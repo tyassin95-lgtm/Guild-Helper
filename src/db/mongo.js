@@ -21,7 +21,9 @@ function getCollections(db = _db) {
   return {
     wishlists: db.collection('wishlists'),
     panels: db.collection('panels'),
-    handedOut: db.collection('handedout')
+    handedOut: db.collection('handedout'),
+    // NEW: store one live summary panel per guild
+    liveSummaries: db.collection('liveSummaries')
   };
 }
 
