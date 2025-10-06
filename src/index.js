@@ -10,7 +10,9 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    // NEW: needed so /summary can list all members (submitted vs not submitted)
+    GatewayIntentBits.GuildMembers
   ]
 });
 
@@ -20,6 +22,7 @@ const client = new Client({
     const collections = getCollections(db);
     await ensureIndexes(collections);
 
+    // Future-proof: use 'clientReady' (v14 supports; v15 will require)
     client.once('clientReady', async () => {
       console.log(`Logged in as ${client.user.tag}!`);
       await registerSlashCommands(client);
@@ -41,7 +44,6 @@ const client = new Client({
 
     console.log('Loaded token:', process.env.DISCORD_TOKEN ? '✅ Found' : '❌ Missing');
     await client.login(process.env.DISCORD_TOKEN);
-
   } catch (err) {
     console.error('Fatal boot error:', err);
     process.exit(1);
