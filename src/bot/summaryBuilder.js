@@ -2,9 +2,9 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFl
 
 // Category icons - you can replace these URLs with your own
 const CATEGORY_ICONS = {
-  weapon: 'https://i.imgur.com/YourWeaponIcon.png',
-  armor: 'https://i.imgur.com/YourArmorIcon.png',
-  accessory: 'https://i.imgur.com/YourAccessoryIcon.png'
+  weapon: 'https://i.imgur.com/Jcehryy.png',
+  armor: 'https://i.imgur.com/0Ov1EvE.png',
+  accessory: 'https://i.imgur.com/d9OlKFF.png'
 };
 
 async function buildSummaryEmbedsAndControls(interaction, collections) {
