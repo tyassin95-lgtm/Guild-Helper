@@ -1,36 +1,11 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
-const { BOSS_DATA } = require('../data/bossData'); // static file
 
-function chunkLinesTo1024(arr) {
-  if (!arr || arr.length === 0) return ['—'];
-  const lines = arr.sort((a, b) => a.localeCompare(b)).map(n => `• ${n}`);
-  const chunks = [];
-  let cur = '';
-  for (const line of lines) {
-    const candidate = cur ? `${cur}\n${line}` : line;
-    if (candidate.length > 1024) {
-      if (cur) chunks.push(cur);
-      cur = line;
-    } else {
-      cur = candidate;
-    }
-  }
-  if (cur) chunks.push(cur);
-  return chunks;
-}
-
-// legacy helper: when we only have a string item and no stored boss
-function bestGuessBossForItem(itemName) {
-  for (const tier of ['tier2','tier3']) {
-    for (const boss of Object.keys(BOSS_DATA[tier])) {
-      const b = BOSS_DATA[tier][boss];
-      if ([...b.weapons, ...b.armor, ...b.accessories].includes(itemName)) {
-        return boss;
-      }
-    }
-  }
-  return null;
-}
+// Category icons - you can replace these URLs with your own
+const CATEGORY_ICONS = {
+  weapon: 'https://i.imgur.com/YourWeaponIcon.png',
+  armor: 'https://i.imgur.com/YourArmorIcon.png',
+  accessory: 'https://i.imgur.com/YourAccessoryIcon.png'
+};
 
 async function buildSummaryEmbedsAndControls(interaction, collections) {
   const { wishlists, handedOut } = collections;
@@ -41,67 +16,94 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
   const handed = await handedOut.find({ guildId: interaction.guildId }).toArray();
   const handedOutSet = new Set(handed.map(h => `${h.userId}:${h.boss || ''}:${h.item}`));
 
-  // Prepare boss buckets
-  const bossSummary = {};
-  for (const tier of ['tier2','tier3']) for (const boss of Object.keys(BOSS_DATA[tier])) bossSummary[boss] = {};
+  // Organize by category -> item name -> array of users
+  const categorySummary = {
+    weapons: {},
+    armor: {},
+    accessories: {}
+  };
 
-  // Aggregate items under their stored boss (object form) or best-guess for legacy strings
+  // Aggregate items
   for (const wl of allWishlists) {
     const member = await interaction.guild.members.fetch(wl.userId).catch(() => null);
     const displayName = member ? member.displayName : 'Unknown User';
 
     const packs = [
-      ...(wl.weapons || []).map(v => ({ type: 'weapon', v })),
-      ...(wl.armor || []).map(v => ({ type: 'armor', v })),
-      ...(wl.accessories || []).map(v => ({ type: 'accessory', v }))
+      ...(wl.weapons || []).map(v => ({ type: 'weapon', v, categoryKey: 'weapons' })),
+      ...(wl.armor || []).map(v => ({ type: 'armor', v, categoryKey: 'armor' })),
+      ...(wl.accessories || []).map(v => ({ type: 'accessory', v, categoryKey: 'accessories' }))
     ];
 
-    for (const { v } of packs) {
+    for (const { v, categoryKey } of packs) {
       const name = typeof v === 'string' ? v : v.name;
-      const boss = typeof v === 'string' ? bestGuessBossForItem(name) : v.boss;
+      const boss = typeof v === 'string' ? null : v.boss;
       const addedAt = typeof v === 'string' ? wl.timestamps?.[name] : v.addedAt;
 
-      if (!boss) continue; // unknown legacy string with no match
+      if (!categorySummary[categoryKey][name]) {
+        categorySummary[categoryKey][name] = [];
+      }
 
-      if (!bossSummary[boss][name]) bossSummary[boss][name] = [];
-      const isHandedOut = handedOutSet.has(`${wl.userId}:${boss}:${name}`);
+      const isHandedOut = handedOutSet.has(`${wl.userId}:${boss || ''}:${name}`);
 
-      bossSummary[boss][name].push({
+      categorySummary[categoryKey][name].push({
         name: displayName,
         userId: wl.userId,
+        boss,
         timestamp: addedAt,
         handedOut: isHandedOut
       });
     }
   }
 
-  // Compose embeds
+  // Build embeds by category
   const embeds = [];
-  let anyBossData = false;
+  let anyData = false;
 
-  for (const boss of Object.keys(bossSummary)) {
-    const items = bossSummary[boss];
-    if (Object.keys(items).length === 0) continue;
+  const categoryInfo = [
+    { key: 'weapons', title: '⚔️ WEAPONS', color: '#e74c3c', icon: CATEGORY_ICONS.weapon },
+    { key: 'armor', title: '🛡️ ARMOR', color: '#3498db', icon: CATEGORY_ICONS.armor },
+    { key: 'accessories', title: '💍 ACCESSORIES', color: '#9b59b6', icon: CATEGORY_ICONS.accessory }
+  ];
 
-    anyBossData = true;
+  for (const { key, title, color, icon } of categoryInfo) {
+    const items = categorySummary[key];
+    const itemNames = Object.keys(items);
+
+    if (itemNames.length === 0) continue;
+
+    anyData = true;
     const embed = new EmbedBuilder()
-      .setColor('#e74c3c')
-      .setTitle(`💀 ${boss.toUpperCase()}`)
+      .setColor(color)
+      .setTitle(title)
+      .setThumbnail(icon)
       .setTimestamp();
 
-    const bossImg = (BOSS_DATA.tier2[boss]?.image) || (BOSS_DATA.tier3[boss]?.image);
-    if (bossImg) embed.setImage(bossImg);
+    // Sort items alphabetically
+    itemNames.sort((a, b) => a.localeCompare(b));
 
-    for (const [itemName, users] of Object.entries(items)) {
+    for (const itemName of itemNames) {
+      const users = items[itemName];
+
+      // Sort users by timestamp (oldest first)
+      users.sort((a, b) => {
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return timeA - timeB;
+      });
+
       const userList = users.map(u => {
         const dateStr = u.timestamp ? ` - ${new Date(u.timestamp).toLocaleDateString()}` : '';
+        const bossStr = u.boss ? ` (${u.boss})` : '';
         const crossedOut = u.handedOut ? '~~' : '';
-        return `${crossedOut}• ${u.name}${dateStr}${crossedOut}`;
+        return `${crossedOut}• ${u.name}${dateStr}${bossStr}${crossedOut}`;
       }).join('\n');
+
+      // Handle long field values (Discord limit is 1024 chars)
+      const fieldValue = userList.length > 1024 ? userList.substring(0, 1021) + '...' : userList;
 
       embed.addFields({
         name: `${itemName} (${users.length})`,
-        value: userList.length > 1024 ? userList.substring(0, 1021) + '...' : userList,
+        value: fieldValue,
         inline: false
       });
     }
@@ -109,19 +111,36 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
     embeds.push(embed);
   }
 
-  if (!anyBossData) {
-    embeds.push(new EmbedBuilder().setColor('#e67e22').setTitle('No items wishlisted yet.').setTimestamp());
+  if (!anyData) {
+    embeds.push(
+      new EmbedBuilder()
+        .setColor('#e67e22')
+        .setTitle('No items wishlisted yet.')
+        .setTimestamp()
+    );
   }
 
-  // Admin-only controls (hidden from regular members)
+  // Admin-only controls
   const components = [];
   const isAdmin = interaction.member?.permissions?.has(PermissionFlagsBits.Administrator);
 
   if (isAdmin) {
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('mark_handed_out').setLabel('Mark Item as Handed Out').setStyle(ButtonStyle.Secondary).setEmoji('✅'),
-      new ButtonBuilder().setCustomId('unmark_handed_out').setLabel('Unmark Handed Out').setStyle(ButtonStyle.Secondary).setEmoji('↩️'),
-      new ButtonBuilder().setCustomId('clear_handed_out_all').setLabel('Clear All Handed Out').setStyle(ButtonStyle.Danger).setEmoji('🧹')
+      new ButtonBuilder()
+        .setCustomId('mark_handed_out')
+        .setLabel('Mark Item as Handed Out')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('✅'),
+      new ButtonBuilder()
+        .setCustomId('unmark_handed_out')
+        .setLabel('Unmark Handed Out')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('↩️'),
+      new ButtonBuilder()
+        .setCustomId('clear_handed_out_all')
+        .setLabel('Clear All Handed Out')
+        .setStyle(ButtonStyle.Danger)
+        .setEmoji('🧹')
     );
     components.push(row);
   }
@@ -141,10 +160,15 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
   const linesToChunks = (arr) => {
     if (!arr.length) return ['—'];
     const lines = arr.sort((a, b) => a.localeCompare(b)).map(n => `• ${n}`);
-    const chunks = []; let cur = '';
+    const chunks = [];
+    let cur = '';
     for (const line of lines) {
-      if ((cur + '\n' + line).trim().length > 1024) { chunks.push(cur.trim()); cur = line; }
-      else cur = cur ? cur + '\n' + line : line;
+      if ((cur + '\n' + line).trim().length > 1024) {
+        chunks.push(cur.trim());
+        cur = line;
+      } else {
+        cur = cur ? cur + '\n' + line : line;
+      }
     }
     if (cur) chunks.push(cur.trim());
     return chunks;
@@ -153,14 +177,38 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
   const submittedChunks = linesToChunks(submitted);
   const notSubmittedChunks = linesToChunks(notSubmitted);
 
-  const footerEmbed = new EmbedBuilder().setColor('#2ecc71').setTitle('📝 Submission Status').setTimestamp();
-  (submittedChunks.length === 1)
-    ? footerEmbed.addFields({ name: `Submitted (${submitted.length})`, value: submittedChunks[0] })
-    : submittedChunks.forEach((chunk, i) => footerEmbed.addFields({ name: `Submitted (${submitted.length}) — Part ${i + 1}`, value: chunk }));
+  const footerEmbed = new EmbedBuilder()
+    .setColor('#2ecc71')
+    .setTitle('📝 Submission Status')
+    .setTimestamp();
 
-  (notSubmittedChunks.length === 1)
-    ? footerEmbed.addFields({ name: `Not Submitted (${notSubmitted.length})`, value: notSubmittedChunks[0] })
-    : notSubmittedChunks.forEach((chunk, i) => footerEmbed.addFields({ name: `Not Submitted (${notSubmitted.length}) — Part ${i + 1}`, value: chunk }));
+  if (submittedChunks.length === 1) {
+    footerEmbed.addFields({
+      name: `Submitted (${submitted.length})`,
+      value: submittedChunks[0]
+    });
+  } else {
+    submittedChunks.forEach((chunk, i) => {
+      footerEmbed.addFields({
+        name: `Submitted (${submitted.length}) — Part ${i + 1}`,
+        value: chunk
+      });
+    });
+  }
+
+  if (notSubmittedChunks.length === 1) {
+    footerEmbed.addFields({
+      name: `Not Submitted (${notSubmitted.length})`,
+      value: notSubmittedChunks[0]
+    });
+  } else {
+    notSubmittedChunks.forEach((chunk, i) => {
+      footerEmbed.addFields({
+        name: `Not Submitted (${notSubmitted.length}) — Part ${i + 1}`,
+        value: chunk
+      });
+    });
+  }
 
   embeds.push(footerEmbed);
 
