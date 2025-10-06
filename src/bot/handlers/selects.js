@@ -123,7 +123,7 @@ async function handleSelects({ interaction, collections }) {
     return interaction.update({ content: `✅ Added ${tokensNeeded} item(s) to your wishlist:\n${itemsList}`, embeds: [embed], components });
   }
 
-  // ===== FIXED: confirm remove single item (supports legacy strings and new object entries)
+  // ===== FIXED: confirm remove single item with better boss matching
   if (interaction.customId === 'confirm_remove_item') {
     try {
       const raw = interaction.values[0];
@@ -148,12 +148,44 @@ async function handleSelects({ interaction, collections }) {
       const itemKey = itemType === 'weapon' ? 'weapons' : itemType === 'armor' ? 'armor' : 'accessories';
       const tokenKey = itemType === 'weapon' ? 'weapon' : itemType === 'armor' ? 'armor' : 'accessory';
 
-      // Pull either by string name (legacy) or by subdocument { name, boss }
-      let pullQuery;
+      // Get current wishlist to find exact match
+      const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
+
+      // Find the exact item to remove
+      let itemToRemove = null;
+      const itemArray = wl[itemKey] || [];
+
       if (isLegacy) {
+        // Legacy: match by name only (string)
+        itemToRemove = itemArray.find(item => 
+          typeof item === 'string' ? item === itemName : item.name === itemName
+        );
+      } else {
+        // New format: match by both name AND boss
+        itemToRemove = itemArray.find(item => 
+          typeof item === 'object' && item.name === itemName && item.boss === boss
+        );
+      }
+
+      if (!itemToRemove) {
+        // Item not found - gracefully handle
+        const embed = createWishlistEmbed(wl, interaction.member);
+        const components = wl.finalized ? [] : buildWishlistControls(wl);
+        return interaction.update({
+          content: 'ℹ️ That item was not found in your wishlist (it may have already been removed).',
+          embeds: [embed],
+          components
+        });
+      }
+
+      // Build the correct pull query based on item structure
+      let pullQuery;
+      if (typeof itemToRemove === 'string') {
+        // Legacy string format
         pullQuery = { [itemKey]: itemName };
       } else {
-        pullQuery = { [itemKey]: { name: itemName, boss } };
+        // Object format - need to match the exact subdocument
+        pullQuery = { [itemKey]: { name: itemName, boss, tier: itemToRemove.tier, type: itemToRemove.type, addedAt: itemToRemove.addedAt } };
       }
 
       const res = await wishlists.updateOne(
@@ -161,11 +193,10 @@ async function handleSelects({ interaction, collections }) {
         {
           $pull: pullQuery,
           $inc: { [`tokensUsed.${tokenKey}`]: -1 },
-          ...(isLegacy ? { $unset: { [`timestamps.${itemName}`]: '' } } : {})
+          ...(typeof itemToRemove === 'string' ? { $unset: { [`timestamps.${itemName}`]: '' } } : {})
         }
       );
 
-      // If nothing was modified (e.g., stale UI), just refresh UI gracefully
       const updated = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
       const embed = createWishlistEmbed(updated, interaction.member);
       const components = updated.finalized ? [] : buildWishlistControls(updated);
@@ -182,7 +213,7 @@ async function handleSelects({ interaction, collections }) {
       });
     } catch (err) {
       console.error('confirm_remove_item error:', err);
-      // Fallback UI (don’t let Discord show "This interaction failed")
+      // Fallback UI (don't let Discord show "This interaction failed")
       try {
         const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
         const embed = createWishlistEmbed(wl, interaction.member);
