@@ -1,6 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 
-function createWishlistEmbed(wishlist, user) {
+function createWishlistEmbed(wishlist, user, pendingRegenerations = []) {
   const weaponTokens = (1 + (wishlist.tokenGrants?.weapon || 0)) - (wishlist.tokensUsed?.weapon || 0);
   const armorTokens = (4 + (wishlist.tokenGrants?.armor || 0)) - (wishlist.tokensUsed?.armor || 0);
   const accessoryTokens = (1 + (wishlist.tokenGrants?.accessory || 0)) - (wishlist.tokensUsed?.accessory || 0);
@@ -18,7 +18,6 @@ function createWishlistEmbed(wishlist, user) {
     if (!arr || arr.length === 0) return 'None selected';
 
     return arr.map(it => {
-      // Support both legacy strings and new object form
       const name = typeof it === 'string' ? it : it.name;
       const boss = typeof it === 'string' ? null : it.boss;
       const addedAt = typeof it === 'string' ? timestamps?.[name] : it.addedAt;
@@ -29,29 +28,52 @@ function createWishlistEmbed(wishlist, user) {
     }).join('\n');
   };
 
-  return new EmbedBuilder()
+  // Format regenerating tokens info
+  const regenInfo = [];
+  for (const regen of pendingRegenerations) {
+    const daysLeft = Math.ceil((new Date(regen.regeneratesAt) - new Date()) / (1000 * 60 * 60 * 24));
+    const tokenName = regen.tokenType.charAt(0).toUpperCase() + regen.tokenType.slice(1);
+    regenInfo.push(`• ${tokenName} token (${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining)`);
+  }
+
+  const embed = new EmbedBuilder()
     .setColor(wishlist.finalized ? '#FFD700' : '#3498db')
     .setTitle(`${user.displayName}'s Wishlist`)
-    .setDescription(wishlist.finalized ? '✅ **FINALIZED** - Contact an admin to make changes' : 'Click the buttons below to manage your wishlist')
+    .setDescription(
+      wishlist.finalized 
+        ? '✅ **FINALIZED** - You can add items when tokens regenerate'
+        : 'Click the buttons below to manage your wishlist'
+    )
     .addFields(
       {
-        name: `⚔️ Weapons (${weaponTokens} token${weaponTokens !== 1 ? 's' : ''} remaining)`,
+        name: `⚔️ Weapons (${weaponTokens} token${weaponTokens !== 1 ? 's' : ''} available)`,
         value: formatItems(weapons, wishlist.timestamps),
         inline: false
       },
       {
-        name: `🛡️ Armor (${armorTokens} token${armorTokens !== 1 ? 's' : ''} remaining)`,
+        name: `🛡️ Armor (${armorTokens} token${armorTokens !== 1 ? 's' : ''} available)`,
         value: formatItems(armor, wishlist.timestamps),
         inline: false
       },
       {
-        name: `💍 Accessories (${accessoryTokens} token${accessoryTokens !== 1 ? 's' : ''} remaining)`,
+        name: `💍 Accessories (${accessoryTokens} token${accessoryTokens !== 1 ? 's' : ''} available)`,
         value: formatItems(accessories, wishlist.timestamps),
         inline: false
       }
     )
     .setFooter({ text: 'Throne and Liberty Guild Helper' })
     .setTimestamp();
+
+  // Add regenerating tokens field if any exist
+  if (regenInfo.length > 0) {
+    embed.addFields({
+      name: '🔄 Regenerating Tokens',
+      value: regenInfo.join('\n'),
+      inline: false
+    });
+  }
+
+  return embed;
 }
 
 module.exports = { createWishlistEmbed };

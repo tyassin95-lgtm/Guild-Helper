@@ -4,6 +4,7 @@ const { buildWishlistControls } = require('../../features/wishlist/controls');
 const { BOSS_DATA } = require('../../data/bossData');
 const { scheduleLiveSummaryUpdate } = require('../liveSummary');
 const { getUserWishlist } = require('./selects'); // reuse the shared getter
+const { getUserPendingRegenerations } = require('../tokenRegeneration');
 
 async function handleButtons({ interaction, collections }) {
   const { wishlists, handedOut } = collections;
@@ -11,8 +12,60 @@ async function handleButtons({ interaction, collections }) {
   // open wishlist
   if (interaction.customId === 'open_wishlist') {
     const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
-    const embed = createWishlistEmbed(wl, interaction.member);
-    if (!wl.finalized) return interaction.reply({ embeds: [embed], components: buildWishlistControls(wl), ephemeral: true });
+    const pendingRegens = await getUserPendingRegenerations(
+      interaction.user.id,
+      interaction.guildId,
+      collections
+    );
+    const embed = createWishlistEmbed(wl, interaction.member, pendingRegens);
+
+    // Check if user has available tokens
+    const hasTokens = (
+      (1 + (wl.tokenGrants?.weapon || 0)) - (wl.tokensUsed?.weapon || 0) > 0 ||
+      (4 + (wl.tokenGrants?.armor || 0)) - (wl.tokensUsed?.armor || 0) > 0 ||
+      (1 + (wl.tokenGrants?.accessory || 0)) - (wl.tokensUsed?.accessory || 0) > 0
+    );
+
+    // If not finalized, show full controls
+    if (!wl.finalized) {
+      return interaction.reply({ embeds: [embed], components: buildWishlistControls(wl), ephemeral: true });
+    }
+
+    // If finalized but has available tokens, show LIMITED controls (only add buttons)
+    if (hasTokens) {
+      const weaponTokens = (1 + (wl.tokenGrants?.weapon || 0)) - (wl.tokensUsed?.weapon || 0);
+      const armorTokens = (4 + (wl.tokenGrants?.armor || 0)) - (wl.tokensUsed?.armor || 0);
+      const accessoryTokens = (1 + (wl.tokenGrants?.accessory || 0)) - (wl.tokensUsed?.accessory || 0);
+
+      const addRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('add_weapon')
+          .setLabel('Add Weapon')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('⚔️')
+          .setDisabled(weaponTokens <= 0),
+        new ButtonBuilder()
+          .setCustomId('add_armor')
+          .setLabel('Add Armor')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('🛡️')
+          .setDisabled(armorTokens <= 0),
+        new ButtonBuilder()
+          .setCustomId('add_accessory')
+          .setLabel('Add Accessory')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('💍')
+          .setDisabled(accessoryTokens <= 0)
+      );
+
+      return interaction.reply({ 
+        embeds: [embed], 
+        components: [addRow], 
+        ephemeral: true 
+      });
+    }
+
+    // Fully finalized with no tokens - no controls
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
@@ -64,6 +117,64 @@ async function handleButtons({ interaction, collections }) {
     );
 
     return interaction.reply({ content: 'Select an item to remove:', components: [row], ephemeral: true });
+  }
+
+  // remove regenerated token items only (for finalized wishlists)
+  if (interaction.customId === 'remove_regen_item') {
+    const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
+
+    const mkOption = (type, entry, emoji) => {
+      return { value: `${type}:${entry.boss}:${entry.name}`, label: `${entry.name} — ${entry.boss}`, emoji };
+    };
+
+    // Only show items marked as regenerated tokens
+    const regenItems = [
+      ...(wl.weapons || []).filter(i => typeof i === 'object' && i.isRegeneratedToken).map(i => mkOption('weapon', i, '⚔️')),
+      ...(wl.armor || []).filter(i => typeof i === 'object' && i.isRegeneratedToken).map(i => mkOption('armor', i, '🛡️')),
+      ...(wl.accessories || []).filter(i => typeof i === 'object' && i.isRegeneratedToken).map(i => mkOption('accessory', i, '💍'))
+    ];
+
+    if (regenItems.length === 0) return interaction.reply({ content: '❌ No regenerated token items to remove!', ephemeral: true });
+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('confirm_remove_regen_item')
+        .setPlaceholder('Select regenerated item to remove')
+        .addOptions(regenItems.slice(0, 25))
+    );
+
+    return interaction.reply({ content: 'Select a regenerated token item to remove:', components: [row], ephemeral: true });
+  }
+
+  // finalize regenerated items
+  if (interaction.customId === 'finalize_regen_items') {
+    const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
+
+    // Mark all regenerated items as no longer regenerated (they're now part of the finalized list)
+    await wishlists.updateOne(
+      { userId: interaction.user.id, guildId: interaction.guildId },
+      { 
+        $set: {
+          'weapons.$[elem].isRegeneratedToken': false,
+          'armor.$[elem].isRegeneratedToken': false,
+          'accessories.$[elem].isRegeneratedToken': false
+        }
+      },
+      { 
+        arrayFilters: [{ 'elem.isRegeneratedToken': true }]
+      }
+    );
+
+    const updated = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
+    const embed = createWishlistEmbed(updated, interaction.member);
+
+    await scheduleLiveSummaryUpdate(interaction, collections);
+
+    return interaction.reply({ 
+      content: '✅ Your new selections have been finalized!', 
+      embeds: [embed], 
+      ephemeral: true 
+    });
   }
 
   // clear all -> confirmation

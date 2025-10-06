@@ -5,13 +5,13 @@ const { connectMongo, getCollections } = require('./db/mongo');
 const { ensureIndexes } = require('./db/indexes');
 const { registerSlashCommands } = require('./bot/commands');
 const { onInteractionCreate } = require('./bot/handlers/interaction');
+const { startTokenRegenerationChecker } = require('./bot/tokenRegeneration');
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    // NEW: needed so /summary can list all members (submitted vs not submitted)
     GatewayIntentBits.GuildMembers
   ]
 });
@@ -22,11 +22,13 @@ const client = new Client({
     const collections = getCollections(db);
     await ensureIndexes(collections);
 
-    // Future-proof: use 'clientReady' (v14 supports; v15 will require)
     client.once('clientReady', async () => {
       console.log(`Logged in as ${client.user.tag}!`);
       await registerSlashCommands(client);
       console.log('Slash commands registered.');
+
+      // Start the token regeneration checker
+      startTokenRegenerationChecker(client, collections);
     });
 
     client.on('interactionCreate', async (interaction) => {
