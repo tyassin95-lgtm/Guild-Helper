@@ -33,6 +33,11 @@ async function registerSlashCommands(client) {
       ]
     },
     {
+      name: 'stats',
+      description: 'Admins: View wishlist statistics and popularity data.',
+      default_member_permissions: ADMIN
+    },
+    {
       name: 'granttokens',
       description: 'Admins: Grant extra tokens to a user.',
       default_member_permissions: ADMIN,
@@ -68,10 +73,18 @@ async function registerSlashCommands(client) {
     },
     {
       name: 'resetuser',
-      description: 'Admins: Unlock a user’s wishlist for editing.',
+      description: 'Admins: Unlock a user\'s wishlist for editing.',
       default_member_permissions: ADMIN,
       options: [
         { type: 6, name: 'user', description: 'User to unlock', required: true } // USER
+      ]
+    },
+    {
+      name: 'resetall',
+      description: 'Admins: Reset all users with a specific role (DANGEROUS!).',
+      default_member_permissions: ADMIN,
+      options: [
+        { type: 8, name: 'role', description: 'Role to reset (all members with this role will be reset)', required: true } // ROLE
       ]
     },
 
