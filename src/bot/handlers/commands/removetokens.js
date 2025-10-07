@@ -5,7 +5,7 @@ async function handleRemoveTokens({ interaction, collections }) {
   const { wishlists } = collections;
 
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: '❌ You need administrator permissions.', ephemeral: true });
+    return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
   }
 
   const targetUser = interaction.options.getUser('user');
@@ -22,7 +22,7 @@ async function handleRemoveTokens({ interaction, collections }) {
     { upsert: true }
   );
 
-  return interaction.reply({ content: `✅ Removed ${amount} ${tokenType} token(s) from ${targetUser.tag}. New ${tokenType} grants: ${newGrant}.`, ephemeral: true });
+  return interaction.reply({ content: `✅ Removed ${amount} ${tokenType} token(s) from ${targetUser.tag}. New ${tokenType} grants: ${newGrant}.`, flags: [64] });
 }
 
 module.exports = { handleRemoveTokens };

@@ -17,14 +17,20 @@ function getDb() {
   return _db;
 }
 
+function getClient() {
+  if (!_client) throw new Error('MongoDB client not connected yet');
+  return _client;
+}
+
 function getCollections(db = _db) {
   return {
     wishlists: db.collection('wishlists'),
     panels: db.collection('panels'),
     handedOut: db.collection('handedout'),
     liveSummaries: db.collection('liveSummaries'),
-    tokenRegenerations: db.collection('tokenRegenerations')
+    tokenRegenerations: db.collection('tokenRegenerations'),
+    userCooldowns: db.collection('userCooldowns')
   };
 }
 
-module.exports = { connectMongo, getDb, getCollections };
+module.exports = { connectMongo, getDb, getClient, getCollections };

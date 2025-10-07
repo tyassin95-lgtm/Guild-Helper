@@ -5,7 +5,7 @@ async function handleCreatePanel({ interaction, collections }) {
   const { panels } = collections;
 
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: '❌ You need administrator permissions to create panels.', ephemeral: true });
+    return interaction.reply({ content: '❌ You need administrator permissions to create panels.', flags: [64] });
   }
 
   const embed = new EmbedBuilder()

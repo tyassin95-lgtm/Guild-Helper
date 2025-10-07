@@ -37,9 +37,9 @@ const client = new Client({
       } catch (err) {
         console.error('Interaction error:', err);
         if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ content: '❌ An error occurred!', ephemeral: true }).catch(() => {});
+          await interaction.followUp({ content: '❌ An error occurred!', flags: [64] }).catch(() => {});
         } else {
-          await interaction.reply({ content: '❌ An error occurred!', ephemeral: true }).catch(() => {});
+          await interaction.reply({ content: '❌ An error occurred!', flags: [64] }).catch(() => {});
         }
       }
     });

@@ -1,5 +1,8 @@
-const debounceMap = new Map(); // guildId -> timeout
+const { DEBOUNCE_DELAY_MS } = require('../config');
 const { buildSummaryEmbedsAndControls } = require('./summaryBuilder');
+
+// Use a more robust debounce system with locks
+const debounceMap = new Map(); // guildId -> { timeout, isUpdating }
 
 function mkMsgUrl(guildId, channelId, messageId) {
   return `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
@@ -81,19 +84,47 @@ async function clearLiveSummaryPanel(interaction, collections) {
   }
 
   await liveSummaries.deleteOne({ guildId: interaction.guildId });
+
+  // Clear debounce entry
+  const debounceEntry = debounceMap.get(interaction.guildId);
+  if (debounceEntry?.timeout) {
+    clearTimeout(debounceEntry.timeout);
+  }
+  debounceMap.delete(interaction.guildId);
+
   return true;
 }
 
 /**
- * Debounced refresh. If message is missing, recreate it in the saved channel.
+ * Debounced refresh with improved race condition handling.
+ * If message is missing, recreate it in the saved channel.
  */
-async function scheduleLiveSummaryUpdate(interaction, collections, delayMs = 1200) {
+async function scheduleLiveSummaryUpdate(interaction, collections, delayMs = DEBOUNCE_DELAY_MS) {
   const { liveSummaries } = collections;
   const record = await liveSummaries.findOne({ guildId: interaction.guildId });
   if (!record) return; // not configured
 
-  clearTimeout(debounceMap.get(interaction.guildId));
+  // Get or create debounce entry
+  let debounceEntry = debounceMap.get(interaction.guildId);
+  if (!debounceEntry) {
+    debounceEntry = { timeout: null, isUpdating: false };
+    debounceMap.set(interaction.guildId, debounceEntry);
+  }
+
+  // Clear existing timeout
+  if (debounceEntry.timeout) {
+    clearTimeout(debounceEntry.timeout);
+  }
+
   const to = setTimeout(async () => {
+    // Check if already updating (race condition protection)
+    if (debounceEntry.isUpdating) {
+      console.log(`Skipping duplicate update for guild ${interaction.guildId}`);
+      return;
+    }
+
+    debounceEntry.isUpdating = true;
+
     try {
       const { embeds, components } = await buildSummaryEmbedsAndControls(interaction, collections);
 
@@ -103,26 +134,53 @@ async function scheduleLiveSummaryUpdate(interaction, collections, delayMs = 120
         channel = interaction.channel;
       }
 
+      if (!channel) {
+        console.error(`Could not find channel for live summary guild ${interaction.guildId}`);
+        debounceEntry.isUpdating = false;
+        return;
+      }
+
       let msg = await fetchMessage(channel, record.messageId);
       if (!msg) {
         // recreate
+        console.log(`Recreating live summary message for guild ${interaction.guildId}`);
         msg = await channel.send({ embeds, components });
         await liveSummaries.updateOne(
           { guildId: interaction.guildId },
           { $set: { channelId: msg.channel.id, messageId: msg.id } },
           { upsert: true }
         );
-        return;
+      } else {
+        // update existing
+        await msg.edit({ embeds, components });
       }
-
-      await msg.edit({ embeds, components });
     } catch (e) {
       console.error('Live summary refresh failed:', e);
+    } finally {
+      debounceEntry.isUpdating = false;
+      // Clean up the timeout reference
+      debounceEntry.timeout = null;
     }
   }, delayMs);
 
-  debounceMap.set(interaction.guildId, to);
+  debounceEntry.timeout = to;
 }
+
+/**
+ * Cleanup old debounce entries (call periodically)
+ */
+function cleanupDebounceMap() {
+  const now = Date.now();
+  for (const [guildId, entry] of debounceMap.entries()) {
+    // If no timeout and not updating, remove the entry
+    if (!entry.timeout && !entry.isUpdating) {
+      debounceMap.delete(guildId);
+    }
+  }
+}
+
+// Run cleanup every 10 minutes
+setInterval(cleanupDebounceMap, 10 * 60 * 1000);
 
 module.exports = {
   createOrUpdateLiveSummaryPanel,

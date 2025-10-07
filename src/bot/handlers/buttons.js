@@ -3,15 +3,32 @@ const { createWishlistEmbed } = require('../../features/wishlist/embed');
 const { buildWishlistControls } = require('../../features/wishlist/controls');
 const { BOSS_DATA } = require('../../data/bossData');
 const { scheduleLiveSummaryUpdate } = require('../liveSummary');
-const { getUserWishlist } = require('./selects'); // reuse the shared getter
+const { getUserWishlist } = require('./selects');
 const { getUserPendingRegenerations } = require('../tokenRegeneration');
+const { checkUserCooldown } = require('../rateLimit');
+const { validateAndFixTokenCounts } = require('../tokenRegeneration');
 
 async function handleButtons({ interaction, collections }) {
   const { wishlists, handedOut } = collections;
 
+  // Rate limiting for non-admin actions
+  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    const allowed = await checkUserCooldown(interaction.user.id, 'button_action', collections);
+    if (!allowed) {
+      return interaction.reply({ 
+        content: '⏳ Please wait a moment before performing another action.', 
+        flags: [64] 
+      });
+    }
+  }
+
   // open wishlist
   if (interaction.customId === 'open_wishlist') {
     const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
+
+    // Validate token counts
+    await validateAndFixTokenCounts(interaction.user.id, interaction.guildId, collections);
+
     const pendingRegens = await getUserPendingRegenerations(
       interaction.user.id,
       interaction.guildId,
@@ -28,7 +45,7 @@ async function handleButtons({ interaction, collections }) {
 
     // If not finalized, show full controls
     if (!wl.finalized) {
-      return interaction.reply({ embeds: [embed], components: buildWishlistControls(wl), ephemeral: true });
+      return interaction.reply({ embeds: [embed], components: buildWishlistControls(wl), flags: [64] });
     }
 
     // If finalized but has available tokens, show LIMITED controls (only add buttons)
@@ -61,12 +78,12 @@ async function handleButtons({ interaction, collections }) {
       return interaction.reply({ 
         embeds: [embed], 
         components: [addRow], 
-        ephemeral: true 
+        flags: [64] 
       });
     }
 
     // Fully finalized with no tokens - no controls
-    return interaction.reply({ embeds: [embed], ephemeral: true });
+    return interaction.reply({ embeds: [embed], flags: [64] });
   }
 
   // add item -> choose tier
@@ -84,14 +101,14 @@ async function handleButtons({ interaction, collections }) {
     return interaction.reply({
       content: `Select which tier of bosses you want to choose ${itemType === 'armor' ? 'armor' : `a ${itemType}`} from:`,
       components: [row],
-      ephemeral: true
+      flags: [64]
     });
   }
 
   // remove single item (now we include boss for disambiguation)
   if (interaction.customId === 'remove_item') {
     const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
-    if (wl.finalized) return interaction.reply({ content: '❌ Your wishlist is finalized. Contact an admin to make changes.', ephemeral: true });
+    if (wl.finalized) return interaction.reply({ content: '❌ Your wishlist is finalized. Contact an admin to make changes.', flags: [64] });
 
     const mkOption = (type, entry, emoji) => {
       if (typeof entry === 'string') {
@@ -107,7 +124,7 @@ async function handleButtons({ interaction, collections }) {
       ...(wl.accessories || []).map(i => mkOption('accessory', i, '💍'))
     ];
 
-    if (options.length === 0) return interaction.reply({ content: '❌ Your wishlist is empty!', ephemeral: true });
+    if (options.length === 0) return interaction.reply({ content: '❌ Your wishlist is empty!', flags: [64] });
 
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -116,7 +133,7 @@ async function handleButtons({ interaction, collections }) {
         .addOptions(options.slice(0, 25))
     );
 
-    return interaction.reply({ content: 'Select an item to remove:', components: [row], ephemeral: true });
+    return interaction.reply({ content: 'Select an item to remove:', components: [row], flags: [64] });
   }
 
   // remove regenerated token items only (for finalized wishlists)
@@ -134,7 +151,7 @@ async function handleButtons({ interaction, collections }) {
       ...(wl.accessories || []).filter(i => typeof i === 'object' && i.isRegeneratedToken).map(i => mkOption('accessory', i, '💍'))
     ];
 
-    if (regenItems.length === 0) return interaction.reply({ content: '❌ No regenerated token items to remove!', ephemeral: true });
+    if (regenItems.length === 0) return interaction.reply({ content: '❌ No regenerated token items to remove!', flags: [64] });
 
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -143,7 +160,7 @@ async function handleButtons({ interaction, collections }) {
         .addOptions(regenItems.slice(0, 25))
     );
 
-    return interaction.reply({ content: 'Select a regenerated token item to remove:', components: [row], ephemeral: true });
+    return interaction.reply({ content: 'Select a regenerated token item to remove:', components: [row], flags: [64] });
   }
 
   // finalize regenerated items
@@ -173,20 +190,20 @@ async function handleButtons({ interaction, collections }) {
     return interaction.reply({ 
       content: '✅ Your new selections have been finalized!', 
       embeds: [embed], 
-      ephemeral: true 
+      flags: [64] 
     });
   }
 
   // clear all -> confirmation
   if (interaction.customId === 'clear_all') {
     const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
-    if (wl.finalized) return interaction.reply({ content: '❌ Your wishlist is finalized. Contact an admin to make changes.', ephemeral: true });
+    if (wl.finalized) return interaction.reply({ content: '❌ Your wishlist is finalized. Contact an admin to make changes.', flags: [64] });
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('confirm_clear_all_yes').setLabel('Yes, clear everything').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId('confirm_clear_all_no').setLabel('No, keep my selections').setStyle(ButtonStyle.Secondary)
     );
-    return interaction.reply({ content: 'Are you sure you want to clear **all** your selections?', components: [row], ephemeral: true });
+    return interaction.reply({ content: 'Are you sure you want to clear **all** your selections?', components: [row], flags: [64] });
   }
 
   if (['confirm_clear_all_yes','confirm_clear_all_no'].includes(interaction.customId)) {
@@ -213,7 +230,7 @@ async function handleButtons({ interaction, collections }) {
   if (interaction.customId === 'finalize_wishlist') {
     const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
     if ((wl.weapons?.length || 0) + (wl.armor?.length || 0) + (wl.accessories?.length || 0) === 0) {
-      return interaction.reply({ content: '❌ Cannot finalize an empty wishlist!', ephemeral: true });
+      return interaction.reply({ content: '❌ Cannot finalize an empty wishlist!', flags: [64] });
     }
 
     await wishlists.updateOne({ userId: interaction.user.id, guildId: interaction.guildId }, { $set: { finalized: true } });
@@ -223,17 +240,17 @@ async function handleButtons({ interaction, collections }) {
 
     await scheduleLiveSummaryUpdate(interaction, collections);
 
-    return interaction.reply({ content: '✅ Your wishlist has been finalized! Contact an admin if you need to make changes.', embeds: [embed], ephemeral: true });
+    return interaction.reply({ content: '✅ Your wishlist has been finalized! Contact an admin if you need to make changes.', embeds: [embed], flags: [64] });
   }
 
   // summary: mark handed out -> build choices with boss awareness
   if (interaction.customId === 'mark_handed_out') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: '❌ You need administrator permissions.', ephemeral: true });
+      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
 
     const all = await collections.wishlists.find({ guildId: interaction.guildId, finalized: true }).toArray();
-    if (all.length === 0) return interaction.reply({ content: '❌ No wishlists found.', ephemeral: true });
+    if (all.length === 0) return interaction.reply({ content: '❌ No wishlists found.', flags: [64] });
 
     const itemOptions = [];
     for (const wl of all) {
@@ -256,23 +273,23 @@ async function handleButtons({ interaction, collections }) {
       }
     }
 
-    if (itemOptions.length === 0) return interaction.reply({ content: '❌ No items to mark.', ephemeral: true });
+    if (itemOptions.length === 0) return interaction.reply({ content: '❌ No items to mark.', flags: [64] });
 
     const limited = itemOptions.slice(0, 25);
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder().setCustomId('confirm_handed_out').setPlaceholder('Select item to mark as handed out').addOptions(limited)
     );
-    return interaction.reply({ content: 'Select an item to mark as handed out:', components: [row], ephemeral: true });
+    return interaction.reply({ content: 'Select an item to mark as handed out:', components: [row], flags: [64] });
   }
 
   // summary: unmark handed out
   if (interaction.customId === 'unmark_handed_out') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: '❌ You need administrator permissions.', ephemeral: true });
+      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
 
     const entries = await handedOut.find({ guildId: interaction.guildId }).toArray();
-    if (!entries.length) return interaction.reply({ content: 'Nothing is currently marked as handed out.', ephemeral: true });
+    if (!entries.length) return interaction.reply({ content: 'Nothing is currently marked as handed out.', flags: [64] });
 
     const options = entries.map(h => ({
       label: `${h.item} (${h.boss || 'unknown'}) - ${h.userId}`,
@@ -283,20 +300,20 @@ async function handleButtons({ interaction, collections }) {
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder().setCustomId('confirm_unmark_handed_out').setPlaceholder('Select item(s) to unmark').setMinValues(1).setMaxValues(limited.length).addOptions(limited)
     );
-    return interaction.reply({ content: 'Choose item(s) to unmark as handed out:', components: [row], ephemeral: true });
+    return interaction.reply({ content: 'Choose item(s) to unmark as handed out:', components: [row], flags: [64] });
   }
 
   // clear all handed out
   if (interaction.customId === 'clear_handed_out_all') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: '❌ You need administrator permissions.', ephemeral: true });
+      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('confirm_clear_handed_out_all_yes').setLabel('Yes, clear all').setStyle(ButtonStyle.Danger).setEmoji('🧹'),
       new ButtonBuilder().setCustomId('confirm_clear_handed_out_all_no').setLabel('No').setStyle(ButtonStyle.Secondary)
     );
-    return interaction.reply({ content: 'Are you sure you want to clear **all** handed-out marks for this guild?', components: [row], ephemeral: true });
+    return interaction.reply({ content: 'Are you sure you want to clear **all** handed-out marks for this guild?', components: [row], flags: [64] });
   }
 
   if (['confirm_clear_handed_out_all_yes','confirm_clear_handed_out_all_no'].includes(interaction.customId)) {

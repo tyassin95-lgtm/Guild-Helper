@@ -4,7 +4,7 @@ async function handleGrantTokens({ interaction, collections }) {
   const { wishlists } = collections;
 
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: '❌ You need administrator permissions.', ephemeral: true });
+    return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
   }
 
   const targetUser = interaction.options.getUser('user');
@@ -17,7 +17,7 @@ async function handleGrantTokens({ interaction, collections }) {
     { upsert: true }
   );
 
-  return interaction.reply({ content: `✅ Granted ${amount} ${tokenType} token(s) to ${targetUser.tag}!`, ephemeral: true });
+  return interaction.reply({ content: `✅ Granted ${amount} ${tokenType} token(s) to ${targetUser.tag}!`, flags: [64] });
 }
 
 module.exports = { handleGrantTokens };

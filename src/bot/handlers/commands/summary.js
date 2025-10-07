@@ -3,7 +3,7 @@ const { buildSummaryEmbedsAndControls } = require('../../summaryBuilder');
 
 async function handleSummary({ interaction, collections }) {
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: '❌ You need administrator permissions to view summaries.', ephemeral: true });
+    return interaction.reply({ content: '❌ You need administrator permissions to view summaries.', flags: [64] });
   }
 
   await interaction.deferReply();

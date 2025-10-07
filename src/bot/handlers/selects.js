@@ -3,7 +3,10 @@ const { BOSS_DATA } = require('../../data/bossData');
 const { createWishlistEmbed } = require('../../features/wishlist/embed');
 const { buildWishlistControls } = require('../../features/wishlist/controls');
 const { scheduleLiveSummaryUpdate } = require('../liveSummary');
-const { scheduleTokenRegeneration } = require('../tokenRegeneration');
+const { scheduleTokenRegeneration, validateAndFixTokenCounts } = require('../tokenRegeneration');
+const { TOKEN_REGENERATION_DAYS } = require('../../config');
+const { getClient } = require('../../db/mongo');
+const { checkUserCooldown } = require('../rateLimit');
 
 // shared util used by multiple handlers
 async function getUserWishlist(wishlists, userId, guildId) {
@@ -24,6 +27,18 @@ async function getUserWishlist(wishlists, userId, guildId) {
 
 async function handleSelects({ interaction, collections }) {
   const { wishlists, handedOut } = collections;
+
+  // Rate limiting for non-admin select actions
+  const isAdminAction = ['confirm_handed_out', 'confirm_unmark_handed_out'].includes(interaction.customId);
+  if (!isAdminAction) {
+    const allowed = await checkUserCooldown(interaction.user.id, 'select_action', collections);
+    if (!allowed) {
+      return interaction.reply({ 
+        content: '⏳ Please wait a moment before performing another action.', 
+        flags: [64] 
+      });
+    }
+  }
 
   // choose tier -> show bosses
   if (interaction.customId.startsWith('select_tier_')) {
@@ -81,10 +96,15 @@ async function handleSelects({ interaction, collections }) {
 
     const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
 
+    // Validate token counts before proceeding
+    await validateAndFixTokenCounts(interaction.user.id, interaction.guildId, collections);
+
     // Check if finalized AND no available tokens
     const tokenKey = itemType === 'weapon' ? 'weapon' : itemType === 'armor' ? 'armor' : 'accessory';
-    const maxTokens = (itemType === 'weapon' ? 1 : itemType === 'armor' ? 4 : 1) + (wl.tokenGrants?.[tokenKey] || 0);
-    const tokensAvailable = maxTokens - (wl.tokensUsed?.[tokenKey] || 0);
+    const baseTokens = itemType === 'weapon' ? 1 : itemType === 'armor' ? 4 : 1;
+    const maxTokens = baseTokens + (wl.tokenGrants?.[tokenKey] || 0);
+    const tokensUsed = wl.tokensUsed?.[tokenKey] || 0;
+    const tokensAvailable = Math.max(0, maxTokens - tokensUsed);
 
     if (wl.finalized && tokensAvailable === 0) {
       return interaction.update({ content: '❌ Your wishlist is finalized and you have no available tokens. Contact an admin to make changes.', embeds: [], components: [] });
@@ -102,9 +122,9 @@ async function handleSelects({ interaction, collections }) {
         components = buildWishlistControls(wl);
       } else if (tokensAvailable > 0) {
         const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-        const weaponTokens = (1 + (wl.tokenGrants?.weapon || 0)) - (wl.tokensUsed?.weapon || 0);
-        const armorTokens = (4 + (wl.tokenGrants?.armor || 0)) - (wl.tokensUsed?.armor || 0);
-        const accessoryTokens = (1 + (wl.tokenGrants?.accessory || 0)) - (wl.tokensUsed?.accessory || 0);
+        const weaponTokens = Math.max(0, (1 + (wl.tokenGrants?.weapon || 0)) - (wl.tokensUsed?.weapon || 0));
+        const armorTokens = Math.max(0, (4 + (wl.tokenGrants?.armor || 0)) - (wl.tokensUsed?.armor || 0));
+        const accessoryTokens = Math.max(0, (1 + (wl.tokenGrants?.accessory || 0)) - (wl.tokensUsed?.accessory || 0));
 
         const addRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
@@ -160,9 +180,9 @@ async function handleSelects({ interaction, collections }) {
       components = buildWishlistControls(updated);
     } else {
       const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-      const weaponTokens = (1 + (updated.tokenGrants?.weapon || 0)) - (updated.tokensUsed?.weapon || 0);
-      const armorTokens = (4 + (updated.tokenGrants?.armor || 0)) - (updated.tokensUsed?.armor || 0);
-      const accessoryTokens = (1 + (updated.tokenGrants?.accessory || 0)) - (updated.tokensUsed?.accessory || 0);
+      const weaponTokens = Math.max(0, (1 + (updated.tokenGrants?.weapon || 0)) - (updated.tokensUsed?.weapon || 0));
+      const armorTokens = Math.max(0, (4 + (updated.tokenGrants?.armor || 0)) - (updated.tokensUsed?.armor || 0));
+      const accessoryTokens = Math.max(0, (1 + (updated.tokenGrants?.accessory || 0)) - (updated.tokensUsed?.accessory || 0));
 
       const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -242,10 +262,12 @@ async function handleSelects({ interaction, collections }) {
       const itemArray = wl[itemKey] || [];
 
       if (isLegacy) {
-        itemToRemove = itemArray.find(item => 
-          typeof item === 'string' ? item === itemName : item.name === itemName
-        );
+        // For legacy items, find by name only - prefer string matches first
+        const stringMatch = itemArray.find(item => typeof item === 'string' && item === itemName);
+        const objectMatch = itemArray.find(item => typeof item === 'object' && item.name === itemName);
+        itemToRemove = stringMatch || objectMatch;
       } else {
+        // For new items, must match both name AND boss
         itemToRemove = itemArray.find(item => 
           typeof item === 'object' && item.name === itemName && item.boss === boss
         );
@@ -261,21 +283,41 @@ async function handleSelects({ interaction, collections }) {
         });
       }
 
+      // Build pull query
       let pullQuery;
       if (typeof itemToRemove === 'string') {
         pullQuery = { [itemKey]: itemName };
       } else {
-        pullQuery = { [itemKey]: { name: itemName, boss, tier: itemToRemove.tier, type: itemToRemove.type, addedAt: itemToRemove.addedAt } };
+        // Match exact object to prevent removing wrong duplicate
+        pullQuery = { 
+          [itemKey]: { 
+            name: itemName, 
+            boss, 
+            tier: itemToRemove.tier, 
+            type: itemToRemove.type, 
+            addedAt: itemToRemove.addedAt,
+            ...(itemToRemove.isRegeneratedToken && { isRegeneratedToken: true })
+          } 
+        };
+      }
+
+      const updateDoc = {
+        $pull: pullQuery,
+        $inc: { [`tokensUsed.${tokenKey}`]: -1 }
+      };
+
+      // Only unset timestamps for legacy string items
+      if (typeof itemToRemove === 'string') {
+        updateDoc.$unset = { [`timestamps.${itemName}`]: '' };
       }
 
       const res = await wishlists.updateOne(
         { userId: interaction.user.id, guildId: interaction.guildId },
-        {
-          $pull: pullQuery,
-          $inc: { [`tokensUsed.${tokenKey}`]: -1 },
-          ...(typeof itemToRemove === 'string' ? { $unset: { [`timestamps.${itemName}`]: '' } } : {})
-        }
+        updateDoc
       );
+
+      // Validate token counts after removal
+      await validateAndFixTokenCounts(interaction.user.id, interaction.guildId, collections);
 
       const updated = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
       const embed = createWishlistEmbed(updated, interaction.member);
@@ -299,7 +341,7 @@ async function handleSelects({ interaction, collections }) {
         const components = wl.finalized ? [] : buildWishlistControls(wl);
         return interaction.update({ content: '❌ Could not remove that item due to an error.', embeds: [embed], components });
       } catch {
-        return interaction.reply({ content: '❌ Could not remove that item due to an error.', ephemeral: true });
+        return interaction.reply({ content: '❌ Could not remove that item due to an error.', flags: [64] });
       }
     }
   }
@@ -339,6 +381,9 @@ async function handleSelects({ interaction, collections }) {
         }
       );
 
+      // Validate token counts
+      await validateAndFixTokenCounts(interaction.user.id, interaction.guildId, collections);
+
       const updated = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
       const embed = createWishlistEmbed(updated, interaction.member);
 
@@ -351,7 +396,7 @@ async function handleSelects({ interaction, collections }) {
       });
     } catch (err) {
       console.error('confirm_remove_regen_item error:', err);
-      return interaction.reply({ content: '❌ Could not remove that item due to an error.', ephemeral: true });
+      return interaction.reply({ content: '❌ Could not remove that item due to an error.', flags: [64] });
     }
   }
 
@@ -366,46 +411,84 @@ async function handleSelects({ interaction, collections }) {
     }
 
     let itemType = null;
+    let itemInstance = null;
 
-    if (wl.weapons?.some(w => (typeof w === 'string' ? w : w.name) === item)) {
+    // Find the specific item instance
+    if (wl.weapons?.some(w => {
+      const name = typeof w === 'string' ? w : w.name;
+      const itemBoss = typeof w === 'string' ? null : w.boss;
+      if (name === item && (itemBoss === boss || (!itemBoss && boss === '(unknown boss)'))) {
+        itemInstance = w;
+        return true;
+      }
+      return false;
+    })) {
       itemType = 'weapon';
-    } else if (wl.armor?.some(a => (typeof a === 'string' ? a : a.name) === item)) {
+    } else if (wl.armor?.some(a => {
+      const name = typeof a === 'string' ? a : a.name;
+      const itemBoss = typeof a === 'string' ? null : a.boss;
+      if (name === item && (itemBoss === boss || (!itemBoss && boss === '(unknown boss)'))) {
+        itemInstance = a;
+        return true;
+      }
+      return false;
+    })) {
       itemType = 'armor';
-    } else if (wl.accessories?.some(ac => (typeof ac === 'string' ? ac : ac.name) === item)) {
+    } else if (wl.accessories?.some(ac => {
+      const name = typeof ac === 'string' ? ac : ac.name;
+      const itemBoss = typeof ac === 'string' ? null : ac.boss;
+      if (name === item && (itemBoss === boss || (!itemBoss && boss === '(unknown boss)'))) {
+        itemInstance = ac;
+        return true;
+      }
+      return false;
+    })) {
       itemType = 'accessory';
     }
 
-    if (!itemType) {
+    if (!itemType || !itemInstance) {
       return interaction.update({ content: '❌ Item not found in user\'s wishlist.', components: [] });
     }
 
-    await handedOut.updateOne(
-      { guildId: interaction.guildId, userId, item, boss },
-      { $set: { guildId: interaction.guildId, userId, item, boss, timestamp: new Date() } },
-      { upsert: true }
-    );
+    // Use MongoDB transactions for atomicity
+    const client = getClient();
+    const session = client.startSession();
 
-    const regenDate = new Date();
-    regenDate.setDate(regenDate.getDate() + 7);
+    try {
+      await session.withTransaction(async () => {
+        // Mark as handed out
+        await handedOut.updateOne(
+          { guildId: interaction.guildId, userId, item, boss },
+          { $set: { guildId: interaction.guildId, userId, item, boss, timestamp: new Date() } },
+          { upsert: true, session }
+        );
 
-    await scheduleTokenRegeneration(interaction.client, {
-      userId,
-      guildId: interaction.guildId,
-      tokenType: itemType,
-      itemName: item,
-      bossName: boss,
-      regeneratesAt: regenDate
-    }, collections);
+        // Schedule token regeneration
+        await scheduleTokenRegeneration(interaction.client, {
+          userId,
+          guildId: interaction.guildId,
+          tokenType: itemType,
+          itemName: item,
+          bossName: boss
+        }, collections);
+      });
+    } catch (err) {
+      console.error('Transaction failed:', err);
+      return interaction.update({ content: '❌ Failed to mark item as handed out. Please try again.', components: [] });
+    } finally {
+      await session.endSession();
+    }
 
+    // Send DM to user
     try {
       const user = await interaction.client.users.fetch(userId);
       const dmEmbed = new EmbedBuilder()
         .setColor('#2ecc71')
         .setTitle('🎉 Item Received!')
-        .setDescription(`You have received **${item}** from **${boss || 'a boss'}**!`)
+        .setDescription(`You have received **${item}** from **${boss === '(unknown boss)' ? 'a boss' : boss}**!`)
         .addFields(
           { name: 'Token Used', value: `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} Token`, inline: true },
-          { name: 'Regenerates In', value: '7 days', inline: true }
+          { name: 'Regenerates In', value: `${TOKEN_REGENERATION_DAYS} days`, inline: true }
         )
         .setFooter({ text: 'You will receive a DM when your token regenerates!' })
         .setTimestamp();
@@ -419,7 +502,7 @@ async function handleSelects({ interaction, collections }) {
 
     return interaction.update({ 
       content: `✅ Marked **${item}** (from **${boss}**) as handed out to <@${userId}>!\n` +
-              `Their ${itemType} token will regenerate in 7 days.\n` +
+              `Their ${itemType} token will regenerate in ${TOKEN_REGENERATION_DAYS} days.\n` +
               `The item will remain on their wishlist but appear crossed out in summaries.`, 
       components: [] 
     });
@@ -427,17 +510,41 @@ async function handleSelects({ interaction, collections }) {
 
   // confirm "unmark handed out" (multi)
   if (interaction.customId === 'confirm_unmark_handed_out') {
+    const client = getClient();
+    const session = client.startSession();
     let removed = 0;
-    for (const sel of interaction.values) {
-      const [userId, boss, ...rest] = sel.split(':');
-      const item = rest.join(':');
-      const res = await handedOut.deleteOne({ guildId: interaction.guildId, userId, item, boss });
-      if (res.deletedCount > 0) removed++;
+
+    try {
+      await session.withTransaction(async () => {
+        for (const sel of interaction.values) {
+          const [userId, boss, ...rest] = sel.split(':');
+          const item = rest.join(':');
+          const res = await handedOut.deleteOne({ guildId: interaction.guildId, userId, item, boss }, { session });
+          if (res.deletedCount > 0) {
+            removed++;
+
+            // Cancel the associated token regeneration if it hasn't been notified yet
+            const { tokenRegenerations } = collections;
+            await tokenRegenerations.deleteMany({
+              userId,
+              guildId: interaction.guildId,
+              itemName: item,
+              bossName: boss,
+              notified: false
+            }, { session });
+          }
+        }
+      });
+    } catch (err) {
+      console.error('Transaction failed during unmark:', err);
+      return interaction.update({ content: '❌ Failed to unmark items. Please try again.', components: [] });
+    } finally {
+      await session.endSession();
     }
 
     await scheduleLiveSummaryUpdate(interaction, collections);
 
-    return interaction.update({ content: `↩️ Unmarked ${removed} item(s) as handed out.`, components: [] });
+    return interaction.update({ content: `↩️ Unmarked ${removed} item(s) as handed out and cancelled associated token regenerations.`, components: [] });
   }
 }
 

@@ -1,9 +1,10 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 function buildWishlistControls(wishlist) {
-  const weaponTokens = (1 + (wishlist.tokenGrants?.weapon || 0)) - wishlist.tokensUsed.weapon;
-  const armorTokens = (4 + (wishlist.tokenGrants?.armor || 0)) - wishlist.tokensUsed.armor;
-  const accessoryTokens = (1 + (wishlist.tokenGrants?.accessory || 0)) - wishlist.tokensUsed.accessory;
+  // Use Math.max to ensure tokens never display as negative
+  const weaponTokens = Math.max(0, (1 + (wishlist.tokenGrants?.weapon || 0)) - (wishlist.tokensUsed?.weapon || 0));
+  const armorTokens = Math.max(0, (4 + (wishlist.tokenGrants?.armor || 0)) - (wishlist.tokensUsed?.armor || 0));
+  const accessoryTokens = Math.max(0, (1 + (wishlist.tokenGrants?.accessory || 0)) - (wishlist.tokensUsed?.accessory || 0));
 
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('add_weapon').setLabel('Add Weapon').setStyle(ButtonStyle.Primary).setEmoji('⚔️').setDisabled(weaponTokens <= 0),
