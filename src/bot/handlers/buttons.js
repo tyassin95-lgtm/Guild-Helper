@@ -263,7 +263,7 @@ async function handleButtons({ interaction, collections }) {
     return interaction.reply({ content: '✅ Your wishlist has been finalized! Contact an admin if you need to make changes.', embeds: [embed], flags: [64] });
   }
 
-  // summary: mark handed out -> build choices with boss awareness
+  // summary: mark handed out -> show filter options first
   if (interaction.customId === 'mark_handed_out') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
@@ -272,34 +272,29 @@ async function handleButtons({ interaction, collections }) {
     const all = await collections.wishlists.find({ guildId: interaction.guildId, finalized: true }).toArray();
     if (all.length === 0) return interaction.reply({ content: '❌ No wishlists found.', flags: [64] });
 
-    const itemOptions = [];
+    // Count items by type
+    let weaponCount = 0, armorCount = 0, accessoryCount = 0;
     for (const wl of all) {
-      const member = await interaction.guild.members.fetch(wl.userId).catch(() => null);
-      const displayName = member ? member.displayName : 'Unknown User';
-      const packs = [
-        ...(wl.weapons || []).map(v => ({ type: 'weapon', v })),
-        ...(wl.armor || []).map(v => ({ type: 'armor', v })),
-        ...(wl.accessories || []).map(v => ({ type: 'accessory', v }))
-      ];
-      for (const { v } of packs) {
-        const name = typeof v === 'string' ? v : v.name;
-        const boss = typeof v === 'string' ? '(unknown boss)' : v.boss;
-        // value needs userId + boss + item
-        itemOptions.push({
-          label: `${name} (${boss}) - ${displayName}`,
-          value: `${wl.userId}:${boss}:${name}`,
-          description: 'Mark as handed out'
-        });
-      }
+      weaponCount += (wl.weapons || []).length;
+      armorCount += (wl.armor || []).length;
+      accessoryCount += (wl.accessories || []).length;
     }
 
-    if (itemOptions.length === 0) return interaction.reply({ content: '❌ No items to mark.', flags: [64] });
+    if (weaponCount + armorCount + accessoryCount === 0) {
+      return interaction.reply({ content: '❌ No items to mark.', flags: [64] });
+    }
 
-    const limited = itemOptions.slice(0, 25);
     const row = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder().setCustomId('confirm_handed_out').setPlaceholder('Select item to mark as handed out').addOptions(limited)
+      new StringSelectMenuBuilder()
+        .setCustomId('filter_handed_out_type')
+        .setPlaceholder('Select item type to filter')
+        .addOptions([
+          { label: `⚔️ Weapons (${weaponCount})`, value: 'weapon', emoji: '⚔️' },
+          { label: `🛡️ Armor (${armorCount})`, value: 'armor', emoji: '🛡️' },
+          { label: `💍 Accessories (${accessoryCount})`, value: 'accessory', emoji: '💍' }
+        ])
     );
-    return interaction.reply({ content: 'Select an item to mark as handed out:', components: [row], flags: [64] });
+    return interaction.reply({ content: 'First, select which type of items you want to see:', components: [row], flags: [64] });
   }
 
   // summary: unmark handed out
