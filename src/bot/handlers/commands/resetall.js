@@ -35,6 +35,7 @@ async function handleResetAll({ interaction, collections }) {
              `• Clear all their wishlists\n` +
              `• Unlock them for editing\n` +
              `• Reset all tokens to default (1/4/1)\n` +
+             `• Clear items received history\n` +
              `• Cancel all pending token regenerations\n` +
              `• Clear all handed-out records\n\n` +
              `**This action cannot be undone!**`,
@@ -99,7 +100,7 @@ async function handleResetAllConfirmation({ interaction, collections }) {
       }, { session });
       handedOutCleared = handedOutResult.deletedCount;
 
-      // Reset all wishlists
+      // Reset all wishlists (including itemsReceived)
       const resetResult = await wishlists.updateMany(
         { 
           userId: { $in: userIds }, 
@@ -113,7 +114,8 @@ async function handleResetAllConfirmation({ interaction, collections }) {
             accessories: [],
             tokensUsed: { weapon: 0, armor: 0, accessory: 0 },
             tokenGrants: { weapon: 0, armor: 0, accessory: 0 },
-            timestamps: {}
+            timestamps: {},
+            itemsReceived: [] // NEW: Clear received items
           } 
         },
         { session }
@@ -138,6 +140,7 @@ async function handleResetAllConfirmation({ interaction, collections }) {
   message += `• Reset ${resetCount} wishlist(s)\n`;
   message += `• All users moved to "Not Submitted" status\n`;
   message += `• All tokens reset to default (1 weapon, 4 armor, 1 accessory)\n`;
+  message += `• Items received history cleared\n`;
 
   if (cancelledRegens > 0) {
     message += `• Cancelled ${cancelledRegens} pending token regeneration(s)\n`;

@@ -36,7 +36,7 @@ async function handleResetUser({ interaction, collections }) {
       }, { session });
       handedOutCount = handedOutResult.deletedCount;
 
-      // Reset wishlist to completely fresh state LAST
+      // Reset wishlist to completely fresh state LAST (including itemsReceived)
       result = await wishlists.updateOne(
         { userId: targetUser.id, guildId: interaction.guildId },
         { 
@@ -47,7 +47,8 @@ async function handleResetUser({ interaction, collections }) {
             accessories: [],
             tokensUsed: { weapon: 0, armor: 0, accessory: 0 },
             tokenGrants: { weapon: 0, armor: 0, accessory: 0 },
-            timestamps: {}
+            timestamps: {},
+            itemsReceived: [] // NEW: Clear received items
           } 
         },
         { session }
@@ -74,6 +75,7 @@ async function handleResetUser({ interaction, collections }) {
   message += `• Wishlist cleared and unlocked for editing\n`;
   message += `• Moved back to "Not Submitted" status\n`;
   message += `• All tokens reset to default (1 weapon, 4 armor, 1 accessory)\n`;
+  message += `• Items received history cleared\n`;
 
   if (cancelledRegens > 0) {
     message += `• Cancelled ${cancelledRegens} pending token regeneration(s)\n`;

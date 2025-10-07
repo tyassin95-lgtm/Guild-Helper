@@ -13,6 +13,7 @@ function createWishlistEmbed(wishlist, user, pendingRegenerations = []) {
   const weapons = normalizeArr(wishlist.weapons);
   const armor = normalizeArr(wishlist.armor);
   const accessories = normalizeArr(wishlist.accessories);
+  const itemsReceived = normalizeArr(wishlist.itemsReceived); // NEW
 
   const formatItems = (arr, timestamps = {}) => {
     if (!arr || arr.length === 0) return 'None selected';
@@ -25,6 +26,18 @@ function createWishlistEmbed(wishlist, user, pendingRegenerations = []) {
       const bossStr = boss ? ` — from **${boss}**` : '';
       const dateStr = addedAt ? ` (${fmtDate(addedAt)})` : '';
       return `• ${name}${bossStr}${dateStr}`;
+    }).join('\n');
+  };
+
+  // NEW: Format received items
+  const formatReceivedItems = (arr) => {
+    if (!arr || arr.length === 0) return 'None yet';
+
+    return arr.map(it => {
+      const icon = it.type === 'weapon' ? '⚔️' : it.type === 'armor' ? '🛡️' : '💍';
+      const bossStr = it.boss ? ` — **${it.boss}**` : '';
+      const dateStr = it.receivedAt ? ` (${fmtDate(it.receivedAt)})` : '';
+      return `${icon} ${it.name}${bossStr}${dateStr}`;
     }).join('\n');
   };
 
@@ -69,6 +82,19 @@ function createWishlistEmbed(wishlist, user, pendingRegenerations = []) {
     embed.addFields({
       name: '🔄 Regenerating Tokens',
       value: regenInfo.join('\n'),
+      inline: false
+    });
+  }
+
+  // NEW: Add items received field
+  if (itemsReceived.length > 0) {
+    const receivedText = formatReceivedItems(itemsReceived);
+    // Discord has a 1024 character limit per field
+    const truncated = receivedText.length > 1024 ? receivedText.substring(0, 1021) + '...' : receivedText;
+
+    embed.addFields({
+      name: `📦 Items Received (${itemsReceived.length})`,
+      value: truncated,
       inline: false
     });
   }

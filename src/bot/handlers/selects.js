@@ -18,6 +18,7 @@ async function getUserWishlist(wishlists, userId, guildId) {
       tokensUsed: { weapon: 0, armor: 0, accessory: 0 },
       tokenGrants: { weapon: 0, armor: 0, accessory: 0 },
       timestamps: {}, // legacy support
+      itemsReceived: [], // NEW
       finalized: false
     };
     await wishlists.insertOne(wl);
@@ -98,6 +99,67 @@ async function handleSelects({ interaction, collections }) {
 
     // Validate token counts before proceeding
     await validateAndFixTokenCounts(interaction.user.id, interaction.guildId, collections);
+
+    // FIXED: Check if user already received any of these items (by NAME only, regardless of boss)
+    const alreadyReceived = [];
+    for (const itemName of selectedItems) {
+      const received = (wl.itemsReceived || []).find(item => item.name === itemName);
+      if (received) {
+        alreadyReceived.push({ name: itemName, boss: received.boss || 'Unknown Boss' });
+      }
+    }
+
+    if (alreadyReceived.length > 0) {
+      const embed = createWishlistEmbed(wl, interaction.member);
+
+      // Show appropriate controls based on finalized state
+      let components = [];
+      if (!wl.finalized) {
+        components = buildWishlistControls(wl);
+      } else {
+        const tokenKey = itemType === 'weapon' ? 'weapon' : itemType === 'armor' ? 'armor' : 'accessory';
+        const baseTokens = itemType === 'weapon' ? 1 : itemType === 'armor' ? 4 : 1;
+        const maxTokens = baseTokens + (wl.tokenGrants?.[tokenKey] || 0);
+        const tokensUsed = wl.tokensUsed?.[tokenKey] || 0;
+        const tokensAvailable = Math.max(0, maxTokens - tokensUsed);
+
+        if (tokensAvailable > 0) {
+          const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+          const weaponTokens = Math.max(0, (1 + (wl.tokenGrants?.weapon || 0)) - (wl.tokensUsed?.weapon || 0));
+          const armorTokens = Math.max(0, (4 + (wl.tokenGrants?.armor || 0)) - (wl.tokensUsed?.armor || 0));
+          const accessoryTokens = Math.max(0, (1 + (wl.tokenGrants?.accessory || 0)) - (wl.tokensUsed?.accessory || 0));
+
+          const addRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('add_weapon')
+              .setLabel('Add Weapon')
+              .setStyle(ButtonStyle.Primary)
+              .setEmoji('⚔️')
+              .setDisabled(weaponTokens <= 0),
+            new ButtonBuilder()
+              .setCustomId('add_armor')
+              .setLabel('Add Armor')
+              .setStyle(ButtonStyle.Primary)
+              .setEmoji('🛡️')
+              .setDisabled(armorTokens <= 0),
+            new ButtonBuilder()
+              .setCustomId('add_accessory')
+              .setLabel('Add Accessory')
+              .setStyle(ButtonStyle.Primary)
+              .setEmoji('💍')
+              .setDisabled(accessoryTokens <= 0)
+          );
+          components = [addRow];
+        }
+      }
+
+      const itemList = alreadyReceived.map(i => `• **${i.name}** (you received it from **${i.boss}**)`).join('\n');
+      return interaction.update({
+        content: `❌ You already received the following item(s):\n${itemList}\n\nYou cannot wishlist an item you've already received, even from a different boss!`,
+        embeds: [embed],
+        components
+      });
+    }
 
     // Check if finalized AND no available tokens
     const tokenKey = itemType === 'weapon' ? 'weapon' : itemType === 'armor' ? 'armor' : 'accessory';
@@ -215,7 +277,7 @@ async function handleSelects({ interaction, collections }) {
         const row2 = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId('remove_regen_item')
-            .setLabel('Remove Regenerated Item')
+            .setLabel('Remove Item')
             .setStyle(ButtonStyle.Danger)
             .setEmoji('🗑️'),
           new ButtonBuilder()
@@ -412,6 +474,7 @@ async function handleSelects({ interaction, collections }) {
 
     let itemType = null;
     let itemInstance = null;
+    let itemTier = null;
 
     // Find the specific item instance
     if (wl.weapons?.some(w => {
@@ -419,6 +482,7 @@ async function handleSelects({ interaction, collections }) {
       const itemBoss = typeof w === 'string' ? null : w.boss;
       if (name === item && (itemBoss === boss || (!itemBoss && boss === '(unknown boss)'))) {
         itemInstance = w;
+        itemTier = typeof w === 'string' ? null : w.tier;
         return true;
       }
       return false;
@@ -429,6 +493,7 @@ async function handleSelects({ interaction, collections }) {
       const itemBoss = typeof a === 'string' ? null : a.boss;
       if (name === item && (itemBoss === boss || (!itemBoss && boss === '(unknown boss)'))) {
         itemInstance = a;
+        itemTier = typeof a === 'string' ? null : a.tier;
         return true;
       }
       return false;
@@ -439,6 +504,7 @@ async function handleSelects({ interaction, collections }) {
       const itemBoss = typeof ac === 'string' ? null : ac.boss;
       if (name === item && (itemBoss === boss || (!itemBoss && boss === '(unknown boss)'))) {
         itemInstance = ac;
+        itemTier = typeof ac === 'string' ? null : ac.tier;
         return true;
       }
       return false;
@@ -461,6 +527,44 @@ async function handleSelects({ interaction, collections }) {
           { guildId: interaction.guildId, userId, item, boss },
           { $set: { guildId: interaction.guildId, userId, item, boss, timestamp: new Date() } },
           { upsert: true, session }
+        );
+
+        // NEW: Move item to itemsReceived array and remove from wishlist
+        const itemKey = itemType === 'weapon' ? 'weapons' : itemType === 'armor' ? 'armor' : 'accessories';
+
+        // Build the received item object
+        const receivedItem = {
+          name: item,
+          boss: boss === '(unknown boss)' ? null : boss,
+          type: itemType,
+          tier: itemTier,
+          receivedAt: new Date()
+        };
+
+        // Remove from wishlist and add to itemsReceived
+        let pullQuery;
+        if (typeof itemInstance === 'string') {
+          pullQuery = { [itemKey]: item };
+        } else {
+          pullQuery = { 
+            [itemKey]: { 
+              name: item, 
+              boss: itemInstance.boss, 
+              tier: itemInstance.tier, 
+              type: itemInstance.type, 
+              addedAt: itemInstance.addedAt,
+              ...(itemInstance.isRegeneratedToken && { isRegeneratedToken: true })
+            } 
+          };
+        }
+
+        await wishlists.updateOne(
+          { userId, guildId: interaction.guildId },
+          {
+            $pull: pullQuery,
+            $push: { itemsReceived: receivedItem }
+          },
+          { session }
         );
 
         // Schedule token regeneration
@@ -490,7 +594,7 @@ async function handleSelects({ interaction, collections }) {
           { name: 'Token Used', value: `${itemType.charAt(0).toUpperCase() + itemType.slice(1)} Token`, inline: true },
           { name: 'Regenerates In', value: `${TOKEN_REGENERATION_DAYS} days`, inline: true }
         )
-        .setFooter({ text: 'You will receive a DM when your token regenerates!' })
+        .setFooter({ text: 'This item has been moved to your "Items Received" section. You will receive a DM when your token regenerates!' })
         .setTimestamp();
 
       await user.send({ embeds: [dmEmbed] });
@@ -502,8 +606,9 @@ async function handleSelects({ interaction, collections }) {
 
     return interaction.update({ 
       content: `✅ Marked **${item}** (from **${boss}**) as handed out to <@${userId}>!\n` +
-              `Their ${itemType} token will regenerate in ${TOKEN_REGENERATION_DAYS} days.\n` +
-              `The item will remain on their wishlist but appear crossed out in summaries.`, 
+              `• Their ${itemType} token will regenerate in ${TOKEN_REGENERATION_DAYS} days\n` +
+              `• The item has been moved to their "Items Received" section\n` +
+              `• They cannot select this item again (from any boss)`, 
       components: [] 
     });
   }
@@ -522,6 +627,41 @@ async function handleSelects({ interaction, collections }) {
           const res = await handedOut.deleteOne({ guildId: interaction.guildId, userId, item, boss }, { session });
           if (res.deletedCount > 0) {
             removed++;
+
+            // NEW: Move item back from itemsReceived to wishlist (find by NAME only)
+            const wl = await wishlists.findOne({ userId, guildId: interaction.guildId }, { session });
+            if (wl) {
+              const receivedItem = (wl.itemsReceived || []).find(i => i.name === item);
+
+              if (receivedItem) {
+                // Determine which array to add back to
+                const itemKey = receivedItem.type === 'weapon' ? 'weapons' : 
+                               receivedItem.type === 'armor' ? 'armor' : 'accessories';
+
+                // Add back to wishlist
+                await wishlists.updateOne(
+                  { userId, guildId: interaction.guildId },
+                  {
+                    $pull: { 
+                      itemsReceived: { 
+                        name: item
+                      } 
+                    },
+                    $push: { 
+                      [itemKey]: {
+                        name: item,
+                        boss: receivedItem.boss || boss,
+                        tier: receivedItem.tier,
+                        type: receivedItem.type,
+                        addedAt: new Date(),
+                        isRegeneratedToken: false
+                      }
+                    }
+                  },
+                  { session }
+                );
+              }
+            }
 
             // Cancel the associated token regeneration if it hasn't been notified yet
             const { tokenRegenerations } = collections;
@@ -544,7 +684,12 @@ async function handleSelects({ interaction, collections }) {
 
     await scheduleLiveSummaryUpdate(interaction, collections);
 
-    return interaction.update({ content: `↩️ Unmarked ${removed} item(s) as handed out and cancelled associated token regenerations.`, components: [] });
+    return interaction.update({ 
+      content: `↩️ Unmarked ${removed} item(s) as handed out.\n` +
+              `• Items moved back to wishlists\n` +
+              `• Token regenerations cancelled`, 
+      components: [] 
+    });
   }
 }
 

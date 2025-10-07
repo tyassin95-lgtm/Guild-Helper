@@ -14,6 +14,7 @@ async function getUserWishlist(wishlists, userId, guildId) {
       tokensUsed: { weapon: 0, armor: 0, accessory: 0 },
       tokenGrants: { weapon: 0, armor: 0, accessory: 0 },
       timestamps: {},
+      itemsReceived: [], // NEW
       finalized: false
     };
     await wishlists.insertOne(wishlist);

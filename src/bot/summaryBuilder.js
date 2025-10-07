@@ -145,6 +145,57 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
     components.push(row);
   }
 
+  // NEW: Items Handed Out History
+  if (handed.length > 0) {
+    const handedOutEmbed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle('📦 Items Handed Out')
+      .setDescription(`Total items distributed: **${handed.length}**`)
+      .setTimestamp();
+
+    // Group by user
+    const userGroups = {};
+    for (const h of handed) {
+      if (!userGroups[h.userId]) {
+        userGroups[h.userId] = [];
+      }
+      userGroups[h.userId].push(h);
+    }
+
+    // Build fields for each user (sorted by most items first)
+    const sortedUsers = Object.entries(userGroups).sort((a, b) => b[1].length - a[1].length);
+
+    for (const [userId, items] of sortedUsers) {
+      const member = await interaction.guild.members.fetch(userId).catch(() => null);
+      const displayName = member ? member.displayName : 'Unknown User';
+
+      // Sort items by timestamp (most recent first)
+      items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      const itemList = items.map(h => {
+        const dateStr = h.timestamp ? ` - ${new Date(h.timestamp).toLocaleDateString()}` : '';
+        const bossStr = h.boss ? ` from **${h.boss}**` : '';
+        return `• ${h.item}${bossStr}${dateStr}`;
+      }).join('\n');
+
+      // Handle Discord's 1024 character limit per field
+      const truncated = itemList.length > 1024 ? itemList.substring(0, 1021) + '...' : itemList;
+
+      handedOutEmbed.addFields({
+        name: `${displayName} (${items.length} item${items.length !== 1 ? 's' : ''})`,
+        value: truncated,
+        inline: false
+      });
+
+      // Discord has a 25 field limit per embed
+      if (handedOutEmbed.data.fields?.length >= 25) {
+        break;
+      }
+    }
+
+    embeds.push(handedOutEmbed);
+  }
+
   // Submission footer
   await interaction.guild.members.fetch();
   const humans = interaction.guild.members.cache.filter(m => !m.user.bot);
