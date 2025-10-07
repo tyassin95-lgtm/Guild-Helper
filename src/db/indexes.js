@@ -1,4 +1,4 @@
-async function ensureIndexes({ wishlists, panels, handedOut, liveSummaries, tokenRegenerations, userCooldowns }) {
+async function ensureIndexes({ wishlists, panels, handedOut, liveSummaries, tokenRegenerations, userCooldowns, guildSettings }) {
   // Wishlists index
   await wishlists.createIndex({ userId: 1, guildId: 1 }, { unique: true });
 
@@ -31,6 +31,9 @@ async function ensureIndexes({ wishlists, panels, handedOut, liveSummaries, toke
   // User cooldowns indexes (with TTL)
   await userCooldowns.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await userCooldowns.createIndex({ userId: 1, interactionType: 1 });
+
+  // Guild settings index
+  await guildSettings.createIndex({ guildId: 1 }, { unique: true });
 
   console.log('All indexes created successfully');
 }

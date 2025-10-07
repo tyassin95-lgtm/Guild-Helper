@@ -7,6 +7,7 @@ const { getUserWishlist } = require('./selects');
 const { getUserPendingRegenerations } = require('../tokenRegeneration');
 const { checkUserCooldown } = require('../rateLimit');
 const { validateAndFixTokenCounts } = require('../tokenRegeneration');
+const { isWishlistFrozen } = require('../freezeCheck');
 
 async function handleButtons({ interaction, collections }) {
   const { wishlists, handedOut } = collections;
@@ -18,6 +19,25 @@ async function handleButtons({ interaction, collections }) {
       return interaction.reply({ 
         content: '⏳ Please wait a moment before performing another action.', 
         flags: [64] 
+      });
+    }
+  }
+
+  // Check if wishlists are frozen (for non-admin users)
+  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    const frozen = await isWishlistFrozen(interaction.guildId, collections);
+
+    // Block these actions when frozen
+    const blockedActions = [
+      'open_wishlist', 'add_weapon', 'add_armor', 'add_accessory',
+      'remove_item', 'remove_regen_item', 'clear_all', 'finalize_wishlist',
+      'finalize_regen_items', 'confirm_clear_all_yes'
+    ];
+
+    if (frozen && blockedActions.includes(interaction.customId)) {
+      return interaction.reply({
+        content: '❄️ **Wishlists are currently frozen!**\n\nAn admin has temporarily disabled wishlist modifications. Please try again later.',
+        flags: [64]
       });
     }
   }

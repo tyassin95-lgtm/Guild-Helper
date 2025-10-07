@@ -7,6 +7,8 @@ const { handleResetUser } = require('./commands/resetuser');
 const { handleResetAll, handleResetAllConfirmation } = require('./commands/resetall');
 const { handleStats } = require('./commands/stats');
 const { handleSummaryLive } = require('./commands/summarylive');
+const { handleFreeze, handleFreezeStatus } = require('./commands/freeze');
+const { handleRemind } = require('./commands/remind');
 
 const { handleButtons } = require('./buttons');
 const { handleSelects } = require('./selects');
@@ -23,6 +25,9 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
     if (name === 'removetokens')return handleRemoveTokens({ interaction, collections });
     if (name === 'resetuser')   return handleResetUser({ interaction, collections });
     if (name === 'resetall')    return handleResetAll({ interaction, collections });
+    if (name === 'freeze')      return handleFreeze({ interaction, collections });
+    if (name === 'freezestatus')return handleFreezeStatus({ interaction, collections });
+    if (name === 'remind')      return handleRemind({ interaction, collections });
   }
 
   if (interaction.isButton()) {

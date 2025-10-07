@@ -87,6 +87,33 @@ async function registerSlashCommands(client) {
         { type: 8, name: 'role', description: 'Role to reset (all members with this role will be reset)', required: true } // ROLE
       ]
     },
+    {
+      name: 'freeze',
+      description: 'Admins: Freeze or unfreeze wishlist modifications.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'action',
+          description: 'Freeze or unfreeze wishlists',
+          required: true,
+          choices: [
+            { name: 'freeze (prevent changes)', value: 'freeze' },
+            { name: 'unfreeze (allow changes)', value: 'unfreeze' }
+          ]
+        }
+      ]
+    },
+    {
+      name: 'freezestatus',
+      description: 'Admins: Check if wishlists are currently frozen.',
+      default_member_permissions: ADMIN
+    },
+    {
+      name: 'remind',
+      description: 'Admins: Send a DM reminder to all users who haven\'t submitted wishlists.',
+      default_member_permissions: ADMIN
+    },
 
     // ----- Everyone -----
     {

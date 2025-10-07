@@ -29,7 +29,8 @@ function getCollections(db = _db) {
     handedOut: db.collection('handedout'),
     liveSummaries: db.collection('liveSummaries'),
     tokenRegenerations: db.collection('tokenRegenerations'),
-    userCooldowns: db.collection('userCooldowns')
+    userCooldowns: db.collection('userCooldowns'),
+    guildSettings: db.collection('guildSettings')
   };
 }
 
