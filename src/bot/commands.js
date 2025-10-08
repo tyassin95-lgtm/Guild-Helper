@@ -114,11 +114,29 @@ async function registerSlashCommands(client) {
       description: 'Admins: Send a DM reminder to all users who haven\'t submitted wishlists.',
       default_member_permissions: ADMIN
     },
+    {
+      name: 'playerlist',
+      description: 'Admins: View all players and their party info.',
+      default_member_permissions: ADMIN
+    },
+    {
+      name: 'partiespanel',
+      description: 'Admins: Create a stylized parties panel in this channel.',
+      default_member_permissions: ADMIN
+    },
 
     // ----- Everyone -----
     {
       name: 'mywishlist',
       description: 'View your wishlist (ephemeral).'
+    },
+    {
+      name: 'myinfo',
+      description: 'View and manage your party information.'
+    },
+    {
+      name: 'viewparties',
+      description: 'View all static parties.'
     }
   ];
 

@@ -1,4 +1,4 @@
-async function ensureIndexes({ wishlists, panels, handedOut, liveSummaries, tokenRegenerations, userCooldowns, guildSettings }) {
+async function ensureIndexes({ wishlists, panels, handedOut, liveSummaries, tokenRegenerations, userCooldowns, guildSettings, partyPlayers, parties, partyPanels }) {
   // Wishlists index
   await wishlists.createIndex({ userId: 1, guildId: 1 }, { unique: true });
 
@@ -34,6 +34,16 @@ async function ensureIndexes({ wishlists, panels, handedOut, liveSummaries, toke
 
   // Guild settings index
   await guildSettings.createIndex({ guildId: 1 }, { unique: true });
+
+  // Party system indexes
+  await partyPlayers.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await partyPlayers.createIndex({ guildId: 1 });
+  await partyPlayers.createIndex({ guildId: 1, partyNumber: 1 });
+
+  await parties.createIndex({ guildId: 1, partyNumber: 1 }, { unique: true });
+  await parties.createIndex({ guildId: 1 });
+
+  await partyPanels.createIndex({ guildId: 1 }, { unique: true });
 
   console.log('All indexes created successfully');
 }

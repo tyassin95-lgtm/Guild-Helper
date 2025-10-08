@@ -24,13 +24,19 @@ function getClient() {
 
 function getCollections(db = _db) {
   return {
+    // Wishlist system
     wishlists: db.collection('wishlists'),
     panels: db.collection('panels'),
     handedOut: db.collection('handedout'),
     liveSummaries: db.collection('liveSummaries'),
     tokenRegenerations: db.collection('tokenRegenerations'),
     userCooldowns: db.collection('userCooldowns'),
-    guildSettings: db.collection('guildSettings')
+    guildSettings: db.collection('guildSettings'),
+
+    // Party system
+    partyPlayers: db.collection('partyPlayers'),
+    parties: db.collection('parties'),
+    partyPanels: db.collection('partyPanels')
   };
 }
 
