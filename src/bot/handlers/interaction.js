@@ -18,6 +18,8 @@ const { handleMyInfo } = require('../../features/parties/commands/myinfo');
 const { handleViewParties } = require('../../features/parties/commands/viewparties');
 const { handlePlayerList } = require('../../features/parties/commands/playerlist');
 const { handlePartiesPanel } = require('../../features/parties/commands/partiespanel');
+const { handleAutoAssign } = require('../../features/parties/commands/autoassign');
+const { handleResetParties, handleResetPartiesConfirmation } = require('../../features/parties/commands/resetparties');
 const { handlePartyButtons } = require('../../features/parties/handlers/buttons');
 const { handlePartySelects } = require('../../features/parties/handlers/selects');
 const { handlePartyModals } = require('../../features/parties/handlers/modals');
@@ -46,12 +48,19 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
     if (name === 'viewparties') return handleViewParties({ interaction, collections });
     if (name === 'playerlist')  return handlePlayerList({ interaction, collections });
     if (name === 'partiespanel') return handlePartiesPanel({ interaction, collections });
+    if (name === 'autoassign')  return handleAutoAssign({ interaction, collections });
+    if (name === 'resetparties') return handleResetParties({ interaction, collections });
   }
 
   if (interaction.isButton()) {
     // Handle reset all confirmation buttons
     if (interaction.customId.startsWith('confirm_reset_all_')) {
       return handleResetAllConfirmation({ interaction, collections });
+    }
+
+    // Handle reset parties confirmation buttons
+    if (interaction.customId.startsWith('confirm_reset_parties_')) {
+      return handleResetPartiesConfirmation({ interaction, collections });
     }
 
     // Party system buttons

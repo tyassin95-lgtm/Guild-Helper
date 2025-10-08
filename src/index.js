@@ -6,6 +6,7 @@ const { ensureIndexes } = require('./db/indexes');
 const { registerSlashCommands } = require('./bot/commands');
 const { onInteractionCreate } = require('./bot/handlers/interaction');
 const { startTokenRegenerationChecker } = require('./bot/tokenRegeneration');
+const { startPartyPanelUpdater } = require('./features/parties/panelUpdater');
 
 const client = new Client({
   intents: [
@@ -29,6 +30,9 @@ const client = new Client({
 
       // Start the token regeneration checker
       startTokenRegenerationChecker(client, collections);
+
+      // Start the party panel auto-updater
+      startPartyPanelUpdater(client, collections);
     });
 
     client.on('interactionCreate', async (interaction) => {

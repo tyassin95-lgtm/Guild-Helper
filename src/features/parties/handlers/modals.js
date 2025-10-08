@@ -1,8 +1,10 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { createPlayerInfoEmbed } = require('../embed');
+const { autoAssignPlayer } = require('../autoAssignment');
+const { schedulePartyPanelUpdate } = require('../panelUpdater');
 
 async function handlePartyModals({ interaction, collections }) {
-  const { partyPlayers } = collections;
+  const { partyPlayers, parties } = collections;
 
   // CP modal submission
   if (interaction.customId === 'party_cp_modal') {
@@ -36,7 +38,6 @@ async function handlePartyModals({ interaction, collections }) {
 
     // Update party member CP if assigned
     if (playerInfo.partyNumber) {
-      const { parties } = collections;
       await parties.updateOne(
         { 
           guildId: interaction.guildId, 
@@ -45,6 +46,38 @@ async function handlePartyModals({ interaction, collections }) {
         },
         { $set: { 'members.$.cp': cp } }
       );
+
+      // Recalculate total CP
+      const party = await parties.findOne({
+        guildId: interaction.guildId,
+        partyNumber: playerInfo.partyNumber
+      });
+
+      if (party) {
+        const totalCP = (party.members || []).reduce((sum, m) => sum + (m.cp || 0), 0);
+        await parties.updateOne(
+          { _id: party._id },
+          { $set: { totalCP } }
+        );
+      }
+
+      // Schedule panel update
+      schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+    } else {
+      // Try auto-assignment if player has complete info
+      if (playerInfo.weapon1 && playerInfo.weapon2) {
+        const result = await autoAssignPlayer(
+          interaction.user.id,
+          interaction.guildId,
+          interaction.client,
+          collections
+        );
+
+        if (result.success) {
+          // Schedule panel update
+          schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+        }
+      }
     }
 
     const embed = createPlayerInfoEmbed(playerInfo, interaction.member);

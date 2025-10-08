@@ -124,6 +124,41 @@ async function registerSlashCommands(client) {
       description: 'Admins: Create a stylized parties panel in this channel.',
       default_member_permissions: ADMIN
     },
+    {
+      name: 'autoassign',
+      description: 'Admins: Manage automatic party assignment system.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'action',
+          description: 'What to do',
+          required: true,
+          choices: [
+            { name: 'enable', value: 'enable' },
+            { name: 'disable', value: 'disable' },
+            { name: 'rebalance', value: 'rebalance' },
+            { name: 'status', value: 'status' }
+          ]
+        }
+      ]
+    },
+    {
+      name: 'resetparties',
+      description: 'Admins: Reset all party system data (DANGEROUS!).',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'action',
+          description: 'What to reset',
+          required: true,
+          choices: [
+            { name: 'all (delete everything)', value: 'all' }
+          ]
+        }
+      ]
+    },
 
     // ----- Everyone -----
     {

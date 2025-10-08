@@ -1,6 +1,7 @@
 const { ActionRowBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionFlagsBits } = require('discord.js');
 const { WEAPONS, MAX_PARTIES } = require('../constants');
 const { createPlayerInfoEmbed, createPartiesOverviewEmbed } = require('../embed');
+const { schedulePartyPanelUpdate } = require('../panelUpdater');
 
 async function handlePartyButtons({ interaction, collections }) {
   const { partyPlayers, parties } = collections;
@@ -81,8 +82,14 @@ async function handlePartyButtons({ interaction, collections }) {
       guildId: interaction.guildId,
       partyNumber: nextNumber,
       members: [],
-      createdAt: new Date()
+      totalCP: 0,
+      roleComposition: { tank: 0, healer: 0, dps: 0 },
+      createdAt: new Date(),
+      lastRebalanced: new Date()
     });
+
+    // Schedule panel update
+    schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
 
     const allParties = await parties.find({ guildId: interaction.guildId })
       .sort({ partyNumber: 1 })

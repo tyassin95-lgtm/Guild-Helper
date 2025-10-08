@@ -1,6 +1,9 @@
 const { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const { createPlayerInfoEmbed, createPartiesOverviewEmbed } = require('../embed');
 const { PARTY_SIZE } = require('../constants');
+const { updatePlayerRole } = require('../roleDetection');
+const { autoAssignPlayer, handleRoleChange } = require('../autoAssignment');
+const { schedulePartyPanelUpdate } = require('../panelUpdater');
 
 async function handlePartySelects({ interaction, collections }) {
   const { partyPlayers, parties } = collections;
@@ -8,6 +11,13 @@ async function handlePartySelects({ interaction, collections }) {
   // Select weapon 1
   if (interaction.customId === 'party_select_weapon1') {
     const weapon = interaction.values[0];
+
+    const playerBefore = await partyPlayers.findOne({
+      userId: interaction.user.id,
+      guildId: interaction.guildId
+    });
+
+    const oldRole = playerBefore?.role;
 
     await partyPlayers.updateOne(
       { userId: interaction.user.id, guildId: interaction.guildId },
@@ -19,6 +29,45 @@ async function handlePartySelects({ interaction, collections }) {
       userId: interaction.user.id,
       guildId: interaction.guildId
     });
+
+    // Update role if both weapons are set
+    if (playerInfo.weapon1 && playerInfo.weapon2) {
+      const newRole = await updatePlayerRole(
+        interaction.user.id,
+        interaction.guildId,
+        playerInfo.weapon1,
+        playerInfo.weapon2,
+        collections
+      );
+
+      // Handle role change if player is in a party
+      if (oldRole && newRole !== oldRole && playerInfo.partyNumber) {
+        await handleRoleChange(
+          interaction.user.id,
+          interaction.guildId,
+          oldRole,
+          newRole,
+          interaction.client,
+          collections
+        );
+
+        // Schedule panel update
+        schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+      } else if (!playerInfo.partyNumber && playerInfo.cp) {
+        // Try auto-assignment if not in a party but has CP
+        const result = await autoAssignPlayer(
+          interaction.user.id,
+          interaction.guildId,
+          interaction.client,
+          collections
+        );
+
+        if (result.success) {
+          // Schedule panel update
+          schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+        }
+      }
+    }
 
     const embed = createPlayerInfoEmbed(playerInfo, interaction.member);
 
@@ -47,6 +96,13 @@ async function handlePartySelects({ interaction, collections }) {
   if (interaction.customId === 'party_select_weapon2') {
     const weapon = interaction.values[0];
 
+    const playerBefore = await partyPlayers.findOne({
+      userId: interaction.user.id,
+      guildId: interaction.guildId
+    });
+
+    const oldRole = playerBefore?.role;
+
     await partyPlayers.updateOne(
       { userId: interaction.user.id, guildId: interaction.guildId },
       { $set: { weapon2: weapon, updatedAt: new Date() } },
@@ -57,6 +113,45 @@ async function handlePartySelects({ interaction, collections }) {
       userId: interaction.user.id,
       guildId: interaction.guildId
     });
+
+    // Update role if both weapons are set
+    if (playerInfo.weapon1 && playerInfo.weapon2) {
+      const newRole = await updatePlayerRole(
+        interaction.user.id,
+        interaction.guildId,
+        playerInfo.weapon1,
+        playerInfo.weapon2,
+        collections
+      );
+
+      // Handle role change if player is in a party
+      if (oldRole && newRole !== oldRole && playerInfo.partyNumber) {
+        await handleRoleChange(
+          interaction.user.id,
+          interaction.guildId,
+          oldRole,
+          newRole,
+          interaction.client,
+          collections
+        );
+
+        // Schedule panel update
+        schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+      } else if (!playerInfo.partyNumber && playerInfo.cp) {
+        // Try auto-assignment if not in a party but has CP
+        const result = await autoAssignPlayer(
+          interaction.user.id,
+          interaction.guildId,
+          interaction.client,
+          collections
+        );
+
+        if (result.success) {
+          // Schedule panel update
+          schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+        }
+      }
+    }
 
     const embed = createPlayerInfoEmbed(playerInfo, interaction.member);
 
@@ -137,6 +232,12 @@ async function handlePartySelects({ interaction, collections }) {
       return interaction.update({ content: '❌ This player hasn\'t set up their party info yet!', components: [] });
     }
 
+    // Ensure role is set
+    if (!playerInfo.role) {
+      await updatePlayerRole(userId, interaction.guildId, playerInfo.weapon1, playerInfo.weapon2, collections);
+      playerInfo.role = (await partyPlayers.findOne({ userId, guildId: interaction.guildId })).role;
+    }
+
     // Add to party
     await parties.updateOne(
       { guildId: interaction.guildId, partyNumber },
@@ -147,8 +248,13 @@ async function handlePartySelects({ interaction, collections }) {
             weapon1: playerInfo.weapon1,
             weapon2: playerInfo.weapon2,
             cp: playerInfo.cp || 0,
+            role: playerInfo.role,
             addedAt: new Date()
           }
+        },
+        $inc: {
+          totalCP: (playerInfo.cp || 0),
+          [`roleComposition.${playerInfo.role}`]: 1
         }
       }
     );
@@ -158,6 +264,9 @@ async function handlePartySelects({ interaction, collections }) {
       { userId, guildId: interaction.guildId },
       { $set: { partyNumber } }
     );
+
+    // Schedule panel update
+    schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
 
     const allParties = await parties.find({ guildId: interaction.guildId })
       .sort({ partyNumber: 1 })
@@ -181,15 +290,29 @@ async function handlePartySelects({ interaction, collections }) {
     const partyNumber = parseInt(interaction.customId.split(':')[1]);
     const userId = interaction.values[0];
 
-    await parties.updateOne(
-      { guildId: interaction.guildId, partyNumber },
-      { $pull: { members: { userId } } }
-    );
+    const party = await parties.findOne({ guildId: interaction.guildId, partyNumber });
+    const member = party.members?.find(m => m.userId === userId);
+
+    if (member) {
+      await parties.updateOne(
+        { guildId: interaction.guildId, partyNumber },
+        { 
+          $pull: { members: { userId } },
+          $inc: {
+            totalCP: -(member.cp || 0),
+            [`roleComposition.${member.role}`]: -1
+          }
+        }
+      );
+    }
 
     await partyPlayers.updateOne(
       { userId, guildId: interaction.guildId },
       { $unset: { partyNumber: '' } }
     );
+
+    // Schedule panel update
+    schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
 
     const allParties = await parties.find({ guildId: interaction.guildId })
       .sort({ partyNumber: 1 })
@@ -261,13 +384,25 @@ async function handlePartySelects({ interaction, collections }) {
     // Remove from source party
     await parties.updateOne(
       { guildId: interaction.guildId, partyNumber: fromParty },
-      { $pull: { members: { userId } } }
+      { 
+        $pull: { members: { userId } },
+        $inc: {
+          totalCP: -(memberToMove.cp || 0),
+          [`roleComposition.${memberToMove.role}`]: -1
+        }
+      }
     );
 
     // Add to destination party
     await parties.updateOne(
       { guildId: interaction.guildId, partyNumber: toParty },
-      { $push: { members: { ...memberToMove, addedAt: new Date() } } }
+      { 
+        $push: { members: { ...memberToMove, addedAt: new Date() } },
+        $inc: {
+          totalCP: (memberToMove.cp || 0),
+          [`roleComposition.${memberToMove.role}`]: 1
+        }
+      }
     );
 
     // Update player's party assignment
@@ -275,6 +410,9 @@ async function handlePartySelects({ interaction, collections }) {
       { userId, guildId: interaction.guildId },
       { $set: { partyNumber: toParty } }
     );
+
+    // Schedule panel update
+    schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
 
     const allParties = await parties.find({ guildId: interaction.guildId })
       .sort({ partyNumber: 1 })
@@ -310,6 +448,9 @@ async function handlePartySelects({ interaction, collections }) {
 
     // Delete the party
     await parties.deleteOne({ guildId: interaction.guildId, partyNumber });
+
+    // Schedule panel update
+    schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
 
     const allParties = await parties.find({ guildId: interaction.guildId })
       .sort({ partyNumber: 1 })
