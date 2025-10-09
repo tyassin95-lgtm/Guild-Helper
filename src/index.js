@@ -7,6 +7,7 @@ const { registerSlashCommands } = require('./bot/commands');
 const { onInteractionCreate } = require('./bot/handlers/interaction');
 const { startTokenRegenerationChecker } = require('./bot/tokenRegeneration');
 const { startPartyPanelUpdater } = require('./features/parties/panelUpdater');
+const { startPeriodicRebalancer } = require('./features/parties/rebalancing');
 
 const client = new Client({
   intents: [
@@ -33,6 +34,9 @@ const client = new Client({
 
       // Start the party panel auto-updater
       startPartyPanelUpdater(client, collections);
+
+      // Start the periodic party rebalancer (runs every 72 hours)
+      startPeriodicRebalancer(client, collections);
     });
 
     client.on('interactionCreate', async (interaction) => {

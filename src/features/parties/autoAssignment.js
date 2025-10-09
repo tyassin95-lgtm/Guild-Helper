@@ -1,9 +1,166 @@
 const { getRoleFromWeapons } = require('./roleDetection');
 const { sendPartyAssignmentDM, sendPartyChangeDM } = require('./notifications');
 const { MAX_PARTIES, PARTY_SIZE } = require('./constants');
+const { smartRebalanceNewParty } = require('./smartRebalancing');
+
+/**
+ * Find parties that are missing a specific role
+ */
+async function findPartiesMissingRole(guildId, role, collections) {
+  const { parties } = collections;
+
+  const allParties = await parties.find({ 
+    guildId,
+    $expr: { $lt: [{ $size: { $ifNull: ['$members', []] } }, PARTY_SIZE] } // Not full
+  }).toArray();
+
+  const partiesNeedingRole = [];
+
+  for (const party of allParties) {
+    const members = party.members || [];
+    const composition = {
+      tanks: members.filter(m => m.role === 'tank').length,
+      healers: members.filter(m => m.role === 'healer').length,
+      dps: members.filter(m => m.role === 'dps').length
+    };
+
+    if (role === 'tank' && composition.tanks === 0) {
+      partiesNeedingRole.push(party);
+    } else if (role === 'healer' && composition.healers === 0) {
+      partiesNeedingRole.push(party);
+    }
+  }
+
+  return partiesNeedingRole;
+}
+
+/**
+ * Assign player to a party that needs their role (using CP clustering)
+ */
+async function assignToPartyWithRoleNeed(player, partiesNeedingRole, guildId, client, collections) {
+  const { parties, partyPlayers } = collections;
+
+  if (partiesNeedingRole.length === 0) {
+    return { success: false, reason: 'No parties need this role' };
+  }
+
+  // If only one party needs the role, assign there
+  if (partiesNeedingRole.length === 1) {
+    const targetParty = partiesNeedingRole[0];
+
+    // Add player to party
+    await parties.updateOne(
+      { _id: targetParty._id },
+      {
+        $push: {
+          members: {
+            userId: player.userId,
+            weapon1: player.weapon1,
+            weapon2: player.weapon2,
+            cp: player.cp || 0,
+            role: player.role,
+            addedAt: new Date()
+          }
+        },
+        $inc: {
+          totalCP: (player.cp || 0),
+          [`roleComposition.${player.role}`]: 1
+        }
+      }
+    );
+
+    // Update player record
+    await partyPlayers.updateOne(
+      { userId: player.userId, guildId },
+      {
+        $set: {
+          partyNumber: targetParty.partyNumber,
+          autoAssigned: true,
+          lastNotified: new Date()
+        }
+      }
+    );
+
+    // Send DM
+    try {
+      await sendPartyAssignmentDM(player.userId, targetParty.partyNumber, player.role, client, collections);
+    } catch (err) {
+      console.error(`Failed to send DM to ${player.userId}:`, err.message);
+    }
+
+    return { success: true, partyNumber: targetParty.partyNumber, role: player.role };
+  }
+
+  // Multiple parties need this role - use CP clustering
+  const playerCP = player.cp || 0;
+
+  // Calculate which party has closest average CP
+  let closestParty = null;
+  let smallestDiff = Infinity;
+
+  for (const party of partiesNeedingRole) {
+    const members = party.members || [];
+    if (members.length === 0) {
+      closestParty = party;
+      break;
+    }
+
+    const totalCP = members.reduce((sum, m) => sum + (m.cp || 0), 0);
+    const avgCP = totalCP / members.length;
+    const diff = Math.abs(playerCP - avgCP);
+
+    if (diff < smallestDiff) {
+      smallestDiff = diff;
+      closestParty = party;
+    }
+  }
+
+  // Add player to closest party
+  await parties.updateOne(
+    { _id: closestParty._id },
+    {
+      $push: {
+        members: {
+          userId: player.userId,
+          weapon1: player.weapon1,
+          weapon2: player.weapon2,
+          cp: player.cp || 0,
+          role: player.role,
+          addedAt: new Date()
+        }
+      },
+      $inc: {
+        totalCP: (player.cp || 0),
+        [`roleComposition.${player.role}`]: 1
+      }
+    }
+  );
+
+  // Update player record
+  await partyPlayers.updateOne(
+    { userId: player.userId, guildId },
+    {
+      $set: {
+        partyNumber: closestParty.partyNumber,
+        autoAssigned: true,
+        lastNotified: new Date()
+      }
+    }
+  );
+
+  // Send DM
+  try {
+    await sendPartyAssignmentDM(player.userId, closestParty.partyNumber, player.role, client, collections);
+  } catch (err) {
+    console.error(`Failed to send DM to ${player.userId}:`, err.message);
+  }
+
+  return { success: true, partyNumber: closestParty.partyNumber, role: player.role };
+}
 
 /**
  * Auto-assign a player to the best available party
+ * ENHANCED: Checks for role needs across ALL parties first
  */
 async function autoAssignPlayer(userId, guildId, client, collections) {
   const { partyPlayers, parties, guildSettings } = collections;
@@ -22,23 +179,43 @@ async function autoAssignPlayer(userId, guildId, client, collections) {
 
   // Check if already assigned
   if (player.partyNumber) {
-    // Player already has a party, check if we should rebalance
     return { success: false, reason: 'Already assigned', partyNumber: player.partyNumber };
   }
 
   const role = getRoleFromWeapons(player.weapon1, player.weapon2);
   const cp = player.cp || 0;
 
-  // Get all parties
+  // PRIORITY CHECK: If player is tank or healer, check if ANY party needs them
+  if (role === 'tank' || role === 'healer') {
+    const partiesNeedingRole = await findPartiesMissingRole(guildId, role, collections);
+
+    if (partiesNeedingRole.length > 0) {
+      console.log(`Found ${partiesNeedingRole.length} parties needing ${role}, assigning ${userId} there`);
+      return await assignToPartyWithRoleNeed(player, partiesNeedingRole, guildId, client, collections);
+    }
+  }
+
+  // FALLBACK: Use normal assignment logic (CP clustering)
   const allParties = await parties.find({ guildId }).sort({ partyNumber: 1 }).toArray();
 
   // Find best party for this player
   let bestParty = findBestPartyForRole(allParties, role, cp);
 
+  // Track if we need to trigger smart rebalancing
+  let shouldRebalance = false;
+  let previousFullPartyNumber = null;
+
   // If no suitable party exists, create a new one
   if (!bestParty) {
     if (allParties.length >= MAX_PARTIES) {
       return { success: false, reason: 'Max parties reached' };
+    }
+
+    // Check if there was a previous full party
+    const previousFullParty = allParties.find(p => (p.members?.length || 0) >= PARTY_SIZE);
+    if (previousFullParty) {
+      shouldRebalance = true;
+      previousFullPartyNumber = previousFullParty.partyNumber;
     }
 
     // Create new party
@@ -88,6 +265,21 @@ async function autoAssignPlayer(userId, guildId, client, collections) {
       }
     }
   );
+
+  // Trigger smart rebalancing if this was a new party created from a full party
+  if (shouldRebalance && previousFullPartyNumber) {
+    try {
+      await smartRebalanceNewParty(
+        previousFullPartyNumber,
+        bestParty.partyNumber,
+        guildId,
+        client,
+        collections
+      );
+    } catch (err) {
+      console.error('Smart rebalancing failed:', err);
+    }
+  }
 
   // Send DM notification
   try {
@@ -178,7 +370,7 @@ async function handleRoleChange(userId, guildId, oldRole, newRole, client, colle
     return; // Not assigned to a party
   }
 
-  // Update role in party members array
+  // Update role in party members array AND update weapons
   await parties.updateOne(
     {
       guildId,
@@ -186,7 +378,11 @@ async function handleRoleChange(userId, guildId, oldRole, newRole, client, colle
       'members.userId': userId
     },
     {
-      $set: { 'members.$.role': newRole },
+      $set: { 
+        'members.$.role': newRole,
+        'members.$.weapon1': player.weapon1,
+        'members.$.weapon2': player.weapon2
+      },
       $inc: {
         [`roleComposition.${oldRole}`]: -1,
         [`roleComposition.${newRole}`]: 1
@@ -249,5 +445,6 @@ async function removePlayerFromParty(userId, guildId, collections) {
 module.exports = {
   autoAssignPlayer,
   handleRoleChange,
-  removePlayerFromParty
+  removePlayerFromParty,
+  findPartiesMissingRole
 };
