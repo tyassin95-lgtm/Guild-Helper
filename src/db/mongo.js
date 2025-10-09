@@ -33,6 +33,9 @@ function getCollections(db = _db) {
     userCooldowns: db.collection('userCooldowns'),
     guildSettings: db.collection('guildSettings'),
 
+    // Raid system
+    raidSessions: db.collection('raidSessions'),
+
     // Party system
     partyPlayers: db.collection('partyPlayers'),
     parties: db.collection('parties'),

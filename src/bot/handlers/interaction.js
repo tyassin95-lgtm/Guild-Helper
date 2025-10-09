@@ -1,3 +1,4 @@
+// src/bot/handlers/interaction.js - COMPLETE FILE
 const { handleCreatePanel } = require('./commands/createpanel');
 const { handleMyWishlist } = require('./commands/mywishlist');
 const { handleSummary } = require('./commands/summary');
@@ -7,7 +8,7 @@ const { handleResetUser } = require('./commands/resetuser');
 const { handleResetAll, handleResetAllConfirmation } = require('./commands/resetall');
 const { handleStats } = require('./commands/stats');
 const { handleSummaryLive } = require('./commands/summarylive');
-const { handleFreeze, handleFreezeStatus } = require('./commands/freeze');
+const { handleFreeze, handleFreezeStatus, handleFreezeModal, handleFreezeBossSelection } = require('./commands/freeze');
 const { handleRemind } = require('./commands/remind');
 
 const { handleButtons } = require('./buttons');
@@ -25,14 +26,14 @@ const { handlePartySelects } = require('../../features/parties/handlers/selects'
 const { handlePartyModals } = require('../../features/parties/handlers/modals');
 const { handlePartyManageButtons } = require('../../features/parties/handlers/manageButtons');
 
-// ✨ NEW: Import the safe execution wrapper
+// Safe execution wrapper
 const { safeExecute } = require('../../utils/safeExecute');
 
 async function onInteractionCreate({ client, interaction, db, collections }) {
-  // ✨ NEW: Wrap everything in safeExecute for automatic error handling
+  // Wrap everything in safeExecute for automatic error handling
   await safeExecute(interaction, async () => {
 
-    // All existing code below remains EXACTLY the same
+    // Chat Input Commands
     if (interaction.isChatInputCommand()) {
       const name = interaction.commandName;
 
@@ -59,7 +60,14 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'resetparties') return handleResetParties({ interaction, collections });
     }
 
+    // Button Interactions
     if (interaction.isButton()) {
+      // NEW: Freeze finish selection button
+      if (interaction.customId === 'freeze_finish_selection') {
+        const { handleFreezeFinishButton } = require('./commands/freeze');
+        return handleFreezeFinishButton({ interaction, collections });
+      }
+
       // Handle reset all confirmation buttons
       if (interaction.customId.startsWith('confirm_reset_all_')) {
         return handleResetAllConfirmation({ interaction, collections });
@@ -85,7 +93,13 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       return handleButtons({ interaction, collections });
     }
 
+    // String Select Menu Interactions
     if (interaction.isStringSelectMenu()) {
+      // NEW: Freeze boss selection
+      if (interaction.customId.startsWith('freeze_select_')) {
+        return handleFreezeBossSelection({ interaction, collections });
+      }
+
       // Party system selects
       if (interaction.customId.startsWith('party_')) {
         return handlePartySelects({ interaction, collections });
@@ -94,14 +108,20 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       return handleSelects({ interaction, collections });
     }
 
+    // Modal Submit Interactions
     if (interaction.isModalSubmit()) {
+      // NEW: Freeze raid setup modal
+      if (interaction.customId === 'freeze_raid_setup') {
+        return handleFreezeModal({ interaction, collections });
+      }
+
       // Party system modals
       if (interaction.customId.startsWith('party_')) {
         return handlePartyModals({ interaction, collections });
       }
     }
 
-  }); // ✨ End of safeExecute wrapper
+  }); // End of safeExecute wrapper
 }
 
 module.exports = { onInteractionCreate };
