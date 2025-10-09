@@ -10,170 +10,210 @@ async function handlePartySelects({ interaction, collections }) {
 
   // Select weapon 1
   if (interaction.customId === 'party_select_weapon1') {
+    // CRITICAL: Defer IMMEDIATELY before any database operations
+    await interaction.deferUpdate();
+
     const weapon = interaction.values[0];
 
-    const playerBefore = await partyPlayers.findOne({
-      userId: interaction.user.id,
-      guildId: interaction.guildId
-    });
+    try {
+      const playerBefore = await partyPlayers.findOne({
+        userId: interaction.user.id,
+        guildId: interaction.guildId
+      });
 
-    const oldRole = playerBefore?.role;
+      const oldRole = playerBefore?.role;
 
-    await partyPlayers.updateOne(
-      { userId: interaction.user.id, guildId: interaction.guildId },
-      { $set: { weapon1: weapon, updatedAt: new Date() } },
-      { upsert: true }
-    );
-
-    const playerInfo = await partyPlayers.findOne({
-      userId: interaction.user.id,
-      guildId: interaction.guildId
-    });
-
-    // Update role if both weapons are set
-    if (playerInfo.weapon1 && playerInfo.weapon2) {
-      const newRole = await updatePlayerRole(
-        interaction.user.id,
-        interaction.guildId,
-        playerInfo.weapon1,
-        playerInfo.weapon2,
-        collections
+      await partyPlayers.updateOne(
+        { userId: interaction.user.id, guildId: interaction.guildId },
+        { $set: { weapon1: weapon, updatedAt: new Date() } },
+        { upsert: true }
       );
 
-      // Handle role change if player is in a party
-      if (oldRole && newRole !== oldRole && playerInfo.partyNumber) {
-        await handleRoleChange(
+      const playerInfo = await partyPlayers.findOne({
+        userId: interaction.user.id,
+        guildId: interaction.guildId
+      });
+
+      // Update role if both weapons are set
+      if (playerInfo.weapon1 && playerInfo.weapon2) {
+        const newRole = await updatePlayerRole(
           interaction.user.id,
           interaction.guildId,
-          oldRole,
-          newRole,
-          interaction.client,
+          playerInfo.weapon1,
+          playerInfo.weapon2,
           collections
         );
 
-        // Schedule panel update
-        schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
-      } else if (!playerInfo.partyNumber && playerInfo.cp) {
-        // Try auto-assignment if not in a party but has CP
-        const result = await autoAssignPlayer(
-          interaction.user.id,
-          interaction.guildId,
-          interaction.client,
-          collections
-        );
+        // Handle role change if player is in a party (non-blocking)
+        if (oldRole && newRole !== oldRole && playerInfo.partyNumber) {
+          // Don't await - let this happen in background
+          handleRoleChange(
+            interaction.user.id,
+            interaction.guildId,
+            oldRole,
+            newRole,
+            interaction.client,
+            collections
+          ).catch(err => {
+            console.error('Role change error:', err);
+          });
 
-        if (result.success) {
-          // Schedule panel update
+          // Schedule panel update (non-blocking)
           schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+        } else if (!playerInfo.partyNumber && playerInfo.cp) {
+          // Try auto-assignment if not in a party but has CP (non-blocking)
+          autoAssignPlayer(
+            interaction.user.id,
+            interaction.guildId,
+            interaction.client,
+            collections
+          ).then(result => {
+            if (result.success) {
+              schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+            }
+          }).catch(err => {
+            console.error('Auto-assign error:', err);
+          });
         }
       }
+
+      const embed = createPlayerInfoEmbed(playerInfo, interaction.member);
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('party_set_weapon1')
+          .setLabel('Set Primary Weapon')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('⚔️'),
+        new ButtonBuilder()
+          .setCustomId('party_set_weapon2')
+          .setLabel('Set Secondary Weapon')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('🗡️'),
+        new ButtonBuilder()
+          .setCustomId('party_set_cp')
+          .setLabel('Set Combat Power')
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('💪')
+      );
+
+      return interaction.editReply({ 
+        content: `✅ Primary weapon set to **${weapon}**!`, 
+        embeds: [embed], 
+        components: [row] 
+      });
+    } catch (err) {
+      console.error('Error in party_select_weapon1:', err);
+      return interaction.editReply({ 
+        content: '❌ An error occurred while updating your weapon. Please try again.', 
+        embeds: [], 
+        components: [] 
+      });
     }
-
-    const embed = createPlayerInfoEmbed(playerInfo, interaction.member);
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('party_set_weapon1')
-        .setLabel('Set Primary Weapon')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('⚔️'),
-      new ButtonBuilder()
-        .setCustomId('party_set_weapon2')
-        .setLabel('Set Secondary Weapon')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('🗡️'),
-      new ButtonBuilder()
-        .setCustomId('party_set_cp')
-        .setLabel('Set Combat Power')
-        .setStyle(ButtonStyle.Success)
-        .setEmoji('💪')
-    );
-
-    return interaction.update({ content: `✅ Primary weapon set to **${weapon}**!`, embeds: [embed], components: [row] });
   }
 
   // Select weapon 2
   if (interaction.customId === 'party_select_weapon2') {
+    // CRITICAL: Defer IMMEDIATELY before any database operations
+    await interaction.deferUpdate();
+
     const weapon = interaction.values[0];
 
-    const playerBefore = await partyPlayers.findOne({
-      userId: interaction.user.id,
-      guildId: interaction.guildId
-    });
+    try {
+      const playerBefore = await partyPlayers.findOne({
+        userId: interaction.user.id,
+        guildId: interaction.guildId
+      });
 
-    const oldRole = playerBefore?.role;
+      const oldRole = playerBefore?.role;
 
-    await partyPlayers.updateOne(
-      { userId: interaction.user.id, guildId: interaction.guildId },
-      { $set: { weapon2: weapon, updatedAt: new Date() } },
-      { upsert: true }
-    );
-
-    const playerInfo = await partyPlayers.findOne({
-      userId: interaction.user.id,
-      guildId: interaction.guildId
-    });
-
-    // Update role if both weapons are set
-    if (playerInfo.weapon1 && playerInfo.weapon2) {
-      const newRole = await updatePlayerRole(
-        interaction.user.id,
-        interaction.guildId,
-        playerInfo.weapon1,
-        playerInfo.weapon2,
-        collections
+      await partyPlayers.updateOne(
+        { userId: interaction.user.id, guildId: interaction.guildId },
+        { $set: { weapon2: weapon, updatedAt: new Date() } },
+        { upsert: true }
       );
 
-      // Handle role change if player is in a party
-      if (oldRole && newRole !== oldRole && playerInfo.partyNumber) {
-        await handleRoleChange(
+      const playerInfo = await partyPlayers.findOne({
+        userId: interaction.user.id,
+        guildId: interaction.guildId
+      });
+
+      // Update role if both weapons are set
+      if (playerInfo.weapon1 && playerInfo.weapon2) {
+        const newRole = await updatePlayerRole(
           interaction.user.id,
           interaction.guildId,
-          oldRole,
-          newRole,
-          interaction.client,
+          playerInfo.weapon1,
+          playerInfo.weapon2,
           collections
         );
 
-        // Schedule panel update
-        schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
-      } else if (!playerInfo.partyNumber && playerInfo.cp) {
-        // Try auto-assignment if not in a party but has CP
-        const result = await autoAssignPlayer(
-          interaction.user.id,
-          interaction.guildId,
-          interaction.client,
-          collections
-        );
+        // Handle role change if player is in a party (non-blocking)
+        if (oldRole && newRole !== oldRole && playerInfo.partyNumber) {
+          // Don't await - let this happen in background
+          handleRoleChange(
+            interaction.user.id,
+            interaction.guildId,
+            oldRole,
+            newRole,
+            interaction.client,
+            collections
+          ).catch(err => {
+            console.error('Role change error:', err);
+          });
 
-        if (result.success) {
-          // Schedule panel update
+          // Schedule panel update (non-blocking)
           schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+        } else if (!playerInfo.partyNumber && playerInfo.cp) {
+          // Try auto-assignment if not in a party but has CP (non-blocking)
+          autoAssignPlayer(
+            interaction.user.id,
+            interaction.guildId,
+            interaction.client,
+            collections
+          ).then(result => {
+            if (result.success) {
+              schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+            }
+          }).catch(err => {
+            console.error('Auto-assign error:', err);
+          });
         }
       }
+
+      const embed = createPlayerInfoEmbed(playerInfo, interaction.member);
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('party_set_weapon1')
+          .setLabel('Set Primary Weapon')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('⚔️'),
+        new ButtonBuilder()
+          .setCustomId('party_set_weapon2')
+          .setLabel('Set Secondary Weapon')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('🗡️'),
+        new ButtonBuilder()
+          .setCustomId('party_set_cp')
+          .setLabel('Set Combat Power')
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('💪')
+      );
+
+      return interaction.editReply({ 
+        content: `✅ Secondary weapon set to **${weapon}**!`, 
+        embeds: [embed], 
+        components: [row] 
+      });
+    } catch (err) {
+      console.error('Error in party_select_weapon2:', err);
+      return interaction.editReply({ 
+        content: '❌ An error occurred while updating your weapon. Please try again.', 
+        embeds: [], 
+        components: [] 
+      });
     }
-
-    const embed = createPlayerInfoEmbed(playerInfo, interaction.member);
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('party_set_weapon1')
-        .setLabel('Set Primary Weapon')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('⚔️'),
-      new ButtonBuilder()
-        .setCustomId('party_set_weapon2')
-        .setLabel('Set Secondary Weapon')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('🗡️'),
-      new ButtonBuilder()
-        .setCustomId('party_set_cp')
-        .setLabel('Set Combat Power')
-        .setStyle(ButtonStyle.Success)
-        .setEmoji('💪')
-    );
-
-    return interaction.update({ content: `✅ Secondary weapon set to **${weapon}**!`, embeds: [embed], components: [row] });
   }
 
   // Manage party selection

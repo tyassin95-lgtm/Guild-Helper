@@ -5,18 +5,28 @@ const { smartRebalanceNewParty } = require('./smartRebalancing');
 
 /**
  * Find parties that are missing a specific role
+ * SECURITY: Only returns parties from the specified guild
  */
 async function findPartiesMissingRole(guildId, role, collections) {
   const { parties } = collections;
 
+  // CRITICAL: Filter by guildId to prevent cross-guild contamination
   const allParties = await parties.find({ 
-    guildId,
+    guildId: guildId, // SECURITY: Explicit guild filter
     $expr: { $lt: [{ $size: { $ifNull: ['$members', []] } }, PARTY_SIZE] } // Not full
   }).toArray();
+
+  console.log(`[findPartiesMissingRole] Found ${allParties.length} parties in guild ${guildId}`);
 
   const partiesNeedingRole = [];
 
   for (const party of allParties) {
+    // SECURITY: Double-check guildId
+    if (party.guildId !== guildId) {
+      console.error(`[SECURITY VIOLATION] Party ${party.partyNumber} has wrong guildId! Expected: ${guildId}, Got: ${party.guildId}`);
+      continue;
+    }
+
     const members = party.members || [];
     const composition = {
       tanks: members.filter(m => m.role === 'tank').length,
@@ -30,6 +40,8 @@ async function findPartiesMissingRole(guildId, role, collections) {
       partiesNeedingRole.push(party);
     }
   }
+
+  console.log(`[findPartiesMissingRole] Found ${partiesNeedingRole.length} parties needing ${role}`);
 
   return partiesNeedingRole;
 }
@@ -48,9 +60,15 @@ async function assignToPartyWithRoleNeed(player, partiesNeedingRole, guildId, cl
   if (partiesNeedingRole.length === 1) {
     const targetParty = partiesNeedingRole[0];
 
+    // SECURITY: Verify party belongs to correct guild
+    if (targetParty.guildId !== guildId) {
+      console.error(`[SECURITY] Attempted cross-guild assignment! Party guild: ${targetParty.guildId}, Player guild: ${guildId}`);
+      return { success: false, reason: 'Guild mismatch error' };
+    }
+
     // Add player to party
     await parties.updateOne(
-      { _id: targetParty._id },
+      { _id: targetParty._id, guildId: guildId }, // FIXED: Add guildId check
       {
         $push: {
           members: {
@@ -105,6 +123,12 @@ async function assignToPartyWithRoleNeed(player, partiesNeedingRole, guildId, cl
       break;
     }
 
+    // SECURITY: Skip parties from wrong guild
+    if (party.guildId !== guildId) {
+      console.error(`[SECURITY] Skipping party from wrong guild! Party guild: ${party.guildId}, Player guild: ${guildId}`);
+      continue;
+    }
+
     const totalCP = members.reduce((sum, m) => sum + (m.cp || 0), 0);
     const avgCP = totalCP / members.length;
     const diff = Math.abs(playerCP - avgCP);
@@ -117,7 +141,7 @@ async function assignToPartyWithRoleNeed(player, partiesNeedingRole, guildId, cl
 
   // Add player to closest party
   await parties.updateOne(
-    { _id: closestParty._id },
+    { _id: closestParty._id, guildId: guildId }, // FIXED: Add guildId check
     {
       $push: {
         members: {
@@ -235,7 +259,7 @@ async function autoAssignPlayer(userId, guildId, client, collections) {
 
   // Add player to party
   await parties.updateOne(
-    { _id: bestParty._id },
+    { _id: bestParty._id, guildId: guildId }, // FIXED: Add guildId check
     {
       $push: {
         members: {
@@ -361,42 +385,55 @@ function getNextPartyNumber(allParties) {
 
 /**
  * Handle role change for a player
+ * FIXED: Better error handling and async operations
  */
 async function handleRoleChange(userId, guildId, oldRole, newRole, client, collections) {
   const { partyPlayers, parties } = collections;
 
-  const player = await partyPlayers.findOne({ userId, guildId });
-  if (!player || !player.partyNumber) {
-    return; // Not assigned to a party
-  }
-
-  // Update role in party members array AND update weapons
-  await parties.updateOne(
-    {
-      guildId,
-      partyNumber: player.partyNumber,
-      'members.userId': userId
-    },
-    {
-      $set: { 
-        'members.$.role': newRole,
-        'members.$.weapon1': player.weapon1,
-        'members.$.weapon2': player.weapon2
-      },
-      $inc: {
-        [`roleComposition.${oldRole}`]: -1,
-        [`roleComposition.${newRole}`]: 1
-      }
-    }
-  );
-
-  // Check if we should consider moving the player
-  // For now, we just notify them of the role change
-  const { sendRoleChangeDM } = require('./notifications');
   try {
-    await sendRoleChangeDM(userId, player.partyNumber, oldRole, newRole, client, collections);
+    const player = await partyPlayers.findOne({ userId, guildId });
+    if (!player || !player.partyNumber) {
+      console.log(`[handleRoleChange] Player ${userId} not in a party, skipping`);
+      return; // Not assigned to a party
+    }
+
+    console.log(`[handleRoleChange] ${userId} role change: ${oldRole} → ${newRole} in Party ${player.partyNumber}`);
+
+    // Update role in party members array AND update weapons
+    await parties.updateOne(
+      {
+        guildId,
+        partyNumber: player.partyNumber,
+        'members.userId': userId
+      },
+      {
+        $set: { 
+          'members.$.role': newRole,
+          'members.$.weapon1': player.weapon1,
+          'members.$.weapon2': player.weapon2
+        },
+        $inc: {
+          [`roleComposition.${oldRole}`]: -1,
+          [`roleComposition.${newRole}`]: 1
+        }
+      }
+    );
+
+    console.log(`[handleRoleChange] Updated party document for ${userId}`);
+
+    // Send DM notification (non-blocking - don't wait for it)
+    const { sendRoleChangeDM } = require('./notifications');
+    setImmediate(async () => {
+      try {
+        await sendRoleChangeDM(userId, player.partyNumber, oldRole, newRole, client, collections);
+        console.log(`[handleRoleChange] Sent role change DM to ${userId}`);
+      } catch (err) {
+        console.error(`[handleRoleChange] Failed to send role change DM to ${userId}:`, err.message);
+      }
+    });
   } catch (err) {
-    console.error(`Failed to send role change DM to ${userId}:`, err.message);
+    console.error(`[handleRoleChange] Error for ${userId}:`, err);
+    throw err; // Re-throw so caller knows it failed
   }
 }
 
