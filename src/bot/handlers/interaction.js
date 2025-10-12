@@ -10,6 +10,7 @@ const { handleStats } = require('./commands/stats');
 const { handleSummaryLive } = require('./commands/summarylive');
 const { handleFreeze, handleFreezeStatus, handleFreezeModal, handleFreezeBossSelection } = require('./commands/freeze');
 const { handleRemind } = require('./commands/remind');
+const { handleExcludeRole } = require('./commands/excluderole');
 
 const { handleButtons } = require('./buttons');
 const { handleSelects } = require('./selects');
@@ -50,6 +51,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'freeze')      return handleFreeze({ interaction, collections });
       if (name === 'freezestatus')return handleFreezeStatus({ interaction, collections });
       if (name === 'remind')      return handleRemind({ interaction, collections });
+      if (name === 'excluderole') return handleExcludeRole({ interaction, collections });
 
       // Party commands
       if (name === 'myinfo')      return handleMyInfo({ interaction, collections });

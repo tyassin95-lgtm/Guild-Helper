@@ -1,7 +1,7 @@
 const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 async function handleRemind({ interaction, collections }) {
-  const { wishlists } = collections;
+  const { wishlists, guildSettings } = collections;
 
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
@@ -9,9 +9,25 @@ async function handleRemind({ interaction, collections }) {
 
   await interaction.deferReply({ flags: [64] });
 
+  // Get excluded roles
+  const settings = await guildSettings.findOne({ guildId: interaction.guildId });
+  const excludedRoles = settings?.excludedRoles || [];
+
   // Fetch all guild members
   await interaction.guild.members.fetch();
-  const humans = interaction.guild.members.cache.filter(m => !m.user.bot);
+
+  // Filter out bots and excluded roles
+  const humans = interaction.guild.members.cache.filter(m => {
+    if (m.user.bot) return false;
+
+    // Check if member has any excluded roles
+    if (excludedRoles.length > 0) {
+      const hasExcludedRole = m.roles.cache.some(role => excludedRoles.includes(role.id));
+      if (hasExcludedRole) return false;
+    }
+
+    return true;
+  });
 
   // Get all finalized wishlists
   const finalized = await wishlists.find({ guildId: interaction.guildId, finalized: true }).toArray();
@@ -21,10 +37,21 @@ async function handleRemind({ interaction, collections }) {
   const notSubmitted = humans.filter(m => !finalizedIds.has(m.id));
 
   if (notSubmitted.size === 0) {
-    return interaction.editReply({
-      content: '✅ All members have already submitted their wishlists!',
-      flags: [64]
-    });
+    let message = '✅ All members have already submitted their wishlists!';
+
+    if (excludedRoles.length > 0) {
+      const roleNames = [];
+      for (const roleId of excludedRoles) {
+        const role = await interaction.guild.roles.fetch(roleId).catch(() => null);
+        if (role) roleNames.push(role.name);
+      }
+
+      if (roleNames.length > 0) {
+        message += `\n\n*Excluding members with: ${roleNames.join(', ')}*`;
+      }
+    }
+
+    return interaction.editReply({ content: message, flags: [64] });
   }
 
   // Prepare reminder embed
@@ -73,6 +100,19 @@ async function handleRemind({ interaction, collections }) {
 
     if (failedUsers.length > 10) {
       response += `\n... and ${failedUsers.length - 10} more`;
+    }
+  }
+
+  // Add note about excluded roles if any
+  if (excludedRoles.length > 0) {
+    const roleNames = [];
+    for (const roleId of excludedRoles) {
+      const role = await interaction.guild.roles.fetch(roleId).catch(() => null);
+      if (role) roleNames.push(role.name);
+    }
+
+    if (roleNames.length > 0) {
+      response += `\n\n*Excluded roles from reminders: ${roleNames.join(', ')}*`;
     }
   }
 

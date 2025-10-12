@@ -159,6 +159,30 @@ async function registerSlashCommands(client) {
         }
       ]
     },
+    {
+      name: 'excluderole',
+      description: 'Admins: Exclude/include roles from wishlist tracking.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'action',
+          description: 'What to do',
+          required: true,
+          choices: [
+            { name: 'add (exclude role)', value: 'add' },
+            { name: 'remove (include role)', value: 'remove' },
+            { name: 'list (show excluded roles)', value: 'list' }
+          ]
+        },
+        {
+          type: 8, // ROLE
+          name: 'role',
+          description: 'Role to exclude/include',
+          required: false // Not required for 'list' action
+        }
+      ]
+    },
 
     // ----- Everyone -----
     {

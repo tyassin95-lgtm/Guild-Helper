@@ -8,7 +8,11 @@ const CATEGORY_ICONS = {
 };
 
 async function buildSummaryEmbedsAndControls(interaction, collections) {
-  const { wishlists, handedOut } = collections;
+  const { wishlists, handedOut, guildSettings } = collections;
+
+  // Get excluded roles
+  const settings = await guildSettings.findOne({ guildId: interaction.guildId });
+  const excludedRoles = settings?.excludedRoles || [];
 
   const allWishlists = await wishlists.find({ guildId: interaction.guildId, finalized: true }).toArray();
 
@@ -196,9 +200,22 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
     embeds.push(handedOutEmbed);
   }
 
-  // Submission footer
+  // Submission footer - UPDATED TO FILTER EXCLUDED ROLES
   await interaction.guild.members.fetch();
-  const humans = interaction.guild.members.cache.filter(m => !m.user.bot);
+
+  // Filter out excluded roles
+  const humans = interaction.guild.members.cache.filter(m => {
+    if (m.user.bot) return false;
+
+    // Check if member has any excluded roles
+    if (excludedRoles.length > 0) {
+      const hasExcludedRole = m.roles.cache.some(role => excludedRoles.includes(role.id));
+      if (hasExcludedRole) return false;
+    }
+
+    return true;
+  });
+
   const finalizedIds = new Set(allWishlists.map(w => w.userId));
   const submitted = [];
   const notSubmitted = [];
@@ -232,6 +249,21 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
     .setColor('#2ecc71')
     .setTitle('📝 Submission Status')
     .setTimestamp();
+
+  // Add note about excluded roles if any exist
+  if (excludedRoles.length > 0) {
+    const roleNames = [];
+    for (const roleId of excludedRoles) {
+      const role = await interaction.guild.roles.fetch(roleId).catch(() => null);
+      if (role) roleNames.push(role.name);
+    }
+
+    if (roleNames.length > 0) {
+      footerEmbed.setDescription(
+        `*Excluding members with: ${roleNames.join(', ')}*`
+      );
+    }
+  }
 
   if (submittedChunks.length === 1) {
     footerEmbed.addFields({
