@@ -68,6 +68,168 @@ async function movePlayerBetweenParties(userId, guildId, fromParty, toParty, cli
 }
 
 /**
+ * Clean up duplicate members in all parties
+ * Removes duplicate entries where the same userId appears multiple times in a party
+ */
+async function cleanupDuplicateMembers(guildId, collections) {
+  const { parties } = collections;
+
+  console.log(`[Cleanup] Starting duplicate cleanup for guild ${guildId}`);
+
+  const allParties = await parties.find({ guildId }).toArray();
+  let totalDuplicatesRemoved = 0;
+
+  for (const party of allParties) {
+    const members = party.members || [];
+    const seenUserIds = new Set();
+    const uniqueMembers = [];
+    const duplicates = [];
+
+    // Identify duplicates
+    for (const member of members) {
+      if (seenUserIds.has(member.userId)) {
+        duplicates.push(member);
+        console.log(`[Cleanup] Found duplicate: ${member.userId} in Party ${party.partyNumber}`);
+      } else {
+        seenUserIds.add(member.userId);
+        uniqueMembers.push(member);
+      }
+    }
+
+    // Remove duplicates if found
+    if (duplicates.length > 0) {
+      console.log(`[Cleanup] Removing ${duplicates.length} duplicate(s) from Party ${party.partyNumber}`);
+
+      // Calculate correct totalCP and roleComposition
+      const newTotalCP = uniqueMembers.reduce((sum, m) => sum + (m.cp || 0), 0);
+      const newRoleComposition = {
+        tank: uniqueMembers.filter(m => m.role === 'tank').length,
+        healer: uniqueMembers.filter(m => m.role === 'healer').length,
+        dps: uniqueMembers.filter(m => m.role === 'dps').length
+      };
+
+      // Update party with cleaned data
+      await parties.updateOne(
+        { _id: party._id },
+        {
+          $set: {
+            members: uniqueMembers,
+            totalCP: newTotalCP,
+            roleComposition: newRoleComposition
+          }
+        }
+      );
+
+      totalDuplicatesRemoved += duplicates.length;
+    }
+  }
+
+  console.log(`[Cleanup] Cleanup complete. Removed ${totalDuplicatesRemoved} total duplicate(s)`);
+
+  return {
+    duplicatesRemoved: totalDuplicatesRemoved,
+    partiesChecked: allParties.length
+  };
+}
+
+/**
+ * Fix data inconsistencies between partyPlayers and parties collections
+ * Ensures that if a player thinks they're in a party, they actually are in that party
+ */
+async function fixDataInconsistencies(guildId, collections) {
+  const { parties, partyPlayers } = collections;
+
+  console.log(`[Data Sync] Starting data consistency check for guild ${guildId}`);
+
+  // Get all players who think they're assigned to a party
+  const allPlayers = await partyPlayers.find({ 
+    guildId, 
+    partyNumber: { $exists: true, $ne: null }
+  }).toArray();
+
+  // Get all parties
+  const allParties = await parties.find({ guildId }).toArray();
+
+  let playersFixed = 0;
+  let orphanedPlayers = [];
+
+  for (const player of allPlayers) {
+    // Find the party they think they're in
+    const party = allParties.find(p => p.partyNumber === player.partyNumber);
+
+    if (!party) {
+      // Party doesn't exist - clear player's assignment
+      console.log(`[Data Sync] Player ${player.userId} assigned to non-existent Party ${player.partyNumber}, clearing assignment`);
+      await partyPlayers.updateOne(
+        { userId: player.userId, guildId },
+        { $unset: { partyNumber: '', autoAssigned: '' } }
+      );
+      orphanedPlayers.push(player.userId);
+      playersFixed++;
+      continue;
+    }
+
+    // Check if player is actually in the party's members array
+    const isInParty = party.members?.some(m => m.userId === player.userId);
+
+    if (!isInParty) {
+      console.log(`[Data Sync] Player ${player.userId} not found in Party ${player.partyNumber} members, adding them back`);
+
+      // Player is missing from party - add them back
+      await parties.updateOne(
+        { _id: party._id },
+        {
+          $push: {
+            members: {
+              userId: player.userId,
+              weapon1: player.weapon1,
+              weapon2: player.weapon2,
+              cp: player.cp || 0,
+              role: player.role,
+              addedAt: new Date()
+            }
+          },
+          $inc: {
+            totalCP: (player.cp || 0),
+            [`roleComposition.${player.role}`]: 1
+          }
+        }
+      );
+
+      playersFixed++;
+    }
+  }
+
+  // Check for players in parties who don't have partyNumber set
+  for (const party of allParties) {
+    const members = party.members || [];
+
+    for (const member of members) {
+      const playerRecord = await partyPlayers.findOne({ userId: member.userId, guildId });
+
+      if (!playerRecord || playerRecord.partyNumber !== party.partyNumber) {
+        console.log(`[Data Sync] Player ${member.userId} in Party ${party.partyNumber} but record says Party ${playerRecord?.partyNumber || 'none'}, fixing`);
+
+        await partyPlayers.updateOne(
+          { userId: member.userId, guildId },
+          { $set: { partyNumber: party.partyNumber } },
+          { upsert: true }
+        );
+
+        playersFixed++;
+      }
+    }
+  }
+
+  console.log(`[Data Sync] Consistency check complete. Fixed ${playersFixed} inconsistencies`);
+
+  return {
+    playersFixed,
+    orphanedPlayers
+  };
+}
+
+/**
  * STRENGTH-BASED REBALANCING
  * Ensures: Party 1 > Party 2 > Party 3 in terms of average CP
  * Viability first: All parties must have 1T + 1H minimum
@@ -92,9 +254,20 @@ async function strengthBasedRebalance(guildId, client, collections) {
 
   const moves = [];
 
+  // STEP 0: Clean up any duplicate members first
+  console.log(`[Strength Rebalance] Step 0: Cleaning up duplicate members`);
+  const cleanupResult = await cleanupDuplicateMembers(guildId, collections);
+
+  if (cleanupResult.duplicatesRemoved > 0) {
+    console.log(`[Strength Rebalance] Removed ${cleanupResult.duplicatesRemoved} duplicate member(s)`);
+  }
+
+  // Refresh party data after cleanup
+  const cleanedParties = await parties.find({ guildId }).sort({ partyNumber: 1 }).toArray();
+
   // STEP 1: Ensure all parties have 1T + 1H (viability)
   console.log(`[Strength Rebalance] Step 1: Ensuring viability (1T + 1H per party)`);
-  await ensureViability(allParties, guildId, client, collections, moves);
+  await ensureViability(cleanedParties, guildId, client, collections, moves);
 
   // Refresh party data after viability fixes
   const updatedParties = await parties.find({ guildId }).sort({ partyNumber: 1 }).toArray();
@@ -120,7 +293,11 @@ async function strengthBasedRebalance(guildId, client, collections) {
 
   console.log(`[Strength Rebalance] Complete - ${moves.length} move(s) executed`);
 
-  return { rebalanced: true, moves };
+  return { 
+    rebalanced: true, 
+    moves,
+    duplicatesRemoved: cleanupResult.duplicatesRemoved 
+  };
 }
 
 /**
@@ -236,14 +413,32 @@ async function findDuplicateRole(allParties, role, excludePartyNumber) {
 /**
  * STEP 2/3: Optimize tanks/healers by CP ranking
  * Highest CP → Party 1, 2nd highest → Party 2, etc.
+ * COMPLETELY REBUILDS parties from scratch to avoid any duplication bugs
  */
 async function optimizeRolesByCPRanking(allParties, role, guildId, client, collections, moves) {
+  const { parties, partyPlayers } = collections;
+
+  // Refresh party data from database
+  const refreshedParties = [];
+  for (const party of allParties) {
+    const fresh = await parties.findOne({ guildId, partyNumber: party.partyNumber });
+    if (fresh) refreshedParties.push(fresh);
+  }
+
   // Extract all members of this role across all parties
   const roleMembers = [];
+  const seenUserIds = new Set(); // DEDUPLICATE
 
-  for (const party of allParties) {
+  for (const party of refreshedParties) {
     const members = (party.members || []).filter(m => m.role === role);
     for (const member of members) {
+      // Skip if we've already seen this user (prevents duplicates)
+      if (seenUserIds.has(member.userId)) {
+        console.log(`[Optimize ${role}] WARNING: Skipping duplicate ${member.userId} found in Party ${party.partyNumber}`);
+        continue;
+      }
+
+      seenUserIds.add(member.userId);
       roleMembers.push({ ...member, currentParty: party.partyNumber });
     }
   }
@@ -256,29 +451,71 @@ async function optimizeRolesByCPRanking(allParties, role, guildId, client, colle
   // Sort by CP descending (highest first)
   roleMembers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
-  console.log(`[Optimize ${role}] Found ${roleMembers.length} ${role}(s)`);
+  console.log(`[Optimize ${role}] Found ${roleMembers.length} unique ${role}(s)`);
 
-  // Assign: highest CP to Party 1, next to Party 2, etc.
+  // STEP 1: Remove ALL members of this role from ALL parties (including duplicates)
+  for (const party of refreshedParties) {
+    await parties.updateOne(
+      { _id: party._id },
+      {
+        $pull: { members: { role: role } },
+        $set: { [`roleComposition.${role}`]: 0 }
+      }
+    );
+
+    // Recalculate totalCP without this role
+    const currentParty = await parties.findOne({ _id: party._id });
+    const remainingMembers = (currentParty.members || []).filter(m => m.role !== role);
+    const newTotalCP = remainingMembers.reduce((sum, m) => sum + (m.cp || 0), 0);
+
+    await parties.updateOne(
+      { _id: party._id },
+      { $set: { totalCP: newTotalCP } }
+    );
+  }
+
+  console.log(`[Optimize ${role}] Cleared all ${role}s from parties`);
+
+  // STEP 2: Assign highest CP to Party 1, next to Party 2, etc.
   for (let i = 0; i < roleMembers.length; i++) {
-    const targetPartyNumber = allParties[i % allParties.length].partyNumber;
+    const targetParty = refreshedParties[i % refreshedParties.length];
     const member = roleMembers[i];
 
-    if (member.currentParty !== targetPartyNumber) {
-      console.log(`[Optimize ${role}] Moving ${member.userId} (${member.cp} CP) from Party ${member.currentParty} → Party ${targetPartyNumber}`);
+    console.log(`[Optimize ${role}] Assigning ${member.userId} (${member.cp} CP) to Party ${targetParty.partyNumber}`);
 
-      await movePlayerBetweenParties(
-        member.userId,
-        guildId,
-        member.currentParty,
-        targetPartyNumber,
-        client,
-        collections
-      );
+    // Add member to target party
+    await parties.updateOne(
+      { _id: targetParty._id },
+      {
+        $push: {
+          members: {
+            userId: member.userId,
+            weapon1: member.weapon1,
+            weapon2: member.weapon2,
+            cp: member.cp || 0,
+            role: member.role,
+            addedAt: new Date()
+          }
+        },
+        $inc: {
+          totalCP: (member.cp || 0),
+          [`roleComposition.${role}`]: 1
+        }
+      }
+    );
 
+    // Update player record
+    await partyPlayers.updateOne(
+      { userId: member.userId, guildId },
+      { $set: { partyNumber: targetParty.partyNumber } }
+    );
+
+    // Track move if party changed
+    if (member.currentParty !== targetParty.partyNumber) {
       moves.push({
         userId: member.userId,
         from: member.currentParty,
-        to: targetPartyNumber,
+        to: targetParty.partyNumber,
         role: role,
         reason: `Strength optimization: ${role} rebalancing`
       });
@@ -286,13 +523,15 @@ async function optimizeRolesByCPRanking(allParties, role, guildId, client, colle
       await sendPartyChangeDM(
         member.userId,
         member.currentParty,
-        targetPartyNumber,
+        targetParty.partyNumber,
         `Strength-based rebalancing: ${role} optimization`,
         client,
         collections
       ).catch(err => console.error('DM failed:', err.message));
     }
   }
+
+  console.log(`[Optimize ${role}] Optimization complete`);
 }
 
 /**
@@ -399,8 +638,9 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
         { $set: { partyNumber: party.partyNumber } }
       );
 
+      // Only log move and send DM if party actually changed
       if (dps.currentParty !== party.partyNumber) {
-        console.log(`[DPS Redistribution] Assigned DPS ${dps.userId} (${dps.cp} CP) to Party ${party.partyNumber} (was in Party ${dps.currentParty})`);
+        console.log(`[DPS Redistribution] Moved DPS ${dps.userId} (${dps.cp} CP) from Party ${dps.currentParty} → Party ${party.partyNumber}`);
 
         moves.push({
           userId: dps.userId,
@@ -418,6 +658,8 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
           client,
           collections
         ).catch(err => console.error('DM failed:', err.message));
+      } else {
+        console.log(`[DPS Redistribution] DPS ${dps.userId} (${dps.cp} CP) stayed in Party ${party.partyNumber}`);
       }
     }
 
