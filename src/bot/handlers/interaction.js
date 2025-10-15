@@ -22,6 +22,7 @@ const { handlePlayerList } = require('../../features/parties/commands/playerlist
 const { handlePartiesPanel } = require('../../features/parties/commands/partiespanel');
 const { handleAutoAssign } = require('../../features/parties/commands/autoassign');
 const { handleResetParties, handleResetPartiesConfirmation } = require('../../features/parties/commands/resetparties');
+const { handleRemindParty } = require('../../features/parties/commands/remindparty');
 const { handlePartyButtons } = require('../../features/parties/handlers/buttons');
 const { handlePartySelects } = require('../../features/parties/handlers/selects');
 const { handlePartyModals } = require('../../features/parties/handlers/modals');
@@ -60,6 +61,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'partiespanel') return handlePartiesPanel({ interaction, collections });
       if (name === 'autoassign')  return handleAutoAssign({ interaction, collections });
       if (name === 'resetparties') return handleResetParties({ interaction, collections });
+      if (name === 'remindparty') return handleRemindParty({ interaction, collections });
     }
 
     // Button Interactions

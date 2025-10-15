@@ -9,7 +9,8 @@ async function ensureIndexes({
   partyPlayers, 
   parties, 
   partyPanels,
-  raidSessions 
+  raidSessions,
+  dmContexts 
 }) {
   // Wishlists index
   await wishlists.createIndex({ userId: 1, guildId: 1 }, { unique: true });
@@ -63,6 +64,10 @@ async function ensureIndexes({
   await raidSessions.createIndex({ guildId: 1, active: 1 });
   await raidSessions.createIndex({ guildId: 1 });
   await raidSessions.createIndex({ frozenAt: 1 });
+
+  // DM contexts indexes (NEW)
+  await dmContexts.createIndex({ userId: 1 }, { unique: true });
+  await dmContexts.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index for auto-cleanup
 
   console.log('All indexes created successfully');
 }

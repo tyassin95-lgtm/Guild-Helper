@@ -1,11 +1,19 @@
 const { EmbedBuilder } = require('discord.js');
 
 function createPlayerInfoEmbed(playerInfo, member) {
+  // Handle case where member might be null (DM context or fetch failure)
+  const displayName = member?.displayName || 'Unknown User';
+  const avatarURL = member?.user?.displayAvatarURL?.() || member?.displayAvatarURL?.() || null;
+
   const embed = new EmbedBuilder()
     .setColor('#5865F2')
-    .setTitle(`${member.displayName}'s Party Info`)
-    .setThumbnail(member.user.displayAvatarURL())
+    .setTitle(`${displayName}'s Party Info`)
     .setTimestamp();
+
+  // Only set thumbnail if we have an avatar URL
+  if (avatarURL) {
+    embed.setThumbnail(avatarURL);
+  }
 
   if (!playerInfo || !playerInfo.weapon1 || !playerInfo.weapon2) {
     embed.setDescription('❌ You haven\'t set up your party info yet!\n\nUse the buttons below to get started.');

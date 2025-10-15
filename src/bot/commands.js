@@ -183,6 +183,11 @@ async function registerSlashCommands(client) {
         }
       ]
     },
+    {
+      name: 'remindparty',
+      description: 'Admins: Send a DM to users who haven\'t set up their party info.',
+      default_member_permissions: ADMIN
+    },
 
     // ----- Everyone -----
     {

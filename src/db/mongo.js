@@ -39,7 +39,10 @@ function getCollections(db = _db) {
     // Party system
     partyPlayers: db.collection('partyPlayers'),
     parties: db.collection('parties'),
-    partyPanels: db.collection('partyPanels')
+    partyPanels: db.collection('partyPanels'),
+
+    // DM context tracking (NEW)
+    dmContexts: db.collection('dmContexts')
   };
 }
 
