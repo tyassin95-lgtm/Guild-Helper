@@ -4,24 +4,24 @@ const { getRoleDisplayName, getRoleEmoji } = require('./roleDetection');
 /**
  * Send DM when player is initially assigned to a party
  */
-async function sendPartyAssignmentDM(userId, partyNumber, role, client, collections) {
+async function sendPartyAssignmentDM(userId, partyNumber, role, guildId, client, collections) {
   const { parties, partyPlayers } = collections;
 
-  // FIX: Get the player's guildId first
-  const player = await partyPlayers.findOne({ userId });
-  if (!player || !player.guildId) {
-    console.error(`Cannot send assignment DM: Player ${userId} not found or missing guildId`);
+  // Get the player's data for THIS guild
+  const player = await partyPlayers.findOne({ userId, guildId });
+  if (!player) {
+    console.error(`Cannot send assignment DM: Player ${userId} not found in guild ${guildId}`);
     return;
   }
 
-  // FIX: Include guildId in the query to get the correct party
+  // Include guildId in the party query
   const party = await parties.findOne({ 
-    guildId: player.guildId, 
+    guildId, 
     partyNumber 
   });
 
   if (!party) {
-    console.error(`Cannot send assignment DM: Party ${partyNumber} not found in guild ${player.guildId}`);
+    console.error(`Cannot send assignment DM: Party ${partyNumber} not found in guild ${guildId}`);
     return;
   }
 
@@ -106,26 +106,26 @@ async function sendPartyAssignmentDM(userId, partyNumber, role, client, collecti
 /**
  * Send DM when player is moved to a different party
  */
-async function sendPartyChangeDM(userId, fromParty, toParty, reason, client, collections) {
+async function sendPartyChangeDM(userId, fromParty, toParty, reason, guildId, client, collections) {
   const { parties, partyPlayers } = collections;
 
   const user = await client.users.fetch(userId);
   if (!user) return;
 
-  const player = await partyPlayers.findOne({ userId });
-  if (!player || !player.guildId) {
-    console.error(`Cannot send change DM: Player ${userId} not found or missing guildId`);
+  const player = await partyPlayers.findOne({ userId, guildId });
+  if (!player) {
+    console.error(`Cannot send change DM: Player ${userId} not found in guild ${guildId}`);
     return;
   }
 
-  // FIX: Include guildId in the query
+  // Include guildId in the query
   const party = await parties.findOne({ 
-    guildId: player.guildId, 
+    guildId, 
     partyNumber: toParty 
   });
 
   if (!party) {
-    console.error(`Cannot send change DM: Party ${toParty} not found in guild ${player.guildId}`);
+    console.error(`Cannot send change DM: Party ${toParty} not found in guild ${guildId}`);
     return;
   }
 
@@ -212,7 +212,7 @@ async function sendPartyChangeDM(userId, fromParty, toParty, reason, client, col
 /**
  * Send DM when player's role changes
  */
-async function sendRoleChangeDM(userId, partyNumber, oldRole, newRole, client, collections) {
+async function sendRoleChangeDM(userId, partyNumber, oldRole, newRole, guildId, client, collections) {
   const user = await client.users.fetch(userId);
   if (!user) return;
 

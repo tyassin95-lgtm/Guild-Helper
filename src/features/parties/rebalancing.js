@@ -336,6 +336,7 @@ async function ensureViability(allParties, guildId, client, collections, moves) 
           partyNumber,
           party.partyNumber,
           'Rebalancing: Your party needed a tank',
+          guildId,
           client,
           collections
         ).catch(err => console.error('DM failed:', err.message));
@@ -371,6 +372,7 @@ async function ensureViability(allParties, guildId, client, collections, moves) 
           partyNumber,
           party.partyNumber,
           'Rebalancing: Your party needed a healer',
+          guildId,
           client,
           collections
         ).catch(err => console.error('DM failed:', err.message));
@@ -510,7 +512,7 @@ async function optimizeRolesByCPRanking(allParties, role, guildId, client, colle
       { $set: { partyNumber: targetParty.partyNumber } }
     );
 
-    // Track move if party changed
+    // Track move if party changed (FIXED: added guildId)
     if (member.currentParty !== targetParty.partyNumber) {
       moves.push({
         userId: member.userId,
@@ -525,6 +527,7 @@ async function optimizeRolesByCPRanking(allParties, role, guildId, client, colle
         member.currentParty,
         targetParty.partyNumber,
         `Strength-based rebalancing: ${role} optimization`,
+        guildId,
         client,
         collections
       ).catch(err => console.error('DM failed:', err.message));
@@ -638,7 +641,7 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
         { $set: { partyNumber: party.partyNumber } }
       );
 
-      // Only log move and send DM if party actually changed
+      // Only log move and send DM if party actually changed (FIXED: added guildId)
       if (dps.currentParty !== party.partyNumber) {
         console.log(`[DPS Redistribution] Moved DPS ${dps.userId} (${dps.cp} CP) from Party ${dps.currentParty} → Party ${party.partyNumber}`);
 
@@ -655,6 +658,7 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
           dps.currentParty,
           party.partyNumber,
           'Strength-based rebalancing: DPS optimization',
+          guildId,
           client,
           collections
         ).catch(err => console.error('DM failed:', err.message));

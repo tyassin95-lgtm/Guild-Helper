@@ -146,13 +146,14 @@ async function assignTankOrHealerByPriority(player, role, allParties, guildId, c
       // Add higher CP player
       await addPlayerToParty(player, party, guildId, collections);
 
-      // Send DM to substituted player
+      // Send DM to substituted player (FIXED: added guildId)
       try {
         await sendPartyChangeDM(
-          player.userId,
-          null,
+          existingRole.userId,
           party.partyNumber,
+          null,
           `Higher CP ${role} substitution`,
+          guildId,
           client,
           collections
         );
@@ -303,10 +304,10 @@ async function autoAssignPlayer(userId, guildId, client, collections) {
     result = { success: true, partyNumber: nextNumber };
   }
 
-  // Send DM notification
+  // Send DM notification (FIXED: added guildId)
   if (result.success && !result.substituted) {
     try {
-      await sendPartyAssignmentDM(userId, result.partyNumber, role, client, collections);
+      await sendPartyAssignmentDM(userId, result.partyNumber, role, guildId, client, collections);
     } catch (err) {
       console.error(`Failed to send DM to ${userId}:`, err.message);
     }
@@ -364,11 +365,11 @@ async function handleRoleChange(userId, guildId, oldRole, newRole, client, colle
 
     console.log(`[handleRoleChange] Updated party document for ${userId}`);
 
-    // Send DM notification (non-blocking)
+    // Send DM notification (non-blocking) (FIXED: added guildId)
     const { sendRoleChangeDM } = require('./notifications');
     setImmediate(async () => {
       try {
-        await sendRoleChangeDM(userId, player.partyNumber, oldRole, newRole, client, collections);
+        await sendRoleChangeDM(userId, player.partyNumber, oldRole, newRole, guildId, client, collections);
         console.log(`[handleRoleChange] Sent role change DM to ${userId}`);
       } catch (err) {
         console.error(`[handleRoleChange] Failed to send role change DM to ${userId}:`, err.message);
