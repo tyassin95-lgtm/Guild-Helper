@@ -209,8 +209,7 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
 
       const itemList = items.map(h => {
         const dateStr = h.timestamp ? ` - ${new Date(h.timestamp).toLocaleDateString()}` : '';
-        const bossStr = h.boss ? ` from **${h.boss}**` : '';
-        return `• ${h.item}${bossStr}${dateStr}`;
+        return `• ${h.item}${dateStr}`;
       }).join('\n');
 
       const truncated = itemList.length > 1024 ? itemList.substring(0, 1021) + '...' : itemList;
