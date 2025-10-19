@@ -106,10 +106,7 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
       });
 
       const userList = users.map(u => {
-        const dateStr = u.timestamp ? ` - ${new Date(u.timestamp).toLocaleDateString()}` : '';
-        const bossStr = u.boss ? ` (${u.boss})` : '';
-        const crossedOut = u.handedOut ? '~~' : '';
-        return `${crossedOut}• ${u.name}${dateStr}${bossStr}${crossedOut}`;
+        return `• ${u.name}`;
       }).join('\n');
 
       const fieldValue = userList.length > 1024 ? userList.substring(0, 1021) + '...' : userList;
