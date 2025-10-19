@@ -18,8 +18,7 @@ async function fetchMessage(channel, messageId) {
 
 /**
  * Create or rehome the live summary panel to targetChannelId (required).
- * - If an old panel exists in a different channel, delete it.
- * - Always post/edit in the target channel.
+ * Now creates multiple messages if needed.
  */
 async function createOrUpdateLiveSummaryPanel(interaction, collections, targetChannelId) {
   const { liveSummaries } = collections;
@@ -31,44 +30,84 @@ async function createOrUpdateLiveSummaryPanel(interaction, collections, targetCh
     throw new Error('Missing permissions in this channel: need View Channel, Send Messages, and Embed Links.');
   }
 
-  const { embeds, components } = await buildSummaryEmbedsAndControls(interaction, collections);
+  const { messages } = await buildSummaryEmbedsAndControls(interaction, collections);
 
   // Look up existing record
   const existing = await liveSummaries.findOne({ guildId: interaction.guildId });
 
-  // If we have an existing panel but in a different channel, try to delete it
+  // If we have existing panel(s) but in a different channel, try to delete them
   if (existing && existing.channelId && existing.channelId !== targetChannelId) {
     const oldChannel = await fetchChannel(interaction.client, existing.channelId);
     if (oldChannel) {
-      const oldMsg = await fetchMessage(oldChannel, existing.messageId);
-      if (oldMsg) await oldMsg.delete().catch(() => {});
+      // Delete all stored message IDs
+      for (const msgId of (existing.messageIds || [])) {
+        const oldMsg = await fetchMessage(oldChannel, msgId);
+        if (oldMsg) await oldMsg.delete().catch(() => {});
+      }
     }
   }
 
-  // If we have an existing panel in the same channel, try to edit it
-  if (existing && existing.channelId === targetChannelId) {
-    const msg = await fetchMessage(targetChannel, existing.messageId);
-    if (msg) {
-      await msg.edit({ embeds, components });
-      // ensure record is up to date
+  // If we have an existing panel in the same channel, try to update it
+  if (existing && existing.channelId === targetChannelId && existing.messageIds) {
+    const existingMessages = [];
+
+    // Fetch all existing messages
+    for (const msgId of existing.messageIds) {
+      const msg = await fetchMessage(targetChannel, msgId);
+      if (msg) existingMessages.push(msg);
+    }
+
+    // If we have the right number of messages, update them
+    if (existingMessages.length === messages.length) {
+      for (let i = 0; i < messages.length; i++) {
+        await existingMessages[i].edit({ 
+          embeds: messages[i].embeds, 
+          components: messages[i].components 
+        });
+      }
+
       await liveSummaries.updateOne(
         { guildId: interaction.guildId },
-        { $set: { guildId: interaction.guildId, channelId: targetChannel.id, messageId: msg.id } },
+        { $set: { guildId: interaction.guildId, channelId: targetChannel.id, messageIds: existingMessages.map(m => m.id) } },
         { upsert: true }
       );
-      return { guildId: interaction.guildId, channelId: msg.channel.id, messageId: msg.id, url: mkMsgUrl(interaction.guildId, msg.channel.id, msg.id) };
+
+      return { 
+        guildId: interaction.guildId, 
+        channelId: targetChannel.id, 
+        messageIds: existingMessages.map(m => m.id),
+        url: mkMsgUrl(interaction.guildId, targetChannel.id, existingMessages[0].id) 
+      };
+    } else {
+      // Wrong number of messages, delete old ones and create new
+      for (const msg of existingMessages) {
+        await msg.delete().catch(() => {});
+      }
     }
   }
 
-  // Otherwise create a fresh message in the target channel
-  const sent = await targetChannel.send({ embeds, components });
+  // Otherwise create fresh messages in the target channel
+  const sentMessages = [];
+  for (const message of messages) {
+    const sent = await targetChannel.send({ 
+      embeds: message.embeds, 
+      components: message.components 
+    });
+    sentMessages.push(sent);
+  }
+
   await liveSummaries.updateOne(
     { guildId: interaction.guildId },
-    { $set: { guildId: interaction.guildId, channelId: sent.channel.id, messageId: sent.id } },
+    { $set: { guildId: interaction.guildId, channelId: targetChannel.id, messageIds: sentMessages.map(m => m.id) } },
     { upsert: true }
   );
 
-  return { guildId: interaction.guildId, channelId: sent.channel.id, messageId: sent.id, url: mkMsgUrl(interaction.guildId, sent.channel.id, sent.id) };
+  return { 
+    guildId: interaction.guildId, 
+    channelId: targetChannel.id, 
+    messageIds: sentMessages.map(m => m.id),
+    url: mkMsgUrl(interaction.guildId, targetChannel.id, sentMessages[0].id) 
+  };
 }
 
 /** Remove the live panel for a guild (if present). */
@@ -79,8 +118,11 @@ async function clearLiveSummaryPanel(interaction, collections) {
 
   const channel = await fetchChannel(interaction.client, existing.channelId);
   if (channel) {
-    const msg = await fetchMessage(channel, existing.messageId);
-    if (msg) await msg.delete().catch(() => {});
+    // Delete all messages
+    for (const msgId of (existing.messageIds || [])) {
+      const msg = await fetchMessage(channel, msgId);
+      if (msg) await msg.delete().catch(() => {});
+    }
   }
 
   await liveSummaries.deleteOne({ guildId: interaction.guildId });
@@ -97,7 +139,7 @@ async function clearLiveSummaryPanel(interaction, collections) {
 
 /**
  * Debounced refresh with improved race condition handling.
- * If message is missing, recreate it in the saved channel.
+ * If messages are missing, recreate them in the saved channel.
  */
 async function scheduleLiveSummaryUpdate(interaction, collections, delayMs = DEBOUNCE_DELAY_MS) {
   const { liveSummaries } = collections;
@@ -126,7 +168,7 @@ async function scheduleLiveSummaryUpdate(interaction, collections, delayMs = DEB
     debounceEntry.isUpdating = true;
 
     try {
-      const { embeds, components } = await buildSummaryEmbedsAndControls(interaction, collections);
+      const { messages } = await buildSummaryEmbedsAndControls(interaction, collections);
 
       let channel = await fetchChannel(interaction.client, record.channelId);
       if (!channel) {
@@ -140,19 +182,45 @@ async function scheduleLiveSummaryUpdate(interaction, collections, delayMs = DEB
         return;
       }
 
-      let msg = await fetchMessage(channel, record.messageId);
-      if (!msg) {
-        // recreate
-        console.log(`Recreating live summary message for guild ${interaction.guildId}`);
-        msg = await channel.send({ embeds, components });
+      // Fetch existing messages
+      const existingMessages = [];
+      for (const msgId of (record.messageIds || [])) {
+        const msg = await fetchMessage(channel, msgId);
+        if (msg) existingMessages.push(msg);
+      }
+
+      // If we have the right number of messages, update them
+      if (existingMessages.length === messages.length) {
+        for (let i = 0; i < messages.length; i++) {
+          await existingMessages[i].edit({ 
+            embeds: messages[i].embeds, 
+            components: messages[i].components 
+          });
+        }
+      } else {
+        // Recreate all messages
+        console.log(`Recreating live summary messages for guild ${interaction.guildId}`);
+
+        // Delete old messages
+        for (const msg of existingMessages) {
+          await msg.delete().catch(() => {});
+        }
+
+        // Create new messages
+        const newMessages = [];
+        for (const message of messages) {
+          const sent = await channel.send({ 
+            embeds: message.embeds, 
+            components: message.components 
+          });
+          newMessages.push(sent);
+        }
+
         await liveSummaries.updateOne(
           { guildId: interaction.guildId },
-          { $set: { channelId: msg.channel.id, messageId: msg.id } },
+          { $set: { channelId: channel.id, messageIds: newMessages.map(m => m.id) } },
           { upsert: true }
         );
-      } else {
-        // update existing
-        await msg.edit({ embeds, components });
       }
     } catch (e) {
       console.error('Live summary refresh failed:', e);
