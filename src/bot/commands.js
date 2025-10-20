@@ -188,6 +188,17 @@ async function registerSlashCommands(client) {
       description: 'Admins: Send a DM to users who haven\'t set up their party info.',
       default_member_permissions: ADMIN
     },
+    // NEW: PvP Commands
+    {
+      name: 'pvpevent',
+      description: 'Admins: Create a PvP event with attendance tracking.',
+      default_member_permissions: ADMIN
+    },
+    {
+      name: 'resetbonuses',
+      description: 'Admins: Reset all PvP bonuses (DANGEROUS!).',
+      default_member_permissions: ADMIN
+    },
 
     // ----- Everyone -----
     {

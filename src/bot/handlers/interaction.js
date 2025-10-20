@@ -28,6 +28,13 @@ const { handlePartySelects } = require('../../features/parties/handlers/selects'
 const { handlePartyModals } = require('../../features/parties/handlers/modals');
 const { handlePartyManageButtons } = require('../../features/parties/handlers/manageButtons');
 
+// PvP system imports
+const { handlePvPEvent } = require('../../features/pvp/commands/pvpevent');
+const { handleResetBonuses, handleResetBonusesConfirmation } = require('../../features/pvp/commands/resetbonuses');
+const { handlePvPButtons } = require('../../features/pvp/handlers/buttons');
+const { handlePvPSelects } = require('../../features/pvp/handlers/selects');
+const { handlePvPModals } = require('../../features/pvp/handlers/modals');
+
 // Safe execution wrapper
 const { safeExecute } = require('../../utils/safeExecute');
 
@@ -62,11 +69,15 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'autoassign')  return handleAutoAssign({ interaction, collections });
       if (name === 'resetparties') return handleResetParties({ interaction, collections });
       if (name === 'remindparty') return handleRemindParty({ interaction, collections });
+
+      // PvP commands
+      if (name === 'pvpevent')    return handlePvPEvent({ interaction, collections });
+      if (name === 'resetbonuses') return handleResetBonuses({ interaction, collections });
     }
 
     // Button Interactions
     if (interaction.isButton()) {
-      // NEW: Freeze finish selection button
+      // Freeze finish selection button
       if (interaction.customId === 'freeze_finish_selection') {
         const { handleFreezeFinishButton } = require('./commands/freeze');
         return handleFreezeFinishButton({ interaction, collections });
@@ -80,6 +91,16 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Handle reset parties confirmation buttons
       if (interaction.customId.startsWith('confirm_reset_parties_')) {
         return handleResetPartiesConfirmation({ interaction, collections });
+      }
+
+      // Handle reset bonuses confirmation buttons
+      if (interaction.customId.startsWith('confirm_reset_bonuses_')) {
+        return handleResetBonusesConfirmation({ interaction, collections });
+      }
+
+      // PvP system buttons
+      if (interaction.customId.startsWith('pvp_')) {
+        return handlePvPButtons({ interaction, collections });
       }
 
       // Party system buttons
@@ -99,9 +120,14 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
     // String Select Menu Interactions
     if (interaction.isStringSelectMenu()) {
-      // NEW: Freeze boss selection
+      // Freeze boss selection
       if (interaction.customId.startsWith('freeze_select_')) {
         return handleFreezeBossSelection({ interaction, collections });
+      }
+
+      // PvP system selects
+      if (interaction.customId.startsWith('pvp_')) {
+        return handlePvPSelects({ interaction, collections });
       }
 
       // Party system selects
@@ -114,9 +140,14 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
     // Modal Submit Interactions
     if (interaction.isModalSubmit()) {
-      // NEW: Freeze raid setup modal
+      // Freeze raid setup modal
       if (interaction.customId === 'freeze_raid_setup') {
         return handleFreezeModal({ interaction, collections });
+      }
+
+      // PvP system modals
+      if (interaction.customId.startsWith('pvp_')) {
+        return handlePvPModals({ interaction, collections });
       }
 
       // Party system modals

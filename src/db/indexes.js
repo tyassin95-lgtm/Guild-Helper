@@ -10,7 +10,9 @@ async function ensureIndexes({
   parties, 
   partyPanels,
   raidSessions,
-  dmContexts 
+  dmContexts,
+  pvpEvents,
+  pvpBonuses
 }) {
   // Wishlists index
   await wishlists.createIndex({ userId: 1, guildId: 1 }, { unique: true });
@@ -65,9 +67,20 @@ async function ensureIndexes({
   await raidSessions.createIndex({ guildId: 1 });
   await raidSessions.createIndex({ frozenAt: 1 });
 
-  // DM contexts indexes (NEW)
+  // DM contexts indexes
   await dmContexts.createIndex({ userId: 1 }, { unique: true });
   await dmContexts.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index for auto-cleanup
+
+  // PvP Events indexes
+  await pvpEvents.createIndex({ guildId: 1 });
+  await pvpEvents.createIndex({ guildId: 1, closed: 1 });
+  await pvpEvents.createIndex({ guildId: 1, channelId: 1 });
+  await pvpEvents.createIndex({ eventTime: 1 });
+
+  // PvP Bonuses indexes
+  await pvpBonuses.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await pvpBonuses.createIndex({ guildId: 1 });
+  await pvpBonuses.createIndex({ guildId: 1, bonusCount: -1 }); // Sort by bonus count descending
 
   console.log('All indexes created successfully');
 }

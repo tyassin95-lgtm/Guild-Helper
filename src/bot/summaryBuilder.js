@@ -1,4 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const { createPvPBonusEmbed } = require('../features/pvp/bonusDisplay');
 
 // Category icons - you can replace these URLs with your own
 const CATEGORY_ICONS = {
@@ -245,6 +246,10 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
       messages.push({ embeds: handedOutEmbeds, components: [] });
     }
   }
+
+  // NEW: Add PvP Bonus embed BEFORE submission footer
+  const pvpBonusEmbed = await createPvPBonusEmbed(interaction.guildId, interaction.guild, collections);
+  messages.push({ embeds: [pvpBonusEmbed], components: [] });
 
   // Submission footer
   await interaction.guild.members.fetch();

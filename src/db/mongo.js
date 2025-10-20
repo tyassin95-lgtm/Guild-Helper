@@ -41,8 +41,12 @@ function getCollections(db = _db) {
     parties: db.collection('parties'),
     partyPanels: db.collection('partyPanels'),
 
-    // DM context tracking (NEW)
-    dmContexts: db.collection('dmContexts')
+    // DM context tracking
+    dmContexts: db.collection('dmContexts'),
+
+    // PvP system
+    pvpEvents: db.collection('pvpEvents'),
+    pvpBonuses: db.collection('pvpBonuses')
   };
 }
 
