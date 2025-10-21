@@ -63,10 +63,11 @@ async function ensureIndexes({
 
   await partyPanels.createIndex({ guildId: 1 }, { unique: true });
 
-  // Raid sessions indexes
+  // Raid sessions indexes - FIXED: Added missing compound index for active queries
   await raidSessions.createIndex({ guildId: 1, active: 1 });
   await raidSessions.createIndex({ guildId: 1 });
   await raidSessions.createIndex({ frozenAt: 1 });
+  await raidSessions.createIndex({ active: 1 });
 
   // DM contexts indexes
   await dmContexts.createIndex({ userId: 1 }, { unique: true });
@@ -83,7 +84,7 @@ async function ensureIndexes({
   await pvpBonuses.createIndex({ guildId: 1 });
   await pvpBonuses.createIndex({ guildId: 1, bonusCount: -1 }); // Sort by bonus count descending
 
-  // NEW: PvP Activity Ranking indexes (all-time - never reset)
+  // PvP Activity Ranking indexes (all-time - never reset)
   await pvpActivityRanking.createIndex({ userId: 1, guildId: 1 }, { unique: true });
   await pvpActivityRanking.createIndex({ guildId: 1 });
   await pvpActivityRanking.createIndex({ guildId: 1, totalEvents: -1 }); // Sort by total events descending

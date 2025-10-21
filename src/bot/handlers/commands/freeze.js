@@ -288,12 +288,13 @@ async function finalizeFreeze(interaction, minutes, selectedBosses, collections)
     allowedMentions: { parse: ['everyone'] }
   });
 
-  // Start countdown updater
+  // Start countdown updater - FIXED: Now passing guildId as required parameter
   startCountdownUpdater(
     announcementMsg.id,
     interaction.channelId,
     raidStartTime,
-    interaction.client
+    interaction.client,
+    interaction.guildId
   );
 
   // Store message ID for updates

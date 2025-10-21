@@ -1,6 +1,9 @@
 const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { BOSS_DATA } = require('../../data/bossData');
 
+// Store active countdown intervals to prevent memory leaks
+const activeCountdowns = new Map(); // guildId -> interval
+
 /**
  * Create and store a new raid session
  */
@@ -58,6 +61,9 @@ async function endRaidSession(guildId, collections) {
       } 
     }
   );
+
+  // Clear countdown interval for this guild
+  clearCountdownInterval(guildId);
 
   return {
     ...session,
@@ -327,8 +333,12 @@ async function updateCountdownMessage(messageId, channelId, raidStartTime, clien
 
 /**
  * Start countdown updater for a raid session
+ * FIXED: Now stores interval to prevent memory leaks
  */
-function startCountdownUpdater(messageId, channelId, raidStartTime, client) {
+function startCountdownUpdater(messageId, channelId, raidStartTime, client, guildId) {
+  // Clear any existing countdown for this guild
+  clearCountdownInterval(guildId);
+
   const interval = setInterval(async () => {
     const now = Date.now();
     const timeUntilRaid = raidStartTime.getTime() - now;
@@ -338,11 +348,68 @@ function startCountdownUpdater(messageId, channelId, raidStartTime, client) {
 
     // Stop updating after raid starts
     if (timeUntilRaid <= 0) {
-      clearInterval(interval);
+      clearCountdownInterval(guildId);
     }
   }, 60 * 1000); // Update every minute
 
+  // Store interval for cleanup
+  activeCountdowns.set(guildId, interval);
+
   return interval;
+}
+
+/**
+ * Clear countdown interval for a guild
+ */
+function clearCountdownInterval(guildId) {
+  const existingInterval = activeCountdowns.get(guildId);
+  if (existingInterval) {
+    clearInterval(existingInterval);
+    activeCountdowns.delete(guildId);
+    console.log(`Cleared countdown interval for guild ${guildId}`);
+  }
+}
+
+/**
+ * Cleanup all countdown intervals (call on bot shutdown)
+ */
+function clearAllCountdownIntervals() {
+  for (const [guildId, interval] of activeCountdowns.entries()) {
+    clearInterval(interval);
+    console.log(`Cleared countdown interval for guild ${guildId}`);
+  }
+  activeCountdowns.clear();
+}
+
+/**
+ * Resume active raid countdowns after bot restart
+ */
+async function resumeActiveRaidCountdowns(client, collections) {
+  const { raidSessions } = collections;
+
+  const activeSessions = await raidSessions.find({ active: true }).toArray();
+
+  console.log(`Found ${activeSessions.length} active raid session(s) to resume`);
+
+  for (const session of activeSessions) {
+    // Check if raid already started
+    if (new Date(session.raidStartTime) <= new Date()) {
+      console.log(`Raid for guild ${session.guildId} already started, skipping countdown`);
+      continue;
+    }
+
+    // Resume countdown
+    if (session.announcementMessageId) {
+      console.log(`Resuming countdown for guild ${session.guildId}`);
+      startCountdownUpdater(
+        session.announcementMessageId,
+        session.channelId,
+        new Date(session.raidStartTime),
+        client,
+        session.guildId
+      );
+    }
+  }
 }
 
 module.exports = {
@@ -353,5 +420,8 @@ module.exports = {
   createRaidSummaryMessage,
   getAllBosses,
   updateCountdownMessage,
-  startCountdownUpdater
+  startCountdownUpdater,
+  clearCountdownInterval,
+  clearAllCountdownIntervals,
+  resumeActiveRaidCountdowns
 };

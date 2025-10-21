@@ -8,6 +8,7 @@ const { onInteractionCreate } = require('./bot/handlers/interaction');
 const { startTokenRegenerationChecker } = require('./bot/tokenRegeneration');
 const { startPartyPanelUpdater } = require('./features/parties/panelUpdater');
 const { startPeriodicRebalancer } = require('./features/parties/rebalancing');
+const { resumeActiveRaidCountdowns, clearAllCountdownIntervals } = require('./features/raids/raidSession');
 
 const client = new Client({
   intents: [
@@ -37,6 +38,9 @@ const client = new Client({
 
       // Start the periodic party rebalancer (runs every 72 hours)
       startPeriodicRebalancer(client, collections);
+
+      // Resume active raid countdowns after bot restart
+      await resumeActiveRaidCountdowns(client, collections);
     });
 
     client.on('interactionCreate', async (interaction) => {
@@ -50,6 +54,33 @@ const client = new Client({
           await interaction.reply({ content: '❌ An error occurred!', flags: [64] }).catch(() => {});
         }
       }
+    });
+
+    // Handle graceful shutdown
+    process.on('SIGINT', async () => {
+      console.log('\n🛑 Shutting down gracefully...');
+
+      // Clear all raid countdown intervals
+      clearAllCountdownIntervals();
+
+      // Destroy Discord client
+      client.destroy();
+
+      console.log('✅ Shutdown complete');
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', async () => {
+      console.log('\n🛑 SIGTERM received, shutting down...');
+
+      // Clear all raid countdown intervals
+      clearAllCountdownIntervals();
+
+      // Destroy Discord client
+      client.destroy();
+
+      console.log('✅ Shutdown complete');
+      process.exit(0);
     });
 
     console.log('Loaded token:', process.env.DISCORD_TOKEN ? '✅ Found' : '❌ Missing');

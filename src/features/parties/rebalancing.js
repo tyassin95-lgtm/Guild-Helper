@@ -1,6 +1,7 @@
 const { sendPartyChangeDM } = require('./notifications');
 const { PARTY_SIZE } = require('./constants');
 const { analyzePartyComposition } = require('./autoAssignment');
+const { getClient } = require('../../db/mongo');
 
 const DEFAULT_REBALANCE_THRESHOLD = 0.20;
 const MIN_REBALANCE_INTERVAL_MS = 5 * 60 * 1000;
@@ -413,12 +414,12 @@ async function findDuplicateRole(allParties, role, excludePartyNumber) {
 }
 
 /**
- * STEP 2/3: Optimize tanks/healers by CP ranking
- * Highest CP → Party 1, 2nd highest → Party 2, etc.
- * COMPLETELY REBUILDS parties from scratch to avoid any duplication bugs
+ * STEP 2/3: Optimize tanks/healers by CP ranking using MongoDB transactions
+ * FIXED: Now uses transactions to prevent data loss if bot crashes
  */
 async function optimizeRolesByCPRanking(allParties, role, guildId, client, collections, moves) {
   const { parties, partyPlayers } = collections;
+  const mongoClient = getClient();
 
   // Refresh party data from database
   const refreshedParties = [];
@@ -429,12 +430,11 @@ async function optimizeRolesByCPRanking(allParties, role, guildId, client, colle
 
   // Extract all members of this role across all parties
   const roleMembers = [];
-  const seenUserIds = new Set(); // DEDUPLICATE
+  const seenUserIds = new Set();
 
   for (const party of refreshedParties) {
     const members = (party.members || []).filter(m => m.role === role);
     for (const member of members) {
-      // Skip if we've already seen this user (prevents duplicates)
       if (seenUserIds.has(member.userId)) {
         console.log(`[Optimize ${role}] WARNING: Skipping duplicate ${member.userId} found in Party ${party.partyNumber}`);
         continue;
@@ -455,86 +455,108 @@ async function optimizeRolesByCPRanking(allParties, role, guildId, client, colle
 
   console.log(`[Optimize ${role}] Found ${roleMembers.length} unique ${role}(s)`);
 
-  // STEP 1: Remove ALL members of this role from ALL parties (including duplicates)
-  for (const party of refreshedParties) {
-    await parties.updateOne(
-      { _id: party._id },
-      {
-        $pull: { members: { role: role } },
-        $set: { [`roleComposition.${role}`]: 0 }
+  // Use MongoDB transaction to ensure atomicity
+  const session = mongoClient.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      // STEP 1: Remove ALL members of this role from ALL parties
+      for (const party of refreshedParties) {
+        await parties.updateOne(
+          { _id: party._id },
+          {
+            $pull: { members: { role: role } },
+            $set: { [`roleComposition.${role}`]: 0 }
+          },
+          { session }
+        );
+
+        // Recalculate totalCP without this role
+        const currentParty = await parties.findOne({ _id: party._id }, { session });
+        const remainingMembers = (currentParty.members || []).filter(m => m.role !== role);
+        const newTotalCP = remainingMembers.reduce((sum, m) => sum + (m.cp || 0), 0);
+
+        await parties.updateOne(
+          { _id: party._id },
+          { $set: { totalCP: newTotalCP } },
+          { session }
+        );
       }
-    );
 
-    // Recalculate totalCP without this role
-    const currentParty = await parties.findOne({ _id: party._id });
-    const remainingMembers = (currentParty.members || []).filter(m => m.role !== role);
-    const newTotalCP = remainingMembers.reduce((sum, m) => sum + (m.cp || 0), 0);
+      console.log(`[Optimize ${role}] Cleared all ${role}s from parties`);
 
-    await parties.updateOne(
-      { _id: party._id },
-      { $set: { totalCP: newTotalCP } }
-    );
-  }
+      // STEP 2: Assign highest CP to Party 1, next to Party 2, etc.
+      for (let i = 0; i < roleMembers.length; i++) {
+        const targetParty = refreshedParties[i % refreshedParties.length];
+        const member = roleMembers[i];
 
-  console.log(`[Optimize ${role}] Cleared all ${role}s from parties`);
+        console.log(`[Optimize ${role}] Assigning ${member.userId} (${member.cp} CP) to Party ${targetParty.partyNumber}`);
 
-  // STEP 2: Assign highest CP to Party 1, next to Party 2, etc.
-  for (let i = 0; i < roleMembers.length; i++) {
-    const targetParty = refreshedParties[i % refreshedParties.length];
-    const member = roleMembers[i];
+        // Add member to target party
+        await parties.updateOne(
+          { _id: targetParty._id },
+          {
+            $push: {
+              members: {
+                userId: member.userId,
+                weapon1: member.weapon1,
+                weapon2: member.weapon2,
+                cp: member.cp || 0,
+                role: member.role,
+                addedAt: new Date()
+              }
+            },
+            $inc: {
+              totalCP: (member.cp || 0),
+              [`roleComposition.${role}`]: 1
+            }
+          },
+          { session }
+        );
 
-    console.log(`[Optimize ${role}] Assigning ${member.userId} (${member.cp} CP) to Party ${targetParty.partyNumber}`);
+        // Update player record
+        await partyPlayers.updateOne(
+          { userId: member.userId, guildId },
+          { $set: { partyNumber: targetParty.partyNumber } },
+          { session }
+        );
 
-    // Add member to target party
-    await parties.updateOne(
-      { _id: targetParty._id },
-      {
-        $push: {
-          members: {
+        // Track move if party changed (store in separate array for DMs later)
+        if (member.currentParty !== targetParty.partyNumber) {
+          moves.push({
             userId: member.userId,
-            weapon1: member.weapon1,
-            weapon2: member.weapon2,
-            cp: member.cp || 0,
-            role: member.role,
-            addedAt: new Date()
-          }
-        },
-        $inc: {
-          totalCP: (member.cp || 0),
-          [`roleComposition.${role}`]: 1
+            from: member.currentParty,
+            to: targetParty.partyNumber,
+            role: role,
+            reason: `Strength optimization: ${role} rebalancing`
+          });
         }
       }
-    );
 
-    // Update player record
-    await partyPlayers.updateOne(
-      { userId: member.userId, guildId },
-      { $set: { partyNumber: targetParty.partyNumber } }
-    );
+      console.log(`[Optimize ${role}] Optimization complete`);
+    });
 
-    // Track move if party changed (FIXED: added guildId)
-    if (member.currentParty !== targetParty.partyNumber) {
-      moves.push({
-        userId: member.userId,
-        from: member.currentParty,
-        to: targetParty.partyNumber,
-        role: role,
-        reason: `Strength optimization: ${role} rebalancing`
-      });
-
+    // Send DMs after successful transaction (outside transaction to avoid delays)
+    // Filter moves that happened in THIS optimization pass
+    const roleMoves = moves.filter(m => m.role === role && m.reason.includes('Strength optimization'));
+    for (const move of roleMoves) {
       await sendPartyChangeDM(
-        member.userId,
-        member.currentParty,
-        targetParty.partyNumber,
+        move.userId,
+        move.from,
+        move.to,
         `Strength-based rebalancing: ${role} optimization`,
         guildId,
         client,
         collections
       ).catch(err => console.error('DM failed:', err.message));
     }
-  }
 
-  console.log(`[Optimize ${role}] Optimization complete`);
+  } catch (err) {
+    console.error(`[Optimize ${role}] Transaction failed:`, err);
+    throw err;
+  } finally {
+    await session.endSession();
+  }
 }
 
 /**
@@ -641,7 +663,7 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
         { $set: { partyNumber: party.partyNumber } }
       );
 
-      // Only log move and send DM if party actually changed (FIXED: added guildId)
+      // Only log move and send DM if party actually changed
       if (dps.currentParty !== party.partyNumber) {
         console.log(`[DPS Redistribution] Moved DPS ${dps.userId} (${dps.cp} CP) from Party ${dps.currentParty} → Party ${party.partyNumber}`);
 
