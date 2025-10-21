@@ -4,7 +4,7 @@ const { updateEventEmbed } = require('../embed');
 const { scheduleLiveSummaryUpdate } = require('../../../bot/liveSummary');
 
 async function handlePvPModals({ interaction, collections }) {
-  const { pvpEvents, pvpBonuses } = collections;
+  const { pvpEvents, pvpBonuses, pvpActivityRanking } = collections;
 
   // Location input modal (for Riftstone/Boonstone)
   if (interaction.customId.startsWith('pvp_location_modal:')) {
@@ -59,7 +59,7 @@ async function handlePvPModals({ interaction, collections }) {
       { $push: { attendees: interaction.user.id } }
     );
 
-    // Add +10 bonus to user
+    // Add +10 bonus to user (weekly bonus - can be reset)
     await pvpBonuses.updateOne(
       { userId: interaction.user.id, guildId: interaction.guildId },
       { 
@@ -69,11 +69,21 @@ async function handlePvPModals({ interaction, collections }) {
       { upsert: true }
     );
 
+    // NEW: Increment all-time activity ranking (permanent - never reset)
+    await pvpActivityRanking.updateOne(
+      { userId: interaction.user.id, guildId: interaction.guildId },
+      { 
+        $inc: { totalEvents: 1 },
+        $set: { lastEventDate: new Date() }
+      },
+      { upsert: true }
+    );
+
     // Update the event embed
     const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
     await updateEventEmbed(interaction, updatedEvent, collections);
 
-    // Update live summary to show new bonus
+    // Update live summary to show new bonus AND activity ranking
     await scheduleLiveSummaryUpdate(interaction, collections);
 
     return interaction.editReply({ 

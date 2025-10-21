@@ -46,7 +46,8 @@ function getCollections(db = _db) {
 
     // PvP system
     pvpEvents: db.collection('pvpEvents'),
-    pvpBonuses: db.collection('pvpBonuses')
+    pvpBonuses: db.collection('pvpBonuses'),
+    pvpActivityRanking: db.collection('pvpActivityRanking') // NEW
   };
 }
 

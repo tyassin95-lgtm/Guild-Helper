@@ -12,7 +12,8 @@ async function ensureIndexes({
   raidSessions,
   dmContexts,
   pvpEvents,
-  pvpBonuses
+  pvpBonuses,
+  pvpActivityRanking
 }) {
   // Wishlists index
   await wishlists.createIndex({ userId: 1, guildId: 1 }, { unique: true });
@@ -77,10 +78,15 @@ async function ensureIndexes({
   await pvpEvents.createIndex({ guildId: 1, channelId: 1 });
   await pvpEvents.createIndex({ eventTime: 1 });
 
-  // PvP Bonuses indexes
+  // PvP Bonuses indexes (weekly bonuses - can be reset)
   await pvpBonuses.createIndex({ userId: 1, guildId: 1 }, { unique: true });
   await pvpBonuses.createIndex({ guildId: 1 });
   await pvpBonuses.createIndex({ guildId: 1, bonusCount: -1 }); // Sort by bonus count descending
+
+  // NEW: PvP Activity Ranking indexes (all-time - never reset)
+  await pvpActivityRanking.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await pvpActivityRanking.createIndex({ guildId: 1 });
+  await pvpActivityRanking.createIndex({ guildId: 1, totalEvents: -1 }); // Sort by total events descending
 
   console.log('All indexes created successfully');
 }
