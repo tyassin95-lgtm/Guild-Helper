@@ -281,17 +281,17 @@ async function strengthBasedRebalance(guildId, client, collections) {
     .sort({ partyNumber: 1 })
     .toArray();
 
-  // STEP 2: Optimize tanks by CP (highest CP tank → Party 1)
-  console.log(`[Strength Rebalance] Step 2: Optimizing tanks by CP`);
-  await optimizeRolesByCPRanking(updatedParties, 'tank', guildId, client, collections, moves);
+  // STEP 2: Optimize tanks by CP (STRENGTH CONCENTRATION)
+  console.log(`[Strength Rebalance] Step 2: Optimizing tanks by CP (strength concentration)`);
+  await optimizeRolesByStrengthConcentration(updatedParties, 'tank', guildId, client, collections, moves);
 
-  // STEP 3: Optimize healers by CP (highest CP healer → Party 1)
-  console.log(`[Strength Rebalance] Step 3: Optimizing healers by CP`);
-  await optimizeRolesByCPRanking(updatedParties, 'healer', guildId, client, collections, moves);
+  // STEP 3: Optimize healers by CP (BALANCED ROUND-ROBIN)
+  console.log(`[Strength Rebalance] Step 3: Optimizing healers by CP (balanced round-robin)`);
+  await optimizeHealersByBalancedRoundRobin(updatedParties, guildId, client, collections, moves);
 
-  // STEP 4: Redistribute DPS by CP (highest CP DPS → Party 1)
-  console.log(`[Strength Rebalance] Step 4: Redistributing DPS by strength`);
-  await redistributeDPSByStrength(updatedParties, guildId, client, collections, moves);
+  // STEP 4: Redistribute DPS by CP (STRENGTH CONCENTRATION)
+  console.log(`[Strength Rebalance] Step 4: Redistributing DPS by strength concentration`);
+  await redistributeDPSByStrengthConcentration(updatedParties, guildId, client, collections, moves);
 
   // STEP 5: Process reserve pool (NEW)
   console.log(`[Strength Rebalance] Step 5: Processing reserve pool`);
@@ -427,9 +427,11 @@ async function findDuplicateRole(allParties, role, excludePartyNumber) {
 }
 
 /**
- * STEP 2/3: Optimize tanks/healers by CP ranking using MongoDB transactions
+ * STEP 2: Optimize tanks by STRENGTH CONCENTRATION using MongoDB transactions
+ * 
+ * Strategy: Fill parties sequentially with highest CP members
  */
-async function optimizeRolesByCPRanking(allParties, role, guildId, client, collections, moves) {
+async function optimizeRolesByStrengthConcentration(allParties, role, guildId, client, collections, moves) {
   const { parties, partyPlayers } = collections;
   const mongoClient = getClient();
 
@@ -467,7 +469,7 @@ async function optimizeRolesByCPRanking(allParties, role, guildId, client, colle
   // Sort by CP descending (highest first)
   roleMembers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
-  console.log(`[Optimize ${role}] Found ${roleMembers.length} unique ${role}(s)`);
+  console.log(`[Optimize ${role}] Found ${roleMembers.length} unique ${role}(s), applying strength concentration`);
 
   // Use MongoDB transaction to ensure atomicity
   const session = mongoClient.startSession();
@@ -499,82 +501,76 @@ async function optimizeRolesByCPRanking(allParties, role, guildId, client, colle
 
       console.log(`[Optimize ${role}] Cleared all ${role}s from parties`);
 
-      // STEP 2: Assign by round-robin (respecting caps)
-      let partyIndex = 0;
-      const partyRoleCounts = new Map();
-      refreshedParties.forEach(p => partyRoleCounts.set(p.partyNumber, 0));
+      // STEP 2: STRENGTH CONCENTRATION - Fill parties SEQUENTIALLY
+      // Assign highest CP members to Party 1 first, then Party 2, etc.
+      let memberIndex = 0;
 
-      for (const member of roleMembers) {
-        let assigned = false;
+      for (const targetParty of refreshedParties) {
+        let assignedToThisParty = 0;
 
-        // Try to assign to parties in order, respecting caps
-        for (let attempts = 0; attempts < refreshedParties.length; attempts++) {
-          const targetParty = refreshedParties[partyIndex % refreshedParties.length];
-          const currentCount = partyRoleCounts.get(targetParty.partyNumber);
+        // Fill this party up to maxCount with highest available members
+        while (memberIndex < roleMembers.length && assignedToThisParty < maxCount) {
+          const member = roleMembers[memberIndex];
 
-          if (currentCount < maxCount) {
-            console.log(`[Optimize ${role}] Assigning ${member.userId} (${member.cp} CP) to Party ${targetParty.partyNumber}`);
+          console.log(`[Optimize ${role}] Assigning ${member.userId} (${member.cp} CP) to Party ${targetParty.partyNumber} (strength concentration)`);
 
-            // Add member to target party
-            await parties.updateOne(
-              { _id: targetParty._id },
-              {
-                $push: {
-                  members: {
-                    userId: member.userId,
-                    weapon1: member.weapon1,
-                    weapon2: member.weapon2,
-                    cp: member.cp || 0,
-                    role: member.role,
-                    addedAt: new Date()
-                  }
-                },
-                $inc: {
-                  totalCP: (member.cp || 0),
-                  [`roleComposition.${role}`]: 1
+          // Add member to target party
+          await parties.updateOne(
+            { _id: targetParty._id },
+            {
+              $push: {
+                members: {
+                  userId: member.userId,
+                  weapon1: member.weapon1,
+                  weapon2: member.weapon2,
+                  cp: member.cp || 0,
+                  role: member.role,
+                  addedAt: new Date()
                 }
               },
-              { session }
-            );
+              $inc: {
+                totalCP: (member.cp || 0),
+                [`roleComposition.${role}`]: 1
+              }
+            },
+            { session }
+          );
 
-            // Update player record
-            await partyPlayers.updateOne(
-              { userId: member.userId, guildId },
-              { $set: { partyNumber: targetParty.partyNumber } },
-              { session }
-            );
+          // Update player record
+          await partyPlayers.updateOne(
+            { userId: member.userId, guildId },
+            { $set: { partyNumber: targetParty.partyNumber } },
+            { session }
+          );
 
-            partyRoleCounts.set(targetParty.partyNumber, currentCount + 1);
-
-            // Track move if party changed
-            if (member.currentParty !== targetParty.partyNumber) {
-              moves.push({
-                userId: member.userId,
-                from: member.currentParty,
-                to: targetParty.partyNumber,
-                role: role,
-                reason: `Strength optimization: ${role} rebalancing`
-              });
-            }
-
-            assigned = true;
-            partyIndex++;
-            break;
+          // Track move if party changed
+          if (member.currentParty !== targetParty.partyNumber) {
+            moves.push({
+              userId: member.userId,
+              from: member.currentParty,
+              to: targetParty.partyNumber,
+              role: role,
+              reason: `Strength concentration: ${role} optimization`
+            });
           }
 
-          partyIndex++;
+          memberIndex++;
+          assignedToThisParty++;
         }
 
-        if (!assigned) {
-          console.log(`[Optimize ${role}] WARNING: Could not assign ${member.userId} - all parties at cap`);
+        console.log(`[Optimize ${role}] Party ${targetParty.partyNumber} assigned ${assignedToThisParty} ${role}(s)`);
+
+        // If we've assigned all members, stop
+        if (memberIndex >= roleMembers.length) {
+          break;
         }
       }
 
-      console.log(`[Optimize ${role}] Optimization complete`);
+      console.log(`[Optimize ${role}] Strength concentration complete - assigned ${memberIndex}/${roleMembers.length} ${role}(s)`);
     });
 
     // Send DMs after successful transaction
-    const roleMoves = moves.filter(m => m.role === role && m.reason.includes('Strength optimization'));
+    const roleMoves = moves.filter(m => m.role === role && m.reason.includes('Strength concentration'));
     for (const move of roleMoves) {
       await sendPartyChangeDM(
         move.userId,
@@ -596,9 +592,214 @@ async function optimizeRolesByCPRanking(allParties, role, guildId, client, colle
 }
 
 /**
- * STEP 4: Redistribute DPS by strength
+ * STEP 3: Optimize healers by BALANCED ROUND-ROBIN using MongoDB transactions
+ * 
+ * Strategy: Distribute healers evenly across parties with CP-sorted assignment
+ * Example with 8 healers, 4 parties, max 3 per party:
+ * 
+ * Healers sorted by CP: H1(7800), H2(7500), H3(7300), H4(7100), H5(6900), H6(6700), H7(6500), H8(6300)
+ * 
+ * Round 1: Each party gets 1st healer
+ * - Party 1: H1(7800)
+ * - Party 2: H2(7500)
+ * - Party 3: H3(7300)
+ * - Party 4: H4(7100)
+ * 
+ * Round 2: Each party gets 2nd healer
+ * - Party 1: H1(7800), H5(6900)
+ * - Party 2: H2(7500), H6(6700)
+ * - Party 3: H3(7300), H7(6500)
+ * - Party 4: H4(7100), H8(6300)
+ * 
+ * Round 3: Each party gets 3rd healer (if available)
+ * - Party 1: H1(7800), H5(6900), H9(6100)
+ * - Party 2: H2(7500), H6(6700), H10(5900)
+ * ...
+ * 
+ * Result: 
+ * - ALL Party 1 healers > ALL Party 2 healers
+ * - ALL Party 2 healers > ALL Party 3 healers
+ * - Balanced distribution (each party gets same number)
  */
-async function redistributeDPSByStrength(allParties, guildId, client, collections, moves) {
+async function optimizeHealersByBalancedRoundRobin(allParties, guildId, client, collections, moves) {
+  const { parties, partyPlayers } = collections;
+  const mongoClient = getClient();
+
+  const maxCount = MAX_HEALERS_PER_PARTY;
+
+  // Refresh party data from database
+  const refreshedParties = [];
+  for (const party of allParties) {
+    const fresh = await parties.findOne({ guildId, partyNumber: party.partyNumber });
+    if (fresh) refreshedParties.push(fresh);
+  }
+
+  // Extract all healers across all parties
+  const healers = [];
+  const seenUserIds = new Set();
+
+  for (const party of refreshedParties) {
+    const members = (party.members || []).filter(m => m.role === 'healer');
+    for (const member of members) {
+      if (seenUserIds.has(member.userId)) {
+        console.log(`[Optimize Healer] WARNING: Skipping duplicate ${member.userId} found in Party ${party.partyNumber}`);
+        continue;
+      }
+
+      seenUserIds.add(member.userId);
+      healers.push({ ...member, currentParty: party.partyNumber });
+    }
+  }
+
+  if (healers.length === 0) {
+    console.log(`[Optimize Healer] No healers found`);
+    return;
+  }
+
+  // Sort by CP descending (highest first)
+  healers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
+
+  console.log(`[Optimize Healer] Found ${healers.length} unique healer(s), applying balanced round-robin`);
+
+  // Use MongoDB transaction to ensure atomicity
+  const session = mongoClient.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      // STEP 1: Remove ALL healers from ALL parties
+      for (const party of refreshedParties) {
+        await parties.updateOne(
+          { _id: party._id },
+          {
+            $pull: { members: { role: 'healer' } },
+            $set: { 'roleComposition.healer': 0 }
+          },
+          { session }
+        );
+
+        // Recalculate totalCP without healers
+        const currentParty = await parties.findOne({ _id: party._id }, { session });
+        const remainingMembers = (currentParty.members || []).filter(m => m.role !== 'healer');
+        const newTotalCP = remainingMembers.reduce((sum, m) => sum + (m.cp || 0), 0);
+
+        await parties.updateOne(
+          { _id: party._id },
+          { $set: { totalCP: newTotalCP } },
+          { session }
+        );
+      }
+
+      console.log(`[Optimize Healer] Cleared all healers from parties`);
+
+      // STEP 2: BALANCED ROUND-ROBIN - Distribute healers evenly
+      // Assign in order: H1→P1, H2→P2, H3→P3, H4→P4, H5→P1, H6→P2, etc.
+
+      let healerIndex = 0;
+      const partyCount = refreshedParties.length;
+      let lastAssignedCount = 0;
+
+      while (healerIndex < healers.length) {
+        lastAssignedCount = 0;
+
+        for (let partyIdx = 0; partyIdx < partyCount && healerIndex < healers.length; partyIdx++) {
+          const targetParty = refreshedParties[partyIdx];
+          const healer = healers[healerIndex];
+
+          // Check if party already has max healers
+          const currentParty = await parties.findOne({ _id: targetParty._id }, { session });
+          const currentHealerCount = currentParty.roleComposition?.healer || 0;
+
+          if (currentHealerCount >= maxCount) {
+            continue;
+          }
+
+          console.log(`[Optimize Healer] Assigning ${healer.userId} (${healer.cp} CP) to Party ${targetParty.partyNumber} (round-robin)`);
+
+          // Add healer to target party
+          await parties.updateOne(
+            { _id: targetParty._id },
+            {
+              $push: {
+                members: {
+                  userId: healer.userId,
+                  weapon1: healer.weapon1,
+                  weapon2: healer.weapon2,
+                  cp: healer.cp || 0,
+                  role: 'healer',
+                  addedAt: new Date()
+                }
+              },
+              $inc: {
+                totalCP: (healer.cp || 0),
+                'roleComposition.healer': 1
+              }
+            },
+            { session }
+          );
+
+          // Update player record
+          await partyPlayers.updateOne(
+            { userId: healer.userId, guildId },
+            { $set: { partyNumber: targetParty.partyNumber } },
+            { session }
+          );
+
+          // Track move if party changed
+          if (healer.currentParty !== targetParty.partyNumber) {
+            moves.push({
+              userId: healer.userId,
+              from: healer.currentParty,
+              to: targetParty.partyNumber,
+              role: 'healer',
+              reason: 'Balanced healer distribution'
+            });
+          }
+
+          healerIndex++;
+          lastAssignedCount++;
+        }
+
+        // Safety check: if no healers were assigned in this round, break to avoid infinite loop
+        if (lastAssignedCount === 0) {
+          console.log(`[Optimize Healer] All parties at max healer capacity, stopping`);
+          break;
+        }
+      }
+
+      console.log(`[Optimize Healer] Balanced round-robin complete - assigned ${healerIndex}/${healers.length} healer(s)`);
+    });
+
+    // Send DMs after successful transaction
+    const healerMoves = moves.filter(m => m.role === 'healer' && m.reason.includes('Balanced'));
+    for (const move of healerMoves) {
+      await sendPartyChangeDM(
+        move.userId,
+        move.from,
+        move.to,
+        'Strength-based rebalancing: Healer optimization',
+        guildId,
+        client,
+        collections
+      ).catch(err => console.error('DM failed:', err.message));
+    }
+
+  } catch (err) {
+    console.error(`[Optimize Healer] Transaction failed:`, err);
+    throw err;
+  } finally {
+    await session.endSession();
+  }
+}
+
+/**
+ * STEP 4: Redistribute DPS by STRENGTH CONCENTRATION
+ * 
+ * Strategy: Fill parties sequentially with highest CP DPS
+ * - Calculate available slots per party (6 - tanks - healers)
+ * - Assign highest CP DPS to Party 1 first, then Party 2, etc.
+ * - Result: P1 has strongest DPS, P2 has next strongest, etc.
+ */
+async function redistributeDPSByStrengthConcentration(allParties, guildId, client, collections, moves) {
   const { parties } = collections;
 
   // Refresh party data from database
@@ -610,10 +811,16 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
 
   // Collect all DPS
   const allDPS = [];
+  const seenUserIds = new Set();
 
   for (const party of refreshedParties) {
     const dpsMembers = (party.members || []).filter(m => m.role === 'dps');
     for (const dps of dpsMembers) {
+      if (seenUserIds.has(dps.userId)) {
+        console.log(`[DPS Redistribution] WARNING: Skipping duplicate ${dps.userId}`);
+        continue;
+      }
+      seenUserIds.add(dps.userId);
       allDPS.push({ ...dps, currentParty: party.partyNumber });
     }
   }
@@ -623,10 +830,10 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
     return;
   }
 
-  // Sort by CP descending
+  // Sort by CP descending (highest first)
   allDPS.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
-  console.log(`[DPS Redistribution] Found ${allDPS.length} DPS`);
+  console.log(`[DPS Redistribution] Found ${allDPS.length} DPS, applying strength concentration`);
 
   // Clear all DPS from all parties
   console.log(`[DPS Redistribution] Clearing all DPS from parties...`);
@@ -640,7 +847,8 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
     );
 
     // Recalculate totalCP without DPS
-    const remainingMembers = (party.members || []).filter(m => m.role !== 'dps');
+    const currentParty = await parties.findOne({ _id: party._id });
+    const remainingMembers = (currentParty.members || []).filter(m => m.role !== 'dps');
     const newTotalCP = remainingMembers.reduce((sum, m) => sum + (m.cp || 0), 0);
 
     await parties.updateOne(
@@ -649,7 +857,7 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
     );
   }
 
-  // Redistribute DPS sequentially
+  // STRENGTH CONCENTRATION: Fill parties sequentially with highest CP DPS
   let dpsIndex = 0;
 
   for (const party of refreshedParties) {
@@ -657,13 +865,19 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
     const comp = analyzePartyComposition(currentParty);
     const slotsAvailable = PARTY_SIZE - comp.tanks - comp.healers;
 
-    console.log(`[DPS Redistribution] Party ${party.partyNumber} has ${slotsAvailable} DPS slots`);
+    console.log(`[DPS Redistribution] Party ${party.partyNumber} has ${slotsAvailable} DPS slots available`);
 
-    if (slotsAvailable <= 0) continue;
+    if (slotsAvailable <= 0) {
+      console.log(`[DPS Redistribution] Party ${party.partyNumber} has no room for DPS`);
+      continue;
+    }
 
+    // Fill this party with the next highest CP DPS
     const targetDPS = allDPS.slice(dpsIndex, dpsIndex + slotsAvailable);
 
     for (const dps of targetDPS) {
+      console.log(`[DPS Redistribution] Assigning ${dps.userId} (${dps.cp} CP) to Party ${party.partyNumber}`);
+
       await parties.updateOne(
         { _id: currentParty._id },
         {
@@ -695,7 +909,7 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
           from: dps.currentParty,
           to: party.partyNumber,
           role: 'dps',
-          reason: 'DPS strength redistribution'
+          reason: 'DPS strength concentration'
         });
 
         await sendPartyChangeDM(
@@ -710,10 +924,16 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
       }
     }
 
-    dpsIndex += slotsAvailable;
+    dpsIndex += targetDPS.length;
+
+    // If we've assigned all DPS, stop
+    if (dpsIndex >= allDPS.length) {
+      console.log(`[DPS Redistribution] All DPS assigned`);
+      break;
+    }
   }
 
-  console.log(`[DPS Redistribution] Complete`);
+  console.log(`[DPS Redistribution] Complete - assigned ${dpsIndex}/${allDPS.length} DPS`);
 }
 
 /**

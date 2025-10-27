@@ -22,11 +22,11 @@ async function handleAutoAssign({ interaction, collections }) {
     return interaction.reply({
       content: '✅ **Auto-assignment enabled!**\n\n' +
                '• Players will be automatically assigned to parties when they complete `/myinfo`\n' +
-               '• **Strength-based system**: Lower party numbers = stronger parties\n' +
-               '• **Tanks**: Max 1 per party - Fill sequentially, higher CP can substitute\n' +
-               '• **Healers**: Max 3 per party - Fill sequentially, higher CP can substitute\n' +
-               '• **DPS**: Assigned by strength (highest CP → Party 1)\n' +
-               '• **Viability first**: All parties maintain 1T + 1H minimum\n' +
+               '• **Strength concentration system**: Lower party numbers = stronger parties\n' +
+               '• **Tanks**: Max 1 per party - Highest CP → Party 1, sequential filling\n' +
+               '• **Healers**: Max 3 per party - Balanced round-robin (each party gets 1, then 2, then 3)\n' +
+               '• **DPS**: Highest CP → Party 1, sequential filling by strength\n' +
+               '• **Viability maintained**: All parties have 1T + 1H minimum\n' +
                '• **Reserve system**: When max parties reached, excess players go to reserve\n' +
                '• Users will receive DM notifications about their assignments',
       flags: [64]
@@ -69,9 +69,9 @@ async function handleAutoAssign({ interaction, collections }) {
 
       const embed = new EmbedBuilder()
         .setColor('#2ecc71')
-        .setTitle('✅ Strength-Based Rebalancing Complete!')
+        .setTitle('✅ Strength Concentration Rebalancing Complete!')
         .setDescription(
-          `Successfully rebalanced parties using the **strength-based system**.\n\n` +
+          `Successfully rebalanced parties using **strength concentration**.\n\n` +
           `**${result.moves.length}** player(s) were moved to optimize party strength.`
         )
         .addFields(
@@ -79,10 +79,11 @@ async function handleAutoAssign({ interaction, collections }) {
             name: '📊 Rebalancing Strategy',
             value: 
               '• **Viability First**: All parties have 1 Tank + 1 Healer\n' +
-              '• **Role Optimization**: Highest CP tanks/healers → lower party numbers\n' +
-              '• **DPS Distribution**: Highest CP DPS → Party 1, descending order\n' +
+              '• **Tanks**: Strength concentration (highest CP → Party 1)\n' +
+              '• **Healers**: Balanced round-robin (even distribution with CP sorting)\n' +
+              '• **DPS**: Strength concentration (highest CP → Party 1)\n' +
               '• **Role Caps**: 1 Tank, up to 3 Healers per party\n' +
-              '• **Result**: Party 1 > Party 2 > Party 3 in strength',
+              '• **Result**: Party 1 > Party 2 > Party 3 > Party 4 in overall strength',
             inline: false
           }
         );
@@ -231,7 +232,7 @@ async function handleAutoAssign({ interaction, collections }) {
         },
         {
           name: 'System Type',
-          value: '🏆 Strength-Based',
+          value: '🏆 Strength Concentration',
           inline: true
         },
         {
@@ -257,13 +258,21 @@ async function handleAutoAssign({ interaction, collections }) {
         {
           name: '📋 How It Works',
           value:
-            '**Tanks** (Max 1/party): Fill sequentially (1→2→3)\n' +
-            '• Higher CP can substitute into lower parties\n\n' +
-            '**Healers** (Max 3/party): Fill sequentially\n' +
-            '• Higher CP can substitute into lower parties\n\n' +
-            '**DPS**: Assigned by strength\n' +
+            '**Strength Concentration System**\n' +
+            '• Highest CP members → lowest party numbers\n' +
+            '• Party 1 gets strongest members, then Party 2, etc.\n\n' +
+            '**Tanks** (Max 1/party):\n' +
+            '• Highest CP tank → Party 1\n' +
+            '• Sequential filling by CP (descending)\n\n' +
+            '**Healers** (Max 3/party):\n' +
+            '• **Balanced round-robin distribution**\n' +
+            '• Round 1: Each party gets highest CP healer\n' +
+            '• Round 2: Each party gets next healer (P1→H5, P2→H6, etc.)\n' +
+            '• Round 3: Each party gets 3rd healer (if available)\n' +
+            '• **Result**: ALL P1 healers > ALL P2 healers > ALL P3 healers\n\n' +
+            '**DPS** (Fill remaining slots):\n' +
             '• Highest CP DPS → Party 1\n' +
-            '• Lower CP DPS → higher party numbers\n\n' +
+            '• Sequential filling by CP (descending)\n\n' +
             '**Reserve System**: When max parties reached\n' +
             '• Excess players go to reserve pool\n' +
             '• Automatically considered during rebalancing',
@@ -274,9 +283,10 @@ async function handleAutoAssign({ interaction, collections }) {
           value:
             '• **Automatic**: Every 72 hours\n' +
             '• **Manual**: Use `/autoassign rebalance`\n' +
-            '• Ensures Party 1 > Party 2 > Party 3 in strength\n' +
+            '• Ensures Party 1 > Party 2 > Party 3 > Party 4\n' +
             '• Viability maintained (1T + 1H per party)\n' +
-            '• Reserve players automatically promoted when possible',
+            '• Reserve players automatically promoted when possible\n' +
+            '• **Healers are reshuffled on every rebalance** for optimal distribution',
           inline: false
         }
       )
