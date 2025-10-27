@@ -14,7 +14,7 @@ const WEAPONS = [
 const MAX_PARTIES = 10; // Default maximum, can be configured per guild
 const PARTY_SIZE = 6;
 const MAX_TANKS_PER_PARTY = 1;
-const MAX_HEALERS_PER_PARTY = 3;
+const MAX_HEALERS_PER_PARTY = 2;
 
 module.exports = { 
   WEAPONS, 

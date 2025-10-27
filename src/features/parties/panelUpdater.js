@@ -100,20 +100,20 @@ async function updatePartyPanel(guildId, client, collections) {
     return;
   }
 
-  // Load settings and data in parallel to avoid race conditions
-  const [settings, allPartiesData, reservePlayersData] = await Promise.all([
-    guildSettings.findOne({ guildId }),
+  // FIXED: Load settings FIRST to avoid race condition
+  const settings = await guildSettings.findOne({ guildId });
+  const maxParties = settings?.maxParties || 10;
+
+  // Then load parties and reserves in parallel
+  const [allPartiesData, reservePlayersData] = await Promise.all([
     parties.find({ 
       guildId,
-      partyNumber: { $lte: settings?.maxParties || 10 }
+      partyNumber: { $lte: maxParties }
     }).sort({ partyNumber: 1 }).toArray(),
     getReservePlayers(guildId, collections)
   ]);
 
-  const maxParties = settings?.maxParties || 10;
-
-  // Filter parties again after loading to ensure correct maxParties
-  const allParties = allPartiesData.filter(p => p.partyNumber <= maxParties);
+  const allParties = allPartiesData;
   const reservePlayers = reservePlayersData;
 
   // Build embeds for each party

@@ -24,7 +24,7 @@ async function handleAutoAssign({ interaction, collections }) {
                '• Players will be automatically assigned to parties when they complete `/myinfo`\n' +
                '• **Strength concentration system**: Lower party numbers = stronger parties\n' +
                '• **Tanks**: Max 1 per party - Highest CP → Party 1, sequential filling\n' +
-               '• **Healers**: Max 3 per party - Balanced round-robin (each party gets 1, then 2, then 3)\n' +
+               '• **Healers**: Max 3 per party - Strength concentration (highest CP → Party 1)\n' +
                '• **DPS**: Highest CP → Party 1, sequential filling by strength\n' +
                '• **Viability maintained**: All parties have 1T + 1H minimum\n' +
                '• **Reserve system**: When max parties reached, excess players go to reserve\n' +
@@ -80,7 +80,7 @@ async function handleAutoAssign({ interaction, collections }) {
             value: 
               '• **Viability First**: All parties have 1 Tank + 1 Healer\n' +
               '• **Tanks**: Strength concentration (highest CP → Party 1)\n' +
-              '• **Healers**: Balanced round-robin (even distribution with CP sorting)\n' +
+              '• **Healers**: Strength concentration (highest CP → Party 1)\n' +
               '• **DPS**: Strength concentration (highest CP → Party 1)\n' +
               '• **Role Caps**: 1 Tank, up to 3 Healers per party\n' +
               '• **Result**: Party 1 > Party 2 > Party 3 > Party 4 in overall strength',
@@ -264,11 +264,8 @@ async function handleAutoAssign({ interaction, collections }) {
             '**Tanks** (Max 1/party):\n' +
             '• Highest CP tank → Party 1\n' +
             '• Sequential filling by CP (descending)\n\n' +
-            '**Healers** (Max 3/party):\n' +
-            '• **Balanced round-robin distribution**\n' +
-            '• Round 1: Each party gets highest CP healer\n' +
-            '• Round 2: Each party gets next healer (P1→H5, P2→H6, etc.)\n' +
-            '• Round 3: Each party gets 3rd healer (if available)\n' +
+            '**Healers** (Max 2/party):\n' +
+            '• **Strength concentration** (same as tanks/DPS)\n' +
             '• **Result**: ALL P1 healers > ALL P2 healers > ALL P3 healers\n\n' +
             '**DPS** (Fill remaining slots):\n' +
             '• Highest CP DPS → Party 1\n' +
@@ -286,7 +283,7 @@ async function handleAutoAssign({ interaction, collections }) {
             '• Ensures Party 1 > Party 2 > Party 3 > Party 4\n' +
             '• Viability maintained (1T + 1H per party)\n' +
             '• Reserve players automatically promoted when possible\n' +
-            '• **Healers are reshuffled on every rebalance** for optimal distribution',
+            '• **ALL roles use strength concentration** for optimal party power',
           inline: false
         }
       )

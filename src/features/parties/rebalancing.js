@@ -272,9 +272,11 @@ async function strengthBasedRebalance(guildId, client, collections) {
     .sort({ partyNumber: 1 })
     .toArray();
 
-  // STEP 1: Ensure all parties have 1T + 1H (viability)
-  console.log(`[Strength Rebalance] Step 1: Ensuring viability (1T + 1H per party)`);
-  await ensureViability(cleanedParties, guildId, client, collections, moves);
+  // STEP 1: Ensure all parties have 1T + 1H (viability) - SKIPPED
+  // This step is now redundant since the role optimization steps below automatically
+  // ensure each party gets 1 tank and at least 1 healer through the redistribution
+  console.log(`[Strength Rebalance] Step 1: Skipping viability check - will be handled by role optimization`);
+  // await ensureViability(cleanedParties, guildId, client, collections, moves);
 
   // Refresh party data after viability fixes
   const updatedParties = await parties.find({ guildId, partyNumber: { $lte: maxParties } })
@@ -285,9 +287,9 @@ async function strengthBasedRebalance(guildId, client, collections) {
   console.log(`[Strength Rebalance] Step 2: Optimizing tanks by CP (strength concentration)`);
   await optimizeRolesByStrengthConcentration(updatedParties, 'tank', guildId, client, collections, moves);
 
-  // STEP 3: Optimize healers by CP (BALANCED ROUND-ROBIN)
-  console.log(`[Strength Rebalance] Step 3: Optimizing healers by CP (balanced round-robin)`);
-  await optimizeHealersByBalancedRoundRobin(updatedParties, guildId, client, collections, moves);
+  // STEP 3: Optimize healers by CP (STRENGTH CONCENTRATION) - CHANGED FROM BALANCED ROUND-ROBIN
+  console.log(`[Strength Rebalance] Step 3: Optimizing healers by CP (strength concentration)`);
+  await optimizeHealersByStrengthConcentration(updatedParties, guildId, client, collections, moves);
 
   // STEP 4: Redistribute DPS by CP (STRENGTH CONCENTRATION)
   console.log(`[Strength Rebalance] Step 4: Redistributing DPS by strength concentration`);
@@ -318,6 +320,7 @@ async function strengthBasedRebalance(guildId, client, collections) {
 
 /**
  * STEP 1: Ensure all parties have 1T + 1H (viability first)
+ * NOTE: This function is currently disabled in strengthBasedRebalance
  */
 async function ensureViability(allParties, guildId, client, collections, moves) {
   for (const party of allParties) {
@@ -592,36 +595,12 @@ async function optimizeRolesByStrengthConcentration(allParties, role, guildId, c
 }
 
 /**
- * STEP 3: Optimize healers by BALANCED ROUND-ROBIN using MongoDB transactions
+ * STEP 3: Optimize healers by STRENGTH CONCENTRATION using MongoDB transactions
  * 
- * Strategy: Distribute healers evenly across parties with CP-sorted assignment
- * Example with 8 healers, 4 parties, max 3 per party:
- * 
- * Healers sorted by CP: H1(7800), H2(7500), H3(7300), H4(7100), H5(6900), H6(6700), H7(6500), H8(6300)
- * 
- * Round 1: Each party gets 1st healer
- * - Party 1: H1(7800)
- * - Party 2: H2(7500)
- * - Party 3: H3(7300)
- * - Party 4: H4(7100)
- * 
- * Round 2: Each party gets 2nd healer
- * - Party 1: H1(7800), H5(6900)
- * - Party 2: H2(7500), H6(6700)
- * - Party 3: H3(7300), H7(6500)
- * - Party 4: H4(7100), H8(6300)
- * 
- * Round 3: Each party gets 3rd healer (if available)
- * - Party 1: H1(7800), H5(6900), H9(6100)
- * - Party 2: H2(7500), H6(6700), H10(5900)
- * ...
- * 
- * Result: 
- * - ALL Party 1 healers > ALL Party 2 healers
- * - ALL Party 2 healers > ALL Party 3 healers
- * - Balanced distribution (each party gets same number)
+ * Strategy: Fill parties sequentially with highest CP healers (same as tanks)
+ * This uses pure strength concentration instead of balanced round-robin
  */
-async function optimizeHealersByBalancedRoundRobin(allParties, guildId, client, collections, moves) {
+async function optimizeHealersByStrengthConcentration(allParties, guildId, client, collections, moves) {
   const { parties, partyPlayers } = collections;
   const mongoClient = getClient();
 
@@ -659,7 +638,7 @@ async function optimizeHealersByBalancedRoundRobin(allParties, guildId, client, 
   // Sort by CP descending (highest first)
   healers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
-  console.log(`[Optimize Healer] Found ${healers.length} unique healer(s), applying balanced round-robin`);
+  console.log(`[Optimize Healer] Found ${healers.length} unique healer(s), applying strength concentration`);
 
   // Use MongoDB transaction to ensure atomicity
   const session = mongoClient.startSession();
@@ -691,29 +670,18 @@ async function optimizeHealersByBalancedRoundRobin(allParties, guildId, client, 
 
       console.log(`[Optimize Healer] Cleared all healers from parties`);
 
-      // STEP 2: BALANCED ROUND-ROBIN - Distribute healers evenly
-      // Assign in order: H1→P1, H2→P2, H3→P3, H4→P4, H5→P1, H6→P2, etc.
-
+      // STEP 2: STRENGTH CONCENTRATION - Fill parties sequentially
+      // Assign highest CP healers to Party 1 first (up to maxCount), then Party 2, etc.
       let healerIndex = 0;
-      const partyCount = refreshedParties.length;
-      let lastAssignedCount = 0;
 
-      while (healerIndex < healers.length) {
-        lastAssignedCount = 0;
+      for (const targetParty of refreshedParties) {
+        let assignedToThisParty = 0;
 
-        for (let partyIdx = 0; partyIdx < partyCount && healerIndex < healers.length; partyIdx++) {
-          const targetParty = refreshedParties[partyIdx];
+        // Fill this party up to maxCount with highest available healers
+        while (healerIndex < healers.length && assignedToThisParty < maxCount) {
           const healer = healers[healerIndex];
 
-          // Check if party already has max healers
-          const currentParty = await parties.findOne({ _id: targetParty._id }, { session });
-          const currentHealerCount = currentParty.roleComposition?.healer || 0;
-
-          if (currentHealerCount >= maxCount) {
-            continue;
-          }
-
-          console.log(`[Optimize Healer] Assigning ${healer.userId} (${healer.cp} CP) to Party ${targetParty.partyNumber} (round-robin)`);
+          console.log(`[Optimize Healer] Assigning ${healer.userId} (${healer.cp} CP) to Party ${targetParty.partyNumber} (strength concentration)`);
 
           // Add healer to target party
           await parties.updateOne(
@@ -751,26 +719,27 @@ async function optimizeHealersByBalancedRoundRobin(allParties, guildId, client, 
               from: healer.currentParty,
               to: targetParty.partyNumber,
               role: 'healer',
-              reason: 'Balanced healer distribution'
+              reason: 'Strength concentration: healer optimization'
             });
           }
 
           healerIndex++;
-          lastAssignedCount++;
+          assignedToThisParty++;
         }
 
-        // Safety check: if no healers were assigned in this round, break to avoid infinite loop
-        if (lastAssignedCount === 0) {
-          console.log(`[Optimize Healer] All parties at max healer capacity, stopping`);
+        console.log(`[Optimize Healer] Party ${targetParty.partyNumber} assigned ${assignedToThisParty} healer(s)`);
+
+        // If we've assigned all healers, stop
+        if (healerIndex >= healers.length) {
           break;
         }
       }
 
-      console.log(`[Optimize Healer] Balanced round-robin complete - assigned ${healerIndex}/${healers.length} healer(s)`);
+      console.log(`[Optimize Healer] Strength concentration complete - assigned ${healerIndex}/${healers.length} healer(s)`);
     });
 
     // Send DMs after successful transaction
-    const healerMoves = moves.filter(m => m.role === 'healer' && m.reason.includes('Balanced'));
+    const healerMoves = moves.filter(m => m.role === 'healer' && m.reason.includes('Strength concentration'));
     for (const move of healerMoves) {
       await sendPartyChangeDM(
         move.userId,

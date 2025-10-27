@@ -231,10 +231,10 @@ async function attemptReserveAssignment(reservePlayer, guildId, client, collecti
     }
   }
 
-  // HEALER LOGIC (Max 3 per party)
+  // HEALER LOGIC (Max 2 per party)
   if (role === 'healer') {
-    // Priority 1: Parties with < 3 healers (prioritize fewer healers first)
-    for (let targetHealerCount = 0; targetHealerCount < 3; targetHealerCount++) {
+    // Priority 1: Parties with < 2 healers (prioritize fewer healers first)
+    for (let targetHealerCount = 0; targetHealerCount < 2; targetHealerCount++) {
       for (const party of activeParties) {
         const healerCount = party.members?.filter(m => m.role === 'healer').length || 0;
 
@@ -252,10 +252,10 @@ async function attemptReserveAssignment(reservePlayer, guildId, client, collecti
       }
     }
 
-    // Priority 2: All parties have 3 healers - replace weakest
+    // Priority 2: All parties have 2 healers - replace weakest
     for (const party of activeParties) {
       const healers = party.members?.filter(m => m.role === 'healer') || [];
-      if (healers.length >= 3) {
+      if (healers.length >= 2) {
         const weakestHealer = healers.reduce((min, h) => (h.cp || 0) < (min.cp || 0) ? h : min);
 
         if (cp > (weakestHealer.cp || 0)) {
