@@ -107,9 +107,9 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
         return timeA - timeB;
       });
 
-      const userList = users.map(u => {
-        return `• ${u.name}`;
-      }).join('\n');
+      const userList = '```\n' + users.map(u => {
+        return u.name;
+      }).join('\n\n') + '\n```';
 
       const fieldValue = userList.length > 1024 ? userList.substring(0, 1021) + '...' : userList;
       const fieldName = `${itemName} (${users.length})`;
