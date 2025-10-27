@@ -154,7 +154,7 @@ async function registerSlashCommands(client) {
     },
     {
       name: 'resetparties',
-      description: 'Admins: Reset all party system data (DANGEROUS!).',
+      description: 'Admins: Reset party system data (DANGEROUS!).',
       default_member_permissions: ADMIN,
       options: [
         {
@@ -163,8 +163,15 @@ async function registerSlashCommands(client) {
           description: 'What to reset',
           required: true,
           choices: [
-            { name: 'all (delete everything)', value: 'all' }
+            { name: 'all (delete everything)', value: 'all' },
+            { name: 'user (reset single user)', value: 'user' } // <-- added
           ]
+        },
+        {
+          type: 6, // USER
+          name: 'target',
+          description: 'User to reset (required if action is user)',
+          required: false
         }
       ]
     },

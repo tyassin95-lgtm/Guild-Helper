@@ -67,13 +67,13 @@ async function handleRemindParty({ interaction, collections }) {
     .setTitle('⚔️ Party Info Setup Required')
     .setDescription(
       `Hello! This is a reminder from **${interaction.guild.name}**.\n\n` +
-      `You haven't set up your party information yet! This information is needed for raid party assignments.\n\n` +
+      `You haven't set up your party information yet! This information is needed for party assignments.\n\n` +
       `**What you need to provide:**\n` +
       `• ⚔️ Primary Weapon\n` +
       `• 🗡️ Secondary Weapon\n` +
       `• 💪 Combat Power (CP)\n\n` +
       `**Please use the buttons below to set up your info now!**\n\n` +
-      `This will only take a moment and helps us organize better raid parties. Thank you! 🎯`
+      `This will only take a moment and helps us organize our parties better. Thank you! 🎯`
     )
     .setFooter({ text: `Message sent by ${interaction.user.tag}` })
     .setTimestamp();
@@ -109,7 +109,7 @@ async function handleRemindParty({ interaction, collections }) {
         guildId: interaction.guildId
       });
 
-      const infoEmbed = createPlayerInfoEmbed(playerInfo, member);
+      const infoEmbed = await createPlayerInfoEmbed(playerInfo, member, collections);
 
       await member.send({ 
         embeds: [reminderEmbed, infoEmbed], 

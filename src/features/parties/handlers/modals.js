@@ -10,25 +10,22 @@ async function handlePartyModals({ interaction, collections }) {
 
   // CP modal submission
   if (interaction.customId === 'party_cp_modal') {
+    // Defer the reply once
+    await interaction.deferReply({ flags: [64] }).catch(() => {});
+
     const cpValue = interaction.fields.getTextInputValue('cp_value');
     const cp = parseInt(cpValue.replace(/,/g, ''));
 
-    // Validate input first (before any async operations)
+    // Validate input
     if (isNaN(cp) || cp < 0) {
-      return interaction.reply({ 
-        content: '❌ Invalid Combat Power value! Please enter a valid number.', 
-        flags: [64] 
-      });
+      return interaction.editReply({ content: '❌ Invalid Combat Power value! Please enter a valid number.' });
     }
 
     if (cp > 10000000) {
-      return interaction.reply({ 
-        content: '❌ Combat Power value too high! Maximum is 10,000,000.', 
-        flags: [64] 
-      });
+      return interaction.editReply({ content: '❌ Combat Power value too high! Maximum is 10,000,000.' });
     }
 
-    // CRITICAL: Try to get guild context first, handle expiration immediately
+    // Get guild context
     let guildId, guild;
     try {
       const context = await getGuildContext(interaction, collections);
@@ -36,28 +33,21 @@ async function handlePartyModals({ interaction, collections }) {
       guild = context.guild;
     } catch (err) {
       if (err.message === 'DM_CONTEXT_EXPIRED') {
-        return interaction.reply({ 
-          content: 
+        return interaction.editReply({
+          content:
             '❌ **This DM link has expired (24 hours)**\n\n' +
             'Please return to the server and use `/myinfo` to update your Combat Power.\n\n' +
-            '**Your CP value was not saved.**', 
-          flags: [64] 
-        }).catch(replyErr => {
-          console.error('Failed to send DM expiration message:', replyErr.message);
+            '**Your CP value was not saved.**'
         });
       }
 
-      // Some other error getting guild context
       console.error('Error getting guild context:', err);
-      return interaction.reply({ 
-        content: '❌ Could not determine your server. Please use `/myinfo` in the server to update your CP.', 
-        flags: [64] 
-      }).catch(replyErr => {
-        console.error('Failed to send error message:', replyErr.message);
+      return interaction.editReply({
+        content: '❌ Could not determine your server. Please use `/myinfo` in the server to update your CP.'
       });
     }
 
-    // Now we have valid guild context, proceed with the rest
+    // Update player CP
     try {
       const oldPlayer = await partyPlayers.findOne({
         userId: interaction.user.id,
@@ -88,7 +78,6 @@ async function handlePartyModals({ interaction, collections }) {
           { $set: { 'members.$.cp': cp } }
         );
 
-        // Recalculate total CP
         const party = await parties.findOne({
           guildId: guildId,
           partyNumber: playerInfo.partyNumber
@@ -102,8 +91,8 @@ async function handlePartyModals({ interaction, collections }) {
           );
         }
 
-        // Schedule panel update
         schedulePartyPanelUpdate(guildId, interaction.client, collections);
+
       } else if (playerInfo.inReserve) {
         // Player is in reserve - check if CP increase makes them competitive
         const cpIncrease = cp - oldCP;
@@ -111,7 +100,6 @@ async function handlePartyModals({ interaction, collections }) {
         if (cpIncrease > 0) {
           console.log(`[CP Update] Reserve player ${interaction.user.id} increased CP by ${cpIncrease} (${oldCP} → ${cp})`);
 
-          // Try to assign from reserve
           const result = await attemptReserveAssignment(playerInfo, guildId, interaction.client, collections);
 
           if (result.success) {
@@ -131,7 +119,6 @@ async function handlePartyModals({ interaction, collections }) {
               console.error('Failed to send promotion DM:', err.message);
             }
 
-            // Schedule panel update
             schedulePartyPanelUpdate(guildId, interaction.client, collections);
           }
         }
@@ -146,7 +133,6 @@ async function handlePartyModals({ interaction, collections }) {
           );
 
           if (result.success) {
-            // Schedule panel update
             schedulePartyPanelUpdate(guildId, interaction.client, collections);
           }
         }
@@ -189,21 +175,16 @@ async function handlePartyModals({ interaction, collections }) {
           .setEmoji('💪')
       );
 
-      return interaction.reply({ 
-        content: `✅ Combat Power set to **${cp.toLocaleString()}**!`, 
-        embeds: [embed], 
-        components: [row],
-        flags: [64] 
+      return interaction.editReply({
+        content: `✅ Combat Power set to **${cp.toLocaleString()}**!`,
+        embeds: [embed],
+        components: [row]
       });
+
     } catch (err) {
       console.error('Error processing CP update:', err);
-
-      // Generic error handling
-      return interaction.reply({ 
-        content: '❌ An error occurred while setting your CP. Please try again using `/myinfo` in the server.', 
-        flags: [64] 
-      }).catch(replyErr => {
-        console.error('Failed to send error message:', replyErr.message);
+      return interaction.editReply({
+        content: '❌ An error occurred while setting your CP. Please try again using `/myinfo` in the server.'
       });
     }
   }

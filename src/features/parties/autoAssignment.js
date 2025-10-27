@@ -381,7 +381,7 @@ async function autoAssignPlayer(userId, guildId, client, collections) {
   if (role === 'tank' || role === 'healer') {
     result = await assignTankOrHealerByPriority(player, role, allParties, guildId, client, collections);
   } else {
-    result = await assignDPSByStrength(player, allParties, guildId, collections);
+    result = await assignDPSByStrength(player, allParties, guildId, client, collections);
   }
 
   // If routed to reserve, notify player

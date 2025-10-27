@@ -92,7 +92,7 @@
           };
         }
 
-        const embed = createPlayerInfoEmbed(playerInfo, member);
+        const embed = await createPlayerInfoEmbed(playerInfo, member);
 
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
@@ -218,7 +218,7 @@
           };
         }
 
-        const embed = createPlayerInfoEmbed(playerInfo, member);
+        const embed = await createPlayerInfoEmbed(playerInfo, member);
 
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder()

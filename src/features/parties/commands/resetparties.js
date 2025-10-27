@@ -2,7 +2,7 @@ const { PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = re
 const { schedulePartyPanelUpdate } = require('../panelUpdater');
 
 async function handleResetParties({ interaction, collections }) {
-  const { partyPlayers, parties, partyPanels } = collections;
+  const { partyPlayers, parties } = collections;
 
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
@@ -11,7 +11,6 @@ async function handleResetParties({ interaction, collections }) {
   const action = interaction.options.getString('action');
 
   if (action === 'all') {
-    // Show confirmation dialog
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('confirm_reset_parties_yes')
@@ -24,14 +23,13 @@ async function handleResetParties({ interaction, collections }) {
         .setStyle(ButtonStyle.Secondary)
     );
 
-    // Count records to be deleted
     const playerCount = await partyPlayers.countDocuments({ guildId: interaction.guildId });
     const partyCount = await parties.countDocuments({ guildId: interaction.guildId });
 
     return interaction.reply({
       content: `⚠️ **WARNING: This will completely reset all party data!**\n\n` +
                `This will delete:\n` +
-               `• **${playerCount}** player record(s) (weapons, CP, roles)\n` +
+               `• **${playerCount}** player record(s)\n` +
                `• **${partyCount}** party/parties\n` +
                `• All party assignments\n` +
                `• Party panel configuration\n\n` +
@@ -40,6 +38,28 @@ async function handleResetParties({ interaction, collections }) {
       components: [row],
       flags: [64]
     });
+  }
+
+  if (action === 'user') {
+    const user = interaction.options.getUser('target');
+    if (!user) return interaction.reply({ content: '❌ You must specify a user to reset.', flags: [64] });
+
+    const playerRecord = await partyPlayers.findOne({ guildId: interaction.guildId, userId: user.id });
+    if (!playerRecord) return interaction.reply({ content: `❌ ${user.tag} has no party info to reset.`, flags: [64] });
+
+    // Delete the player's info
+    await partyPlayers.deleteOne({ guildId: interaction.guildId, userId: user.id });
+
+    // Remove the user from all parties
+    await parties.updateMany(
+      { guildId: interaction.guildId },
+      { $pull: { members: { userId: user.id } } }
+    );
+
+    // Correct argument order: guildId, client, collections
+    await schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+
+    return interaction.reply({ content: `✅ **${user.tag}’s party info has been reset.**`, flags: [64] });
   }
 
   return interaction.reply({ content: 'Unknown action.', flags: [64] });
@@ -60,32 +80,26 @@ async function handleResetPartiesConfirmation({ interaction, collections }) {
     await interaction.deferUpdate();
 
     try {
-      // Delete all party players
       const playersResult = await partyPlayers.deleteMany({ guildId: interaction.guildId });
-
-      // Delete all parties
       const partiesResult = await parties.deleteMany({ guildId: interaction.guildId });
-
-      // Get panel info before deleting
       const panelInfo = await partyPanels.findOne({ guildId: interaction.guildId });
 
-      // Delete party panel message if it exists
       if (panelInfo) {
         try {
           const channel = await interaction.client.channels.fetch(panelInfo.channelId).catch(() => null);
           if (channel) {
             const message = await channel.messages.fetch(panelInfo.messageId).catch(() => null);
-            if (message) {
-              await message.delete().catch(() => {});
-            }
+            if (message) await message.delete().catch(() => {});
           }
         } catch (err) {
           console.error('Failed to delete party panel message:', err);
         }
 
-        // Remove panel record
         await partyPanels.deleteOne({ guildId: interaction.guildId });
       }
+
+      // Schedule panel update with correct argument order
+      await schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
 
       return interaction.editReply({
         content: `✅ **Party system reset complete!**\n\n` +
