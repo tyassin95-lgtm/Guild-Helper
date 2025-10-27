@@ -248,6 +248,163 @@ async function sendRoleChangeDM(userId, partyNumber, oldRole, newRole, guildId, 
 }
 
 /**
+ * Send DM when player is promoted from reserve to active party
+ */
+async function sendReservePromotionDM(userId, partyNumber, role, guildId, client, collections) {
+  const { parties } = collections;
+
+  const user = await client.users.fetch(userId);
+  if (!user) return;
+
+  const party = await parties.findOne({ guildId, partyNumber });
+  if (!party) return;
+
+  const members = party.members || [];
+  const totalCP = party.totalCP || 0;
+  const avgCP = members.length > 0 ? Math.round(totalCP / members.length) : 0;
+
+  // Build member list
+  const tanks = members.filter(m => m.role === 'tank');
+  const healers = members.filter(m => m.role === 'healer');
+  const dps = members.filter(m => m.role === 'dps');
+
+  const buildRoleList = async (roleMembers) => {
+    if (roleMembers.length === 0) return '*None*';
+
+    const names = await Promise.all(roleMembers.map(async m => {
+      if (m.userId === userId) return 'You';
+      try {
+        const member = await client.users.fetch(m.userId);
+        return member.username;
+      } catch {
+        return 'Unknown';
+      }
+    }));
+
+    return names.map(name => `• ${name}`).join('\n');
+  };
+
+  const tankList = await buildRoleList(tanks);
+  const healerList = await buildRoleList(healers);
+  const dpsList = await buildRoleList(dps);
+
+  const embed = new EmbedBuilder()
+    .setColor('#2ecc71')
+    .setTitle('🎉 Promoted from Reserve!')
+    .setDescription(`Great news! You've been assigned to **Party ${partyNumber}**!`)
+    .addFields(
+      { 
+        name: 'Your Role', 
+        value: `${getRoleEmoji(role)} ${getRoleDisplayName(role)}`, 
+        inline: true 
+      },
+      { 
+        name: 'Party Size', 
+        value: `${members.length}/6`, 
+        inline: true 
+      },
+      { 
+        name: 'Average CP', 
+        value: avgCP.toLocaleString(), 
+        inline: true 
+      },
+      {
+        name: '🛡️ Tanks',
+        value: tankList,
+        inline: true
+      },
+      {
+        name: '💚 Healers',
+        value: healerList,
+        inline: true
+      },
+      {
+        name: '⚔️ DPS',
+        value: dpsList,
+        inline: true
+      }
+    )
+    .setFooter({ text: 'Good luck on your adventures!' })
+    .setTimestamp();
+
+  try {
+    await user.send({ embeds: [embed] });
+  } catch (err) {
+    console.error(`Cannot send DM to ${userId}:`, err.message);
+  }
+}
+
+/**
+ * Send DM when player is demoted from active party to reserve
+ */
+async function sendReserveDemotionDM(userId, fromParty, guildId, client, collections) {
+  const { partyPlayers } = collections;
+
+  const user = await client.users.fetch(userId);
+  if (!user) return;
+
+  const player = await partyPlayers.findOne({ userId, guildId });
+  if (!player) return;
+
+  // Get reserve position
+  const allReserves = await partyPlayers.find({ 
+    guildId, 
+    inReserve: true 
+  }).toArray();
+
+  // Sort by priority
+  const roleOrder = { tank: 0, healer: 1, dps: 2 };
+  allReserves.sort((a, b) => {
+    const roleDiff = roleOrder[a.role] - roleOrder[b.role];
+    if (roleDiff !== 0) return roleDiff;
+    const cpDiff = (b.cp || 0) - (a.cp || 0);
+    if (cpDiff !== 0) return cpDiff;
+    return new Date(a.reservedAt) - new Date(b.reservedAt);
+  });
+
+  const overallPosition = allReserves.findIndex(p => p.userId === userId) + 1;
+  const roleReserves = allReserves.filter(p => p.role === player.role);
+  const rolePosition = roleReserves.findIndex(p => p.userId === userId) + 1;
+
+  const embed = new EmbedBuilder()
+    .setColor('#e67e22')
+    .setTitle('⏸️ Moved to Reserve Pool')
+    .setDescription(
+      fromParty 
+        ? `You have been moved from **Party ${fromParty}** to the reserve pool.\n\n**Reason:** ${player.reserveReason || 'Party restructuring'}`
+        : `You have been placed in the reserve pool.\n\n**Reason:** ${player.reserveReason || 'Party limit reached'}`
+    )
+    .addFields(
+      {
+        name: 'Your Info',
+        value: 
+          `• **Role:** ${getRoleEmoji(player.role)} ${getRoleDisplayName(player.role)} (${player.weapon1}/${player.weapon2})\n` +
+          `• **CP:** ${(player.cp || 0).toLocaleString()}\n` +
+          `• **Reserve Position:** #${overallPosition} of ${allReserves.length} overall\n` +
+          `• **Role Position:** #${rolePosition} of ${roleReserves.length} ${getRoleDisplayName(player.role)}s`,
+        inline: false
+      },
+      {
+        name: 'How to Get Promoted',
+        value:
+          '• Increase your CP to be more competitive\n' +
+          '• Wait for rebalancing (every 72 hours)\n' +
+          '• Wait for a slot to open in active parties\n\n' +
+          'You will be automatically notified when promoted!',
+        inline: false
+      }
+    )
+    .setFooter({ text: 'Tip: Update your CP using /myinfo to improve your ranking!' })
+    .setTimestamp();
+
+  try {
+    await user.send({ embeds: [embed] });
+  } catch (err) {
+    console.error(`Cannot send DM to ${userId}:`, err.message);
+  }
+}
+
+/**
  * Check if user was notified recently (anti-spam)
  */
 async function shouldNotifyUser(userId, guildId, collections) {
@@ -277,6 +434,8 @@ module.exports = {
   sendPartyAssignmentDM,
   sendPartyChangeDM,
   sendRoleChangeDM,
+  sendReservePromotionDM,
+  sendReserveDemotionDM,
   shouldNotifyUser,
   updateLastNotified
 };

@@ -1,6 +1,7 @@
 const { getRoleFromWeapons } = require('./roleDetection');
 const { sendPartyAssignmentDM, sendPartyChangeDM } = require('./notifications');
-const { MAX_PARTIES, PARTY_SIZE } = require('./constants');
+const { MAX_PARTIES, PARTY_SIZE, MAX_TANKS_PER_PARTY, MAX_HEALERS_PER_PARTY } = require('./constants');
+const { shouldRouteToReserve, attemptReserveAssignment, moveToReserve } = require('./reserve');
 
 /**
  * Analyze party composition
@@ -94,17 +95,45 @@ async function removePlayerFromParty(userId, guildId, collections) {
 }
 
 /**
+ * Check if party can accept this role (respecting caps)
+ */
+function canAcceptRole(party, role) {
+  const comp = analyzePartyComposition(party);
+
+  if (role === 'tank' && comp.tanks >= MAX_TANKS_PER_PARTY) {
+    return false;
+  }
+
+  if (role === 'healer' && comp.healers >= MAX_HEALERS_PER_PARTY) {
+    return false;
+  }
+
+  // DPS can fill any remaining slots
+  if (comp.totalMembers >= PARTY_SIZE) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Assign tank or healer by priority (sequential party filling + substitution)
  */
 async function assignTankOrHealerByPriority(player, role, allParties, guildId, client, collections) {
-  const { parties, partyPlayers } = collections;
+  const { parties, partyPlayers, guildSettings } = collections;
+
+  const settings = await guildSettings.findOne({ guildId });
+  const maxParties = settings?.maxParties || MAX_PARTIES;
+
+  // Filter to only active parties within limit
+  const activeParties = allParties.filter(p => p.partyNumber <= maxParties);
 
   // Sort parties by party number (lowest first)
-  const sortedParties = [...allParties]
+  const sortedParties = [...activeParties]
     .filter(p => (p.members?.length || 0) < PARTY_SIZE)
     .sort((a, b) => a.partyNumber - b.partyNumber);
 
-  // Phase 1: Find first party missing this role
+  // Phase 1: Find first party missing this role (respecting caps)
   for (const party of sortedParties) {
     const comp = analyzePartyComposition(party);
 
@@ -114,73 +143,80 @@ async function assignTankOrHealerByPriority(player, role, allParties, guildId, c
       return { success: true, partyNumber: party.partyNumber };
     }
 
-    if (role === 'healer' && comp.healers === 0) {
-      await addPlayerToParty(player, party, guildId, collections);
-      console.log(`[Priority Assignment] ${role} assigned to Party ${party.partyNumber} (filling gap)`);
-      return { success: true, partyNumber: party.partyNumber };
+    if (role === 'healer' && comp.healers < MAX_HEALERS_PER_PARTY) {
+      if (canAcceptRole(party, role)) {
+        await addPlayerToParty(player, party, guildId, collections);
+        console.log(`[Priority Assignment] ${role} assigned to Party ${party.partyNumber} (filling gap)`);
+        return { success: true, partyNumber: party.partyNumber };
+      }
     }
   }
 
-  // Phase 2: All parties have this role - check for substitution (higher CP replaces lower CP in lower party numbers)
-  const allSortedParties = [...allParties].sort((a, b) => a.partyNumber - b.partyNumber);
+  // Phase 2: Check for substitution if at max parties
+  if (activeParties.length >= maxParties) {
+    console.log(`[Priority Assignment] Max parties reached, checking substitution for ${role}`);
 
-  for (const party of allSortedParties) {
-    const members = party.members || [];
-    const existingRole = members.find(m => m.role === role);
+    const allSortedParties = [...activeParties].sort((a, b) => a.partyNumber - b.partyNumber);
 
-    if (existingRole && player.cp > existingRole.cp) {
-      console.log(`[Substitution] Swapping ${role}: ${existingRole.cp} CP → ${player.cp} CP in Party ${party.partyNumber}`);
+    for (const party of allSortedParties) {
+      const members = party.members || [];
+      const existingRole = members.find(m => m.role === role);
 
-      // Remove lower CP player
-      await parties.updateOne(
-        { _id: party._id },
-        {
-          $pull: { members: { userId: existingRole.userId } },
-          $inc: {
-            totalCP: -(existingRole.cp || 0),
-            [`roleComposition.${role}`]: -1
+      if (existingRole && player.cp > existingRole.cp) {
+        console.log(`[Substitution] Swapping ${role}: ${existingRole.cp} CP → ${player.cp} CP in Party ${party.partyNumber}`);
+
+        // Remove lower CP player
+        await parties.updateOne(
+          { _id: party._id },
+          {
+            $pull: { members: { userId: existingRole.userId } },
+            $inc: {
+              totalCP: -(existingRole.cp || 0),
+              [`roleComposition.${role}`]: -1
+            }
           }
+        );
+
+        // Add higher CP player
+        await addPlayerToParty(player, party, guildId, collections);
+
+        // Send DM to substituted player
+        try {
+          await sendPartyChangeDM(
+            existingRole.userId,
+            party.partyNumber,
+            null,
+            `Higher CP ${role} substitution`,
+            guildId,
+            client,
+            collections
+          );
+        } catch (err) {
+          console.error(`Failed to send substitution DM:`, err.message);
         }
-      );
 
-      // Add higher CP player
-      await addPlayerToParty(player, party, guildId, collections);
+        // Move displaced player to reserve
+        await moveToReserve(existingRole.userId, guildId, `Substituted by higher CP ${role}`, collections);
 
-      // Send DM to substituted player (FIXED: added guildId)
-      try {
-        await sendPartyChangeDM(
-          existingRole.userId,
-          party.partyNumber,
-          null,
-          `Higher CP ${role} substitution`,
-          guildId,
-          client,
-          collections
-        );
-      } catch (err) {
-        console.error(`Failed to send substitution DM:`, err.message);
+        // Try to reassign from reserve immediately
+        const removedPlayerData = await partyPlayers.findOne({ userId: existingRole.userId, guildId });
+        if (removedPlayerData) {
+          setTimeout(async () => {
+            await attemptReserveAssignment(removedPlayerData, guildId, client, collections);
+          }, 1000);
+        }
+
+        return { success: true, partyNumber: party.partyNumber, substituted: true };
       }
-
-      // Reassign the removed player to a new party
-      const removedPlayerData = await partyPlayers.findOne({ userId: existingRole.userId, guildId });
-      if (removedPlayerData) {
-        removedPlayerData.partyNumber = null; // Clear assignment
-        await partyPlayers.updateOne(
-          { userId: existingRole.userId, guildId },
-          { $unset: { partyNumber: '', autoAssigned: '' } }
-        );
-
-        // Re-auto-assign them
-        setTimeout(async () => {
-          await autoAssignPlayer(existingRole.userId, guildId, client, collections);
-        }, 1000);
-      }
-
-      return { success: true, partyNumber: party.partyNumber, substituted: true };
     }
+
+    // No substitution possible - route to reserve
+    console.log(`[Priority Assignment] No substitution possible for ${role}, routing to reserve`);
+    await moveToReserve(player.userId, guildId, 'Party limit reached - awaiting slot', collections);
+    return { success: true, routed: 'reserve' };
   }
 
-  // Phase 3: No substitution possible, assign to any available party
+  // Phase 3: No substitution needed, assign to any available party
   if (sortedParties.length > 0) {
     const targetParty = sortedParties[0];
     await addPlayerToParty(player, targetParty, guildId, collections);
@@ -194,13 +230,63 @@ async function assignTankOrHealerByPriority(player, role, allParties, guildId, c
 /**
  * Assign DPS by strength priority (higher CP → lower party numbers)
  */
-async function assignDPSByStrength(player, allParties, guildId, collections) {
+async function assignDPSByStrength(player, allParties, guildId, client, collections) {
+  const { guildSettings } = collections;
+
+  const settings = await guildSettings.findOne({ guildId });
+  const maxParties = settings?.maxParties || MAX_PARTIES;
+
+  // Filter to only active parties within limit
+  const activeParties = allParties.filter(p => p.partyNumber <= maxParties);
+
   // Sort parties by party number (lowest first)
-  const sortedParties = [...allParties]
+  const sortedParties = [...activeParties]
     .filter(p => (p.members?.length || 0) < PARTY_SIZE)
     .sort((a, b) => a.partyNumber - b.partyNumber);
 
-  if (sortedParties.length === 0) return null;
+  if (sortedParties.length === 0) {
+    // Check if we're at max parties
+    if (activeParties.length >= maxParties) {
+      // Try substitution
+      for (const party of activeParties) {
+        const dpsList = party.members?.filter(m => m.role === 'dps') || [];
+        if (dpsList.length > 0) {
+          const weakestDPS = dpsList.reduce((min, d) => (d.cp || 0) < (min.cp || 0) ? d : min);
+
+          if (player.cp > (weakestDPS.cp || 0)) {
+            console.log(`[DPS Substitution] ${player.cp} CP > ${weakestDPS.cp} CP in Party ${party.partyNumber}`);
+
+            // Remove weaker DPS
+            await collections.parties.updateOne(
+              { _id: party._id },
+              {
+                $pull: { members: { userId: weakestDPS.userId } },
+                $inc: {
+                  totalCP: -(weakestDPS.cp || 0),
+                  'roleComposition.dps': -1
+                }
+              }
+            );
+
+            // Add stronger DPS
+            await addPlayerToParty(player, party, guildId, collections);
+
+            // Move displaced DPS to reserve
+            await moveToReserve(weakestDPS.userId, guildId, 'Substituted by higher CP DPS', collections);
+
+            return { success: true, partyNumber: party.partyNumber, substituted: true };
+          }
+        }
+      }
+
+      // No substitution possible - route to reserve
+      console.log(`[DPS Assignment] Cannot substitute, routing to reserve`);
+      await moveToReserve(player.userId, guildId, 'Party limit reached - lower CP', collections);
+      return { success: true, routed: 'reserve' };
+    }
+
+    return null;
+  }
 
   // Strategy: Assign to the lowest-numbered party that needs DPS
   for (const party of sortedParties) {
@@ -229,7 +315,7 @@ async function assignDPSByStrength(player, allParties, guildId, collections) {
 }
 
 /**
- * Auto-assign a player to the best available party (strength-based system)
+ * Auto-assign a player to the best available party (strength-based system with reserve support)
  */
 async function autoAssignPlayer(userId, guildId, client, collections) {
   const { partyPlayers, parties, guildSettings } = collections;
@@ -251,8 +337,22 @@ async function autoAssignPlayer(userId, guildId, client, collections) {
     return { success: false, reason: 'Already assigned', partyNumber: player.partyNumber };
   }
 
+  // Check if in reserve - try to assign from reserve
+  if (player.inReserve) {
+    console.log(`[Auto-Assign] Player ${userId} in reserve, attempting assignment`);
+    const result = await attemptReserveAssignment(player, guildId, client, collections);
+
+    if (result.success) {
+      return { success: true, partyNumber: result.partyNumber, fromReserve: true };
+    } else {
+      return { success: false, reason: 'Still in reserve - no suitable placement' };
+    }
+  }
+
   const role = getRoleFromWeapons(player.weapon1, player.weapon2);
   const cp = player.cp || 0;
+
+  const maxParties = settings?.maxParties || MAX_PARTIES;
 
   // Get all existing parties
   let allParties = await parties.find({ guildId }).sort({ partyNumber: 1 }).toArray();
@@ -272,6 +372,9 @@ async function autoAssignPlayer(userId, guildId, client, collections) {
     allParties = await parties.find({ guildId }).sort({ partyNumber: 1 }).toArray();
   }
 
+  // Check if should route to reserve (max parties reached and all viable)
+  const shouldReserve = await shouldRouteToReserve(guildId, collections);
+
   let result;
 
   // Route based on role
@@ -281,10 +384,37 @@ async function autoAssignPlayer(userId, guildId, client, collections) {
     result = await assignDPSByStrength(player, allParties, guildId, collections);
   }
 
-  // If no suitable party found, create a new one
+  // If routed to reserve, notify player
+  if (result && result.routed === 'reserve') {
+    console.log(`[Auto-Assign] Player ${userId} routed to reserve`);
+
+    const { sendReserveDemotionDM } = require('./notifications');
+    try {
+      await sendReserveDemotionDM(userId, null, guildId, client, collections);
+    } catch (err) {
+      console.error(`Failed to send reserve DM to ${userId}:`, err.message);
+    }
+
+    return { success: true, routed: 'reserve' };
+  }
+
+  // If no suitable party found and not at max, create a new one
   if (!result || !result.success) {
-    if (allParties.length >= MAX_PARTIES) {
-      return { success: false, reason: 'Max parties reached' };
+    const activePartyCount = allParties.filter(p => p.partyNumber <= maxParties).length;
+
+    if (activePartyCount >= maxParties) {
+      // Route to reserve
+      console.log(`[Auto-Assign] Max parties reached, routing ${userId} to reserve`);
+      await moveToReserve(player.userId, guildId, 'Party limit reached - awaiting slot', collections);
+
+      const { sendReserveDemotionDM } = require('./notifications');
+      try {
+        await sendReserveDemotionDM(userId, null, guildId, client, collections);
+      } catch (err) {
+        console.error(`Failed to send reserve DM to ${userId}:`, err.message);
+      }
+
+      return { success: true, routed: 'reserve' };
     }
 
     const nextNumber = getNextPartyNumber(allParties);
@@ -304,8 +434,8 @@ async function autoAssignPlayer(userId, guildId, client, collections) {
     result = { success: true, partyNumber: nextNumber };
   }
 
-  // Send DM notification (FIXED: added guildId)
-  if (result.success && !result.substituted) {
+  // Send DM notification (if not substituted and not routed to reserve)
+  if (result.success && !result.substituted && !result.routed) {
     try {
       await sendPartyAssignmentDM(userId, result.partyNumber, role, guildId, client, collections);
     } catch (err) {
@@ -336,6 +466,27 @@ async function handleRoleChange(userId, guildId, oldRole, newRole, client, colle
 
   try {
     const player = await partyPlayers.findOne({ userId, guildId });
+
+    // If in reserve, try to reassign with new role
+    if (player.inReserve) {
+      console.log(`[handleRoleChange] Player ${userId} in reserve with role change: ${oldRole} → ${newRole}`);
+
+      const result = await attemptReserveAssignment(player, guildId, client, collections);
+
+      if (result.success) {
+        console.log(`[handleRoleChange] Player ${userId} promoted from reserve to Party ${result.partyNumber} with new role`);
+
+        const { sendReservePromotionDM } = require('./notifications');
+        try {
+          await sendReservePromotionDM(userId, result.partyNumber, newRole, guildId, client, collections);
+        } catch (err) {
+          console.error(`Failed to send promotion DM:`, err.message);
+        }
+      }
+
+      return;
+    }
+
     if (!player || !player.partyNumber) {
       console.log(`[handleRoleChange] Player ${userId} not in a party, skipping`);
       return;
@@ -365,7 +516,7 @@ async function handleRoleChange(userId, guildId, oldRole, newRole, client, colle
 
     console.log(`[handleRoleChange] Updated party document for ${userId}`);
 
-    // Send DM notification (non-blocking) (FIXED: added guildId)
+    // Send DM notification (non-blocking)
     const { sendRoleChangeDM } = require('./notifications');
     setImmediate(async () => {
       try {

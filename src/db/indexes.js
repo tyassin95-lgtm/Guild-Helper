@@ -56,6 +56,10 @@ async function ensureIndexes({
   await partyPlayers.createIndex({ guildId: 1 });
   await partyPlayers.createIndex({ guildId: 1, partyNumber: 1 });
   await partyPlayers.createIndex({ guildId: 1, role: 1 });
+  // NEW: Reserve pool indexes for efficient queries
+  await partyPlayers.createIndex({ guildId: 1, inReserve: 1 });
+  await partyPlayers.createIndex({ guildId: 1, inReserve: 1, role: 1 });
+  await partyPlayers.createIndex({ guildId: 1, inReserve: 1, role: 1, cp: -1 });
 
   await parties.createIndex({ guildId: 1, partyNumber: 1 }, { unique: true });
   await parties.createIndex({ guildId: 1 });

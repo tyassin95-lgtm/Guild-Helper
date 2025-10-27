@@ -9,7 +9,7 @@ async function handleMyInfo({ interaction, collections }) {
     guildId: interaction.guildId
   });
 
-  const embed = createPlayerInfoEmbed(playerInfo, interaction.member);
+  const embed = await createPlayerInfoEmbed(playerInfo, interaction.member, collections);
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()

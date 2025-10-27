@@ -3,6 +3,7 @@ const { createPlayerInfoEmbed } = require('../embed');
 const { autoAssignPlayer } = require('../autoAssignment');
 const { schedulePartyPanelUpdate } = require('../panelUpdater');
 const { getGuildContext } = require('./buttons');
+const { attemptReserveAssignment } = require('../reserve');
 
 async function handlePartyModals({ interaction, collections }) {
   const { partyPlayers, parties } = collections;
@@ -12,6 +13,7 @@ async function handlePartyModals({ interaction, collections }) {
     const cpValue = interaction.fields.getTextInputValue('cp_value');
     const cp = parseInt(cpValue.replace(/,/g, ''));
 
+    // Validate input first (before any async operations)
     if (isNaN(cp) || cp < 0) {
       return interaction.reply({ 
         content: '❌ Invalid Combat Power value! Please enter a valid number.', 
@@ -26,9 +28,43 @@ async function handlePartyModals({ interaction, collections }) {
       });
     }
 
+    // CRITICAL: Try to get guild context first, handle expiration immediately
+    let guildId, guild;
     try {
-      // Get guild context (works in both DM and guild)
-      const { guildId, guild } = await getGuildContext(interaction, collections);
+      const context = await getGuildContext(interaction, collections);
+      guildId = context.guildId;
+      guild = context.guild;
+    } catch (err) {
+      if (err.message === 'DM_CONTEXT_EXPIRED') {
+        return interaction.reply({ 
+          content: 
+            '❌ **This DM link has expired (24 hours)**\n\n' +
+            'Please return to the server and use `/myinfo` to update your Combat Power.\n\n' +
+            '**Your CP value was not saved.**', 
+          flags: [64] 
+        }).catch(replyErr => {
+          console.error('Failed to send DM expiration message:', replyErr.message);
+        });
+      }
+
+      // Some other error getting guild context
+      console.error('Error getting guild context:', err);
+      return interaction.reply({ 
+        content: '❌ Could not determine your server. Please use `/myinfo` in the server to update your CP.', 
+        flags: [64] 
+      }).catch(replyErr => {
+        console.error('Failed to send error message:', replyErr.message);
+      });
+    }
+
+    // Now we have valid guild context, proceed with the rest
+    try {
+      const oldPlayer = await partyPlayers.findOne({
+        userId: interaction.user.id,
+        guildId: guildId
+      });
+
+      const oldCP = oldPlayer?.cp || 0;
 
       await partyPlayers.updateOne(
         { userId: interaction.user.id, guildId: guildId },
@@ -68,6 +104,37 @@ async function handlePartyModals({ interaction, collections }) {
 
         // Schedule panel update
         schedulePartyPanelUpdate(guildId, interaction.client, collections);
+      } else if (playerInfo.inReserve) {
+        // Player is in reserve - check if CP increase makes them competitive
+        const cpIncrease = cp - oldCP;
+
+        if (cpIncrease > 0) {
+          console.log(`[CP Update] Reserve player ${interaction.user.id} increased CP by ${cpIncrease} (${oldCP} → ${cp})`);
+
+          // Try to assign from reserve
+          const result = await attemptReserveAssignment(playerInfo, guildId, interaction.client, collections);
+
+          if (result.success) {
+            console.log(`[CP Update] Reserve player ${interaction.user.id} promoted to Party ${result.partyNumber}`);
+
+            const { sendReservePromotionDM } = require('../notifications');
+            try {
+              await sendReservePromotionDM(
+                interaction.user.id,
+                result.partyNumber,
+                playerInfo.role,
+                guildId,
+                interaction.client,
+                collections
+              );
+            } catch (err) {
+              console.error('Failed to send promotion DM:', err.message);
+            }
+
+            // Schedule panel update
+            schedulePartyPanelUpdate(guildId, interaction.client, collections);
+          }
+        }
       } else {
         // Try auto-assignment if player has complete info
         if (playerInfo.weapon1 && playerInfo.weapon2) {
@@ -102,7 +169,7 @@ async function handlePartyModals({ interaction, collections }) {
         };
       }
 
-      const embed = createPlayerInfoEmbed(playerInfo, member);
+      const embed = await createPlayerInfoEmbed(playerInfo, member, collections);
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -129,18 +196,14 @@ async function handlePartyModals({ interaction, collections }) {
         flags: [64] 
       });
     } catch (err) {
-      console.error('Error in party_cp_modal:', err);
+      console.error('Error processing CP update:', err);
 
-      if (err.message === 'DM_CONTEXT_EXPIRED') {
-        return interaction.reply({ 
-          content: '❌ This DM link has expired (24 hours). Please use `/myinfo` in the server to set up your party info.', 
-          flags: [64] 
-        });
-      }
-
+      // Generic error handling
       return interaction.reply({ 
-        content: '❌ An error occurred while setting your CP. Please try again.', 
+        content: '❌ An error occurred while setting your CP. Please try again using `/myinfo` in the server.', 
         flags: [64] 
+      }).catch(replyErr => {
+        console.error('Failed to send error message:', replyErr.message);
       });
     }
   }

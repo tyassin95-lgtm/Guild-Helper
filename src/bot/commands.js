@@ -138,8 +138,17 @@ async function registerSlashCommands(client) {
             { name: 'enable', value: 'enable' },
             { name: 'disable', value: 'disable' },
             { name: 'rebalance', value: 'rebalance' },
-            { name: 'status', value: 'status' }
+            { name: 'status', value: 'status' },
+            { name: 'max-parties', value: 'max-parties' }
           ]
+        },
+        {
+          type: 4, // INTEGER
+          name: 'value',
+          description: 'Value for max-parties (1-10)',
+          required: false,
+          min_value: 1,
+          max_value: 10
         }
       ]
     },
@@ -188,7 +197,12 @@ async function registerSlashCommands(client) {
       description: 'Admins: Send a DM to users who haven\'t set up their party info.',
       default_member_permissions: ADMIN
     },
-    // NEW: PvP Commands
+    {
+      name: 'viewreserve',
+      description: 'Admins: View players in the reserve pool.',
+      default_member_permissions: ADMIN
+    },
+    // PvP Commands
     {
       name: 'pvpevent',
       description: 'Admins: Create a PvP event with attendance tracking.',

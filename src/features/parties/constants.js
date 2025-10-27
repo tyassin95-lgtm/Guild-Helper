@@ -11,7 +11,15 @@ const WEAPONS = [
   { name: 'Spear', emoji: '🔱' }
 ];
 
-const MAX_PARTIES = 10;
+const MAX_PARTIES = 10; // Default maximum, can be configured per guild
 const PARTY_SIZE = 6;
+const MAX_TANKS_PER_PARTY = 1;
+const MAX_HEALERS_PER_PARTY = 3;
 
-module.exports = { WEAPONS, MAX_PARTIES, PARTY_SIZE };
+module.exports = { 
+  WEAPONS, 
+  MAX_PARTIES, 
+  PARTY_SIZE,
+  MAX_TANKS_PER_PARTY,
+  MAX_HEALERS_PER_PARTY
+};

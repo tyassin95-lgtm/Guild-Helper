@@ -1,7 +1,8 @@
 const { sendPartyChangeDM } = require('./notifications');
-const { PARTY_SIZE } = require('./constants');
+const { PARTY_SIZE, MAX_TANKS_PER_PARTY, MAX_HEALERS_PER_PARTY } = require('./constants');
 const { analyzePartyComposition } = require('./autoAssignment');
 const { getClient } = require('../../db/mongo');
+const { processReservePool } = require('./reserve');
 
 const DEFAULT_REBALANCE_THRESHOLD = 0.20;
 const MIN_REBALANCE_INTERVAL_MS = 5 * 60 * 1000;
@@ -70,7 +71,6 @@ async function movePlayerBetweenParties(userId, guildId, fromParty, toParty, cli
 
 /**
  * Clean up duplicate members in all parties
- * Removes duplicate entries where the same userId appears multiple times in a party
  */
 async function cleanupDuplicateMembers(guildId, collections) {
   const { parties } = collections;
@@ -135,7 +135,6 @@ async function cleanupDuplicateMembers(guildId, collections) {
 
 /**
  * Fix data inconsistencies between partyPlayers and parties collections
- * Ensures that if a player thinks they're in a party, they actually are in that party
  */
 async function fixDataInconsistencies(guildId, collections) {
   const { parties, partyPlayers } = collections;
@@ -145,7 +144,8 @@ async function fixDataInconsistencies(guildId, collections) {
   // Get all players who think they're assigned to a party
   const allPlayers = await partyPlayers.find({ 
     guildId, 
-    partyNumber: { $exists: true, $ne: null }
+    partyNumber: { $exists: true, $ne: null },
+    inReserve: { $ne: true } // Exclude reserve players
   }).toArray();
 
   // Get all parties
@@ -213,7 +213,10 @@ async function fixDataInconsistencies(guildId, collections) {
 
         await partyPlayers.updateOne(
           { userId: member.userId, guildId },
-          { $set: { partyNumber: party.partyNumber } },
+          { 
+            $set: { partyNumber: party.partyNumber },
+            $unset: { inReserve: '', reservedAt: '', reserveReason: '' }
+          },
           { upsert: true }
         );
 
@@ -231,9 +234,7 @@ async function fixDataInconsistencies(guildId, collections) {
 }
 
 /**
- * STRENGTH-BASED REBALANCING
- * Ensures: Party 1 > Party 2 > Party 3 in terms of average CP
- * Viability first: All parties must have 1T + 1H minimum
+ * STRENGTH-BASED REBALANCING with Reserve Pool Processing
  */
 async function strengthBasedRebalance(guildId, client, collections) {
   const { parties, guildSettings } = collections;
@@ -246,9 +247,12 @@ async function strengthBasedRebalance(guildId, client, collections) {
     return { rebalanced: false, reason: 'Auto-assignment disabled' };
   }
 
-  const allParties = await parties.find({ guildId }).sort({ partyNumber: 1 }).toArray();
+  const maxParties = settings?.maxParties || 10;
 
-  if (allParties.length < 2) {
+  const allParties = await parties.find({ guildId }).sort({ partyNumber: 1 }).toArray();
+  const activeParties = allParties.filter(p => p.partyNumber <= maxParties);
+
+  if (activeParties.length < 2) {
     console.log(`[Strength Rebalance] Skipped - not enough parties`);
     return { rebalanced: false, reason: 'Not enough parties' };
   }
@@ -264,14 +268,18 @@ async function strengthBasedRebalance(guildId, client, collections) {
   }
 
   // Refresh party data after cleanup
-  const cleanedParties = await parties.find({ guildId }).sort({ partyNumber: 1 }).toArray();
+  const cleanedParties = await parties.find({ guildId, partyNumber: { $lte: maxParties } })
+    .sort({ partyNumber: 1 })
+    .toArray();
 
   // STEP 1: Ensure all parties have 1T + 1H (viability)
   console.log(`[Strength Rebalance] Step 1: Ensuring viability (1T + 1H per party)`);
   await ensureViability(cleanedParties, guildId, client, collections, moves);
 
   // Refresh party data after viability fixes
-  const updatedParties = await parties.find({ guildId }).sort({ partyNumber: 1 }).toArray();
+  const updatedParties = await parties.find({ guildId, partyNumber: { $lte: maxParties } })
+    .sort({ partyNumber: 1 })
+    .toArray();
 
   // STEP 2: Optimize tanks by CP (highest CP tank → Party 1)
   console.log(`[Strength Rebalance] Step 2: Optimizing tanks by CP`);
@@ -285,6 +293,12 @@ async function strengthBasedRebalance(guildId, client, collections) {
   console.log(`[Strength Rebalance] Step 4: Redistributing DPS by strength`);
   await redistributeDPSByStrength(updatedParties, guildId, client, collections, moves);
 
+  // STEP 5: Process reserve pool (NEW)
+  console.log(`[Strength Rebalance] Step 5: Processing reserve pool`);
+  const reserveResult = await processReservePool(guildId, client, collections);
+
+  console.log(`[Strength Rebalance] Reserve processing: ${reserveResult.promoted}/${reserveResult.processed} promoted`);
+
   // Update last rebalance time
   await guildSettings.updateOne(
     { guildId },
@@ -292,12 +306,13 @@ async function strengthBasedRebalance(guildId, client, collections) {
     { upsert: true }
   );
 
-  console.log(`[Strength Rebalance] Complete - ${moves.length} move(s) executed`);
+  console.log(`[Strength Rebalance] Complete - ${moves.length} move(s) executed, ${reserveResult.promoted} promoted from reserve`);
 
   return { 
     rebalanced: true, 
     moves,
-    duplicatesRemoved: cleanupResult.duplicatesRemoved 
+    duplicatesRemoved: cleanupResult.duplicatesRemoved,
+    reservePromoted: reserveResult.promoted
   };
 }
 
@@ -393,16 +408,14 @@ async function findDuplicateRole(allParties, role, excludePartyNumber) {
 
     if (role === 'tank' && comp.tanks >= 2) {
       const tanks = party.members.filter(m => m.role === 'tank');
-      // Return the lower CP tank
       const lowestTank = tanks.reduce((lowest, tank) =>
         (tank.cp || 0) < (lowest.cp || 0) ? tank : lowest
       );
       return { partyNumber: party.partyNumber, member: lowestTank };
     }
 
-    if (role === 'healer' && comp.healers >= 2) {
+    if (role === 'healer' && comp.healers > MAX_HEALERS_PER_PARTY) {
       const healers = party.members.filter(m => m.role === 'healer');
-      // Return the lower CP healer
       const lowestHealer = healers.reduce((lowest, healer) =>
         (healer.cp || 0) < (lowest.cp || 0) ? healer : lowest
       );
@@ -415,11 +428,12 @@ async function findDuplicateRole(allParties, role, excludePartyNumber) {
 
 /**
  * STEP 2/3: Optimize tanks/healers by CP ranking using MongoDB transactions
- * FIXED: Now uses transactions to prevent data loss if bot crashes
  */
 async function optimizeRolesByCPRanking(allParties, role, guildId, client, collections, moves) {
   const { parties, partyPlayers } = collections;
   const mongoClient = getClient();
+
+  const maxCount = role === 'tank' ? MAX_TANKS_PER_PARTY : MAX_HEALERS_PER_PARTY;
 
   // Refresh party data from database
   const refreshedParties = [];
@@ -485,59 +499,81 @@ async function optimizeRolesByCPRanking(allParties, role, guildId, client, colle
 
       console.log(`[Optimize ${role}] Cleared all ${role}s from parties`);
 
-      // STEP 2: Assign highest CP to Party 1, next to Party 2, etc.
-      for (let i = 0; i < roleMembers.length; i++) {
-        const targetParty = refreshedParties[i % refreshedParties.length];
-        const member = roleMembers[i];
+      // STEP 2: Assign by round-robin (respecting caps)
+      let partyIndex = 0;
+      const partyRoleCounts = new Map();
+      refreshedParties.forEach(p => partyRoleCounts.set(p.partyNumber, 0));
 
-        console.log(`[Optimize ${role}] Assigning ${member.userId} (${member.cp} CP) to Party ${targetParty.partyNumber}`);
+      for (const member of roleMembers) {
+        let assigned = false;
 
-        // Add member to target party
-        await parties.updateOne(
-          { _id: targetParty._id },
-          {
-            $push: {
-              members: {
+        // Try to assign to parties in order, respecting caps
+        for (let attempts = 0; attempts < refreshedParties.length; attempts++) {
+          const targetParty = refreshedParties[partyIndex % refreshedParties.length];
+          const currentCount = partyRoleCounts.get(targetParty.partyNumber);
+
+          if (currentCount < maxCount) {
+            console.log(`[Optimize ${role}] Assigning ${member.userId} (${member.cp} CP) to Party ${targetParty.partyNumber}`);
+
+            // Add member to target party
+            await parties.updateOne(
+              { _id: targetParty._id },
+              {
+                $push: {
+                  members: {
+                    userId: member.userId,
+                    weapon1: member.weapon1,
+                    weapon2: member.weapon2,
+                    cp: member.cp || 0,
+                    role: member.role,
+                    addedAt: new Date()
+                  }
+                },
+                $inc: {
+                  totalCP: (member.cp || 0),
+                  [`roleComposition.${role}`]: 1
+                }
+              },
+              { session }
+            );
+
+            // Update player record
+            await partyPlayers.updateOne(
+              { userId: member.userId, guildId },
+              { $set: { partyNumber: targetParty.partyNumber } },
+              { session }
+            );
+
+            partyRoleCounts.set(targetParty.partyNumber, currentCount + 1);
+
+            // Track move if party changed
+            if (member.currentParty !== targetParty.partyNumber) {
+              moves.push({
                 userId: member.userId,
-                weapon1: member.weapon1,
-                weapon2: member.weapon2,
-                cp: member.cp || 0,
-                role: member.role,
-                addedAt: new Date()
-              }
-            },
-            $inc: {
-              totalCP: (member.cp || 0),
-              [`roleComposition.${role}`]: 1
+                from: member.currentParty,
+                to: targetParty.partyNumber,
+                role: role,
+                reason: `Strength optimization: ${role} rebalancing`
+              });
             }
-          },
-          { session }
-        );
 
-        // Update player record
-        await partyPlayers.updateOne(
-          { userId: member.userId, guildId },
-          { $set: { partyNumber: targetParty.partyNumber } },
-          { session }
-        );
+            assigned = true;
+            partyIndex++;
+            break;
+          }
 
-        // Track move if party changed (store in separate array for DMs later)
-        if (member.currentParty !== targetParty.partyNumber) {
-          moves.push({
-            userId: member.userId,
-            from: member.currentParty,
-            to: targetParty.partyNumber,
-            role: role,
-            reason: `Strength optimization: ${role} rebalancing`
-          });
+          partyIndex++;
+        }
+
+        if (!assigned) {
+          console.log(`[Optimize ${role}] WARNING: Could not assign ${member.userId} - all parties at cap`);
         }
       }
 
       console.log(`[Optimize ${role}] Optimization complete`);
     });
 
-    // Send DMs after successful transaction (outside transaction to avoid delays)
-    // Filter moves that happened in THIS optimization pass
+    // Send DMs after successful transaction
     const roleMoves = moves.filter(m => m.role === role && m.reason.includes('Strength optimization'));
     for (const move of roleMoves) {
       await sendPartyChangeDM(
@@ -561,19 +597,18 @@ async function optimizeRolesByCPRanking(allParties, role, guildId, client, colle
 
 /**
  * STEP 4: Redistribute DPS by strength
- * Highest CP DPS → Party 1, next highest → Party 2, etc.
  */
 async function redistributeDPSByStrength(allParties, guildId, client, collections, moves) {
   const { parties } = collections;
 
-  // CRITICAL: Refresh party data from database to get current state after Steps 1-3
+  // Refresh party data from database
   const refreshedParties = [];
   for (const party of allParties) {
     const fresh = await parties.findOne({ guildId, partyNumber: party.partyNumber });
     if (fresh) refreshedParties.push(fresh);
   }
 
-  // Collect all DPS from refreshed data
+  // Collect all DPS
   const allDPS = [];
 
   for (const party of refreshedParties) {
@@ -593,7 +628,7 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
 
   console.log(`[DPS Redistribution] Found ${allDPS.length} DPS`);
 
-  // First, clear all DPS from all parties
+  // Clear all DPS from all parties
   console.log(`[DPS Redistribution] Clearing all DPS from parties...`);
   for (const party of refreshedParties) {
     await parties.updateOne(
@@ -614,29 +649,21 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
     );
   }
 
-  // Now redistribute DPS sequentially
+  // Redistribute DPS sequentially
   let dpsIndex = 0;
 
   for (const party of refreshedParties) {
-    // Refresh composition after clearing
     const currentParty = await parties.findOne({ guildId, partyNumber: party.partyNumber });
     const comp = analyzePartyComposition(currentParty);
     const slotsAvailable = PARTY_SIZE - comp.tanks - comp.healers;
 
-    console.log(`[DPS Redistribution] Party ${party.partyNumber} has ${slotsAvailable} DPS slots (${comp.tanks}T + ${comp.healers}H)`);
+    console.log(`[DPS Redistribution] Party ${party.partyNumber} has ${slotsAvailable} DPS slots`);
 
-    if (slotsAvailable <= 0) {
-      console.log(`[DPS Redistribution] Party ${party.partyNumber} has no DPS slots available`);
-      continue;
-    }
+    if (slotsAvailable <= 0) continue;
 
-    // Assign the highest CP DPS to fill this party
     const targetDPS = allDPS.slice(dpsIndex, dpsIndex + slotsAvailable);
 
-    console.log(`[DPS Redistribution] Assigning ${targetDPS.length} DPS to Party ${party.partyNumber}`);
-
     for (const dps of targetDPS) {
-      // Add DPS directly (they were already removed)
       await parties.updateOne(
         { _id: currentParty._id },
         {
@@ -657,16 +684,12 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
         }
       );
 
-      // Update player record
       await collections.partyPlayers.updateOne(
         { userId: dps.userId, guildId },
         { $set: { partyNumber: party.partyNumber } }
       );
 
-      // Only log move and send DM if party actually changed
       if (dps.currentParty !== party.partyNumber) {
-        console.log(`[DPS Redistribution] Moved DPS ${dps.userId} (${dps.cp} CP) from Party ${dps.currentParty} → Party ${party.partyNumber}`);
-
         moves.push({
           userId: dps.userId,
           from: dps.currentParty,
@@ -684,15 +707,13 @@ async function redistributeDPSByStrength(allParties, guildId, client, collection
           client,
           collections
         ).catch(err => console.error('DM failed:', err.message));
-      } else {
-        console.log(`[DPS Redistribution] DPS ${dps.userId} (${dps.cp} CP) stayed in Party ${party.partyNumber}`);
       }
     }
 
     dpsIndex += slotsAvailable;
   }
 
-  console.log(`[DPS Redistribution] Redistribution complete. Assigned ${dpsIndex} DPS across ${refreshedParties.length} parties`);
+  console.log(`[DPS Redistribution] Complete`);
 }
 
 /**
@@ -738,7 +759,7 @@ async function runPeriodicRebalancerForAllGuilds(client, collections) {
         );
 
         if (result.rebalanced) {
-          console.log(`[Periodic Rebalance] ✅ Rebalanced ${result.moves.length} player(s) in guild ${guildConfig.guildId}`);
+          console.log(`[Periodic Rebalance] ✅ Guild ${guildConfig.guildId}: ${result.moves.length} moved, ${result.reservePromoted || 0} promoted from reserve`);
         }
       } catch (err) {
         console.error(`[Periodic Rebalance] ❌ Failed for guild ${guildConfig.guildId}:`, err);
@@ -762,7 +783,7 @@ async function checkAndRebalanceParties(guildId, client, collections, force = fa
     return { rebalanced: false, reason: 'Auto-assignment disabled' };
   }
 
-  // Check last rebalance time (prevent too frequent rebalancing)
+  // Check last rebalance time
   if (!force && settings?.lastPeriodicRebalance) {
     const timeSinceLastRebalance = Date.now() - new Date(settings.lastPeriodicRebalance).getTime();
     if (timeSinceLastRebalance < MIN_REBALANCE_INTERVAL_MS) {
@@ -770,7 +791,6 @@ async function checkAndRebalanceParties(guildId, client, collections, force = fa
     }
   }
 
-  // Execute strength-based rebalancing
   return await strengthBasedRebalance(guildId, client, collections);
 }
 

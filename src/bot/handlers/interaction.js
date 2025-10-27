@@ -23,6 +23,7 @@ const { handlePartiesPanel } = require('../../features/parties/commands/partiesp
 const { handleAutoAssign } = require('../../features/parties/commands/autoassign');
 const { handleResetParties, handleResetPartiesConfirmation } = require('../../features/parties/commands/resetparties');
 const { handleRemindParty } = require('../../features/parties/commands/remindparty');
+const { handleViewReserve } = require('../../features/parties/commands/viewreserve');
 const { handlePartyButtons } = require('../../features/parties/handlers/buttons');
 const { handlePartySelects } = require('../../features/parties/handlers/selects');
 const { handlePartyModals } = require('../../features/parties/handlers/modals');
@@ -69,6 +70,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'autoassign')  return handleAutoAssign({ interaction, collections });
       if (name === 'resetparties') return handleResetParties({ interaction, collections });
       if (name === 'remindparty') return handleRemindParty({ interaction, collections });
+      if (name === 'viewreserve') return handleViewReserve({ interaction, collections });
 
       // PvP commands
       if (name === 'pvpevent')    return handlePvPEvent({ interaction, collections });
