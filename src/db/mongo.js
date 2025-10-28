@@ -35,6 +35,7 @@ function getCollections(db = _db) {
 
     // Raid system
     raidSessions: db.collection('raidSessions'),
+    raidEvents: db.collection('raidEvents'),
 
     // Party system
     partyPlayers: db.collection('partyPlayers'),
@@ -49,7 +50,7 @@ function getCollections(db = _db) {
     pvpBonuses: db.collection('pvpBonuses'),
     pvpActivityRanking: db.collection('pvpActivityRanking'),
 
-    // Application system - FIXED: Changed applicationAnswers to applicationResponses
+    // Application system
     applicationPanels: db.collection('applicationPanels'),
     applicationTickets: db.collection('applicationTickets'),
     applicationResponses: db.collection('applicationResponses'),

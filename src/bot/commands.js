@@ -220,6 +220,17 @@ async function registerSlashCommands(client) {
       description: 'Admins: Reset all PvP bonuses (DANGEROUS!).',
       default_member_permissions: ADMIN
     },
+    // Raid Commands
+    {
+      name: 'createraid',
+      description: 'Admins: Create a raid event with attendance tracking.',
+      default_member_permissions: ADMIN
+    },
+    {
+      name: 'deleteraid',
+      description: 'Admins: Delete a raid event.',
+      default_member_permissions: ADMIN
+    },
     // Application System Commands
     {
       name: 'createapplication',

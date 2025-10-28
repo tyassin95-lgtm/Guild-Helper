@@ -1,4 +1,3 @@
-// src/bot/handlers/interaction.js - COMPLETE FILE WITH APPLICATION SYSTEM
 const { handleCreatePanel } = require('./commands/createpanel');
 const { handleMyWishlist } = require('./commands/mywishlist');
 const { handleSummary } = require('./commands/summary');
@@ -36,8 +35,14 @@ const { handlePvPButtons } = require('../../features/pvp/handlers/buttons');
 const { handlePvPSelects } = require('../../features/pvp/handlers/selects');
 const { handlePvPModals } = require('../../features/pvp/handlers/modals');
 
+// Raid system imports
+const { handleCreateRaid, handleCreateBasicModal } = require('../../features/raids/commands/createraid');
+const { handleDeleteRaid } = require('../../features/raids/commands/deleteraid');
+const { handleRaidButtons } = require('../../features/raids/handlers/buttons');
+const { handleRaidModals } = require('../../features/raids/handlers/modals');
+
 // Application system imports
-const { handleCreateApplication, handleCreateBasicModal } = require('../../features/applications/commands/createapplication');
+const { handleCreateApplication, handleCreateBasicModal: handleAppCreateBasicModal } = require('../../features/applications/commands/createapplication');
 const { handleDeleteApplication } = require('../../features/applications/commands/deleteapplication');
 const { handleEditApplication } = require('../../features/applications/commands/editapplication');
 const { handleApplicationStats } = require('../../features/applications/commands/applicationstats');
@@ -104,6 +109,10 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'pvpevent')    return handlePvPEvent({ interaction, collections });
       if (name === 'resetbonuses') return handleResetBonuses({ interaction, collections });
 
+      // Raid commands
+      if (name === 'createraid')  return handleCreateRaid({ interaction, collections });
+      if (name === 'deleteraid')  return handleDeleteRaid({ interaction, collections });
+
       // Application commands
       if (name === 'createapplication')   return handleCreateApplication({ interaction, collections });
       if (name === 'deleteapplication')   return handleDeleteApplication({ interaction, collections });
@@ -140,6 +149,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // PvP system buttons
       if (interaction.customId.startsWith('pvp_')) {
         return handlePvPButtons({ interaction, collections });
+      }
+
+      // Raid system buttons
+      if (interaction.customId.startsWith('raid_')) {
+        return handleRaidButtons({ interaction, collections });
       }
 
       // Party system buttons
@@ -252,6 +266,15 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         return handlePvPModals({ interaction, collections });
       }
 
+      // Raid system modals
+      if (interaction.customId.startsWith('raid_')) {
+        // Raid creation modal
+        if (interaction.customId === 'raid_create_basic') {
+          return handleCreateBasicModal({ interaction, collections });
+        }
+        return handleRaidModals({ interaction, collections });
+      }
+
       // Party system modals
       if (interaction.customId.startsWith('party_')) {
         return handlePartyModals({ interaction, collections });
@@ -261,7 +284,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (interaction.customId.startsWith('app_')) {
         // Basic configuration modal
         if (interaction.customId === 'app_create_basic') {
-          return handleCreateBasicModal({ interaction, collections });
+          return handleAppCreateBasicModal({ interaction, collections });
         }
         // Answer submission modals
         if (interaction.customId.startsWith('app_answer:')) {

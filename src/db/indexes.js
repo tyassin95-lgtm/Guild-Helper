@@ -10,6 +10,7 @@ async function ensureIndexes({
   parties, 
   partyPanels,
   raidSessions,
+  raidEvents,
   dmContexts,
   pvpEvents,
   pvpBonuses,
@@ -79,6 +80,13 @@ async function ensureIndexes({
   await raidSessions.createIndex({ frozenAt: 1 });
   await raidSessions.createIndex({ active: 1 });
 
+  // Raid events indexes
+  await raidEvents.createIndex({ guildId: 1 });
+  await raidEvents.createIndex({ guildId: 1, active: 1 });
+  await raidEvents.createIndex({ messageId: 1 });
+  await raidEvents.createIndex({ 'timeSlots.timestamp': 1 });
+  await raidEvents.createIndex({ guildId: 1, channelId: 1 });
+
   // DM contexts indexes
   await dmContexts.createIndex({ userId: 1, type: 1 }, { unique: true });
   await dmContexts.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index for auto-cleanup
@@ -99,7 +107,7 @@ async function ensureIndexes({
   await pvpActivityRanking.createIndex({ guildId: 1 });
   await pvpActivityRanking.createIndex({ guildId: 1, totalEvents: -1 }); // Sort by total events descending
 
-  // Application System Indexes - FIXED: Changed applicationAnswers to applicationResponses
+  // Application System Indexes
   // Application panels
   await applicationPanels.createIndex({ guildId: 1 });
   await applicationPanels.createIndex({ guildId: 1, channelId: 1 });
@@ -117,7 +125,7 @@ async function ensureIndexes({
   await applicationTickets.createIndex({ createdAt: -1 }); // For sorting by newest
   await applicationTickets.createIndex({ lastActivity: -1 }); // For cleanup queries
 
-  // Application responses (renamed from applicationAnswers)
+  // Application responses
   await applicationResponses.createIndex({ ticketId: 1 });
   await applicationResponses.createIndex({ guildId: 1, userId: 1 });
   await applicationResponses.createIndex({ guildId: 1, panelId: 1 });
