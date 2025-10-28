@@ -44,20 +44,45 @@ async function handlePvPModals({ interaction, collections }) {
       return interaction.editReply({ content: '❌ Attendance period is closed.' });
     }
 
-    if (event.attendees && event.attendees.includes(interaction.user.id)) {
-      return interaction.editReply({ content: '❌ You\'ve already recorded attendance for this event.' });
-    }
-
-    // Verify password
+    // Verify password first (before checking attendance to save a DB query)
     if (enteredPassword !== event.password) {
       return interaction.editReply({ content: '❌ Incorrect password. Please try again.' });
     }
 
-    // Add user to attendees
-    await pvpEvents.updateOne(
-      { _id: new ObjectId(eventId) },
+    // FIXED: Use atomic operation to add user to attendees (prevents race conditions)
+    // This checks if the user is already in the array and adds them in a single atomic operation
+    const updateResult = await pvpEvents.updateOne(
+      { 
+        _id: new ObjectId(eventId),
+        attendees: { $ne: interaction.user.id }, // Only match if user NOT in array
+        closed: false // Also verify event is still open
+      },
       { $push: { attendees: interaction.user.id } }
     );
+
+    // If matchedCount is 0, either the user already recorded attendance or event was closed
+    if (updateResult.matchedCount === 0) {
+      // Fetch the event again to determine the exact reason
+      const currentEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
+
+      if (!currentEvent) {
+        return interaction.editReply({ content: '❌ Event not found.' });
+      }
+
+      if (currentEvent.closed) {
+        return interaction.editReply({ content: '❌ Attendance period is closed.' });
+      }
+
+      if (currentEvent.attendees && currentEvent.attendees.includes(interaction.user.id)) {
+        return interaction.editReply({ content: '❌ You\'ve already recorded attendance for this event.' });
+      }
+
+      // Shouldn't reach here, but just in case
+      return interaction.editReply({ content: '❌ Unable to record attendance. Please try again.' });
+    }
+
+    // If we get here, the attendance was successfully recorded
+    // Now add the bonuses and activity ranking
 
     // Add +10 bonus to user (weekly bonus - can be reset)
     await pvpBonuses.updateOne(
@@ -69,7 +94,7 @@ async function handlePvPModals({ interaction, collections }) {
       { upsert: true }
     );
 
-    // NEW: Increment all-time activity ranking (permanent - never reset)
+    // Increment all-time activity ranking (permanent - never reset)
     await pvpActivityRanking.updateOne(
       { userId: interaction.user.id, guildId: interaction.guildId },
       { 
