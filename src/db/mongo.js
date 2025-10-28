@@ -47,7 +47,15 @@ function getCollections(db = _db) {
     // PvP system
     pvpEvents: db.collection('pvpEvents'),
     pvpBonuses: db.collection('pvpBonuses'),
-    pvpActivityRanking: db.collection('pvpActivityRanking') // NEW
+    pvpActivityRanking: db.collection('pvpActivityRanking'),
+
+    // Application system
+    applicationPanels: db.collection('applicationPanels'),
+    applicationTickets: db.collection('applicationTickets'),
+    applicationAnswers: db.collection('applicationAnswers'),
+    applicationNotes: db.collection('applicationNotes'),
+    applicationBlacklist: db.collection('applicationBlacklist'),
+    applicationCooldowns: db.collection('applicationCooldowns')
   };
 }
 

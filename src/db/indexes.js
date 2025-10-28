@@ -13,7 +13,13 @@ async function ensureIndexes({
   dmContexts,
   pvpEvents,
   pvpBonuses,
-  pvpActivityRanking
+  pvpActivityRanking,
+  applicationPanels,
+  applicationTickets,
+  applicationAnswers,
+  applicationNotes,
+  applicationBlacklist,
+  applicationCooldowns
 }) {
   // Wishlists index
   await wishlists.createIndex({ userId: 1, guildId: 1 }, { unique: true });
@@ -56,7 +62,7 @@ async function ensureIndexes({
   await partyPlayers.createIndex({ guildId: 1 });
   await partyPlayers.createIndex({ guildId: 1, partyNumber: 1 });
   await partyPlayers.createIndex({ guildId: 1, role: 1 });
-  // NEW: Reserve pool indexes for efficient queries
+  // Reserve pool indexes for efficient queries
   await partyPlayers.createIndex({ guildId: 1, inReserve: 1 });
   await partyPlayers.createIndex({ guildId: 1, inReserve: 1, role: 1 });
   await partyPlayers.createIndex({ guildId: 1, inReserve: 1, role: 1, cp: -1 });
@@ -67,14 +73,14 @@ async function ensureIndexes({
 
   await partyPanels.createIndex({ guildId: 1 }, { unique: true });
 
-  // Raid sessions indexes - FIXED: Added missing compound index for active queries
+  // Raid sessions indexes
   await raidSessions.createIndex({ guildId: 1, active: 1 });
   await raidSessions.createIndex({ guildId: 1 });
   await raidSessions.createIndex({ frozenAt: 1 });
   await raidSessions.createIndex({ active: 1 });
 
   // DM contexts indexes
-  await dmContexts.createIndex({ userId: 1 }, { unique: true });
+  await dmContexts.createIndex({ userId: 1, type: 1 }, { unique: true });
   await dmContexts.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index for auto-cleanup
 
   // PvP Events indexes
@@ -92,6 +98,43 @@ async function ensureIndexes({
   await pvpActivityRanking.createIndex({ userId: 1, guildId: 1 }, { unique: true });
   await pvpActivityRanking.createIndex({ guildId: 1 });
   await pvpActivityRanking.createIndex({ guildId: 1, totalEvents: -1 }); // Sort by total events descending
+
+  // Application System Indexes
+  // Application panels
+  await applicationPanels.createIndex({ guildId: 1 });
+  await applicationPanels.createIndex({ guildId: 1, channelId: 1 });
+  await applicationPanels.createIndex({ guildId: 1, messageId: 1 });
+  await applicationPanels.createIndex({ active: 1 });
+
+  // Application tickets
+  await applicationTickets.createIndex({ guildId: 1 });
+  await applicationTickets.createIndex({ guildId: 1, userId: 1 });
+  await applicationTickets.createIndex({ guildId: 1, userId: 1, panelId: 1, status: 1 });
+  await applicationTickets.createIndex({ guildId: 1, panelId: 1 });
+  await applicationTickets.createIndex({ guildId: 1, status: 1 });
+  await applicationTickets.createIndex({ ticketChannelId: 1 });
+  await applicationTickets.createIndex({ assignedStaffId: 1 });
+  await applicationTickets.createIndex({ createdAt: -1 }); // For sorting by newest
+  await applicationTickets.createIndex({ lastActivity: -1 }); // For cleanup queries
+
+  // Application answers
+  await applicationAnswers.createIndex({ ticketId: 1 });
+  await applicationAnswers.createIndex({ guildId: 1, userId: 1 });
+
+  // Application notes
+  await applicationNotes.createIndex({ ticketId: 1 });
+  await applicationNotes.createIndex({ guildId: 1 });
+  await applicationNotes.createIndex({ staffId: 1 });
+  await applicationNotes.createIndex({ createdAt: -1 });
+
+  // Application blacklist
+  await applicationBlacklist.createIndex({ guildId: 1, userId: 1 }, { unique: true });
+  await applicationBlacklist.createIndex({ guildId: 1 });
+  await applicationBlacklist.createIndex({ addedAt: 1 });
+
+  // Application cooldowns (with TTL)
+  await applicationCooldowns.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await applicationCooldowns.createIndex({ userId: 1, guildId: 1, panelId: 1 });
 
   console.log('All indexes created successfully');
 }

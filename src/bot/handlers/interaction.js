@@ -1,4 +1,4 @@
-// src/bot/handlers/interaction.js - COMPLETE FILE
+// src/bot/handlers/interaction.js - COMPLETE FILE WITH APPLICATION SYSTEM
 const { handleCreatePanel } = require('./commands/createpanel');
 const { handleMyWishlist } = require('./commands/mywishlist');
 const { handleSummary } = require('./commands/summary');
@@ -35,6 +35,34 @@ const { handleResetBonuses, handleResetBonusesConfirmation } = require('../../fe
 const { handlePvPButtons } = require('../../features/pvp/handlers/buttons');
 const { handlePvPSelects } = require('../../features/pvp/handlers/selects');
 const { handlePvPModals } = require('../../features/pvp/handlers/modals');
+
+// Application system imports
+const { handleCreateApplication, handleCreateBasicModal } = require('../../features/applications/commands/createapplication');
+const { handleDeleteApplication } = require('../../features/applications/commands/deleteapplication');
+const { handleEditApplication } = require('../../features/applications/commands/editapplication');
+const { handleApplicationStats } = require('../../features/applications/commands/applicationstats');
+const { handleApplicationHistory } = require('../../features/applications/commands/applicationhistory');
+const { handleBlacklist } = require('../../features/applications/commands/blacklist');
+const { handleClearOldTickets } = require('../../features/applications/commands/clearoldtickets');
+const { handleApplicationButtons } = require('../../features/applications/handlers/buttons');
+const { handleApplicationSelects } = require('../../features/applications/handlers/selects');
+const { handleApplicationModals } = require('../../features/applications/handlers/modals');
+const { 
+  handleApplyButton,
+  handleStartApplication,
+  handleAnswerSubmit,
+  handleNextQuestion,
+  handleEditAnswers,
+  handleEditQuestionSelect
+} = require('../../features/applications/handlers/applyFlow');
+const {
+  handleFinalSubmit,
+  handleAccept,
+  handleAcceptConfirm,
+  handleReject,
+  handleRejectConfirm,
+  handleInterview
+} = require('../../features/applications/handlers/reviewFlow');
 
 // Safe execution wrapper
 const { safeExecute } = require('../../utils/safeExecute');
@@ -75,6 +103,15 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // PvP commands
       if (name === 'pvpevent')    return handlePvPEvent({ interaction, collections });
       if (name === 'resetbonuses') return handleResetBonuses({ interaction, collections });
+
+      // Application commands
+      if (name === 'createapplication')   return handleCreateApplication({ interaction, collections });
+      if (name === 'deleteapplication')   return handleDeleteApplication({ interaction, collections });
+      if (name === 'editapplication')     return handleEditApplication({ interaction, collections });
+      if (name === 'applicationstats')    return handleApplicationStats({ interaction, collections });
+      if (name === 'applicationhistory')  return handleApplicationHistory({ interaction, collections });
+      if (name === 'blacklist')           return handleBlacklist({ interaction, collections });
+      if (name === 'clearoldtickets')     return handleClearOldTickets({ interaction, collections });
     }
 
     // Button Interactions
@@ -117,6 +154,52 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         return handlePartyButtons({ interaction, collections });
       }
 
+      // Application system buttons
+      if (interaction.customId.startsWith('app_')) {
+        // Apply flow buttons
+        if (interaction.customId === 'app_apply') {
+          return handleApplyButton({ interaction, collections });
+        }
+        if (interaction.customId.startsWith('app_start:')) {
+          return handleStartApplication({ interaction, collections });
+        }
+        if (interaction.customId.startsWith('app_next:')) {
+          return handleNextQuestion({ interaction, collections });
+        }
+        if (interaction.customId === 'app_edit_answers') {
+          return handleEditAnswers({ interaction, collections });
+        }
+        if (interaction.customId === 'app_submit_final') {
+          return handleFinalSubmit({ interaction, collections });
+        }
+        if (interaction.customId === 'app_review_cancel') {
+          return interaction.update({ 
+            content: '❌ Application cancelled.', 
+            components: [] 
+          });
+        }
+
+        // Review flow buttons
+        if (interaction.customId.startsWith('app_accept:')) {
+          return handleAccept({ interaction, collections });
+        }
+        if (interaction.customId.startsWith('app_accept_confirm:')) {
+          return handleAcceptConfirm({ interaction, collections });
+        }
+        if (interaction.customId.startsWith('app_reject:')) {
+          return handleReject({ interaction, collections });
+        }
+        if (interaction.customId.startsWith('app_reject_confirm:')) {
+          return handleRejectConfirm({ interaction, collections });
+        }
+        if (interaction.customId.startsWith('app_interview:')) {
+          return handleInterview({ interaction, collections });
+        }
+
+        // Configuration buttons (during panel creation)
+        return handleApplicationButtons({ interaction, collections });
+      }
+
       return handleButtons({ interaction, collections });
     }
 
@@ -137,7 +220,24 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         return handlePartySelects({ interaction, collections });
       }
 
+      // Application system selects
+      if (interaction.customId.startsWith('app_')) {
+        if (interaction.customId === 'app_select_edit_question') {
+          return handleEditQuestionSelect({ interaction, collections });
+        }
+        return handleApplicationSelects({ interaction, collections });
+      }
+
       return handleSelects({ interaction, collections });
+    }
+
+    // Role Select Menu Interactions
+    if (interaction.isRoleSelectMenu()) {
+      // Application system role selects
+      if (interaction.customId === 'app_select_roles') {
+        const { handleSelectRoles } = require('../../features/applications/handlers/configButtons');
+        return handleSelectRoles({ interaction, collections });
+      }
     }
 
     // Modal Submit Interactions
@@ -155,6 +255,19 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Party system modals
       if (interaction.customId.startsWith('party_')) {
         return handlePartyModals({ interaction, collections });
+      }
+
+      // Application system modals
+      if (interaction.customId.startsWith('app_')) {
+        // Basic configuration modal
+        if (interaction.customId === 'app_create_basic') {
+          return handleCreateBasicModal({ interaction, collections });
+        }
+        // Answer submission modals
+        if (interaction.customId.startsWith('app_answer:')) {
+          return handleAnswerSubmit({ interaction, collections });
+        }
+        return handleApplicationModals({ interaction, collections });
       }
     }
 

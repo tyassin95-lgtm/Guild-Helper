@@ -164,7 +164,7 @@ async function registerSlashCommands(client) {
           required: true,
           choices: [
             { name: 'all (delete everything)', value: 'all' },
-            { name: 'user (reset single user)', value: 'user' } // <-- added
+            { name: 'user (reset single user)', value: 'user' }
           ]
         },
         {
@@ -195,7 +195,7 @@ async function registerSlashCommands(client) {
           type: 8, // ROLE
           name: 'role',
           description: 'Role to exclude/include',
-          required: false // Not required for 'list' action
+          required: false
         }
       ]
     },
@@ -219,6 +219,109 @@ async function registerSlashCommands(client) {
       name: 'resetbonuses',
       description: 'Admins: Reset all PvP bonuses (DANGEROUS!).',
       default_member_permissions: ADMIN
+    },
+    // Application System Commands
+    {
+      name: 'createapplication',
+      description: 'Admins: Create a new application panel.',
+      default_member_permissions: ADMIN
+    },
+    {
+      name: 'deleteapplication',
+      description: 'Admins: Delete an application panel.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'panel_id',
+          description: 'The ID of the panel to delete',
+          required: true
+        }
+      ]
+    },
+    {
+      name: 'editapplication',
+      description: 'Admins: Edit an existing application panel.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'panel_id',
+          description: 'The ID of the panel to edit',
+          required: true
+        }
+      ]
+    },
+    {
+      name: 'applicationstats',
+      description: 'Admins: View application statistics.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'panel_id',
+          description: 'Specific panel ID (optional)',
+          required: false
+        }
+      ]
+    },
+    {
+      name: 'applicationhistory',
+      description: 'Admins: View application history for a user.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 6, // USER
+          name: 'user',
+          description: 'User to check history for',
+          required: true
+        }
+      ]
+    },
+    {
+      name: 'blacklist',
+      description: 'Admins: Manage application blacklist.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'action',
+          description: 'What to do',
+          required: true,
+          choices: [
+            { name: 'add', value: 'add' },
+            { name: 'remove', value: 'remove' },
+            { name: 'list', value: 'list' }
+          ]
+        },
+        {
+          type: 6, // USER
+          name: 'user',
+          description: 'User to add/remove from blacklist',
+          required: false
+        },
+        {
+          type: 3, // STRING
+          name: 'reason',
+          description: 'Reason for blacklisting',
+          required: false
+        }
+      ]
+    },
+    {
+      name: 'clearoldtickets',
+      description: 'Admins: Clean up old closed application tickets.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 4, // INTEGER
+          name: 'days',
+          description: 'Delete tickets older than this many days (default: 30)',
+          required: false,
+          min_value: 1,
+          max_value: 365
+        }
+      ]
     },
 
     // ----- Everyone -----
