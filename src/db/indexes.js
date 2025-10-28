@@ -16,7 +16,7 @@ async function ensureIndexes({
   pvpActivityRanking,
   applicationPanels,
   applicationTickets,
-  applicationAnswers,
+  applicationResponses,
   applicationNotes,
   applicationBlacklist,
   applicationCooldowns
@@ -99,7 +99,7 @@ async function ensureIndexes({
   await pvpActivityRanking.createIndex({ guildId: 1 });
   await pvpActivityRanking.createIndex({ guildId: 1, totalEvents: -1 }); // Sort by total events descending
 
-  // Application System Indexes
+  // Application System Indexes - FIXED: Changed applicationAnswers to applicationResponses
   // Application panels
   await applicationPanels.createIndex({ guildId: 1 });
   await applicationPanels.createIndex({ guildId: 1, channelId: 1 });
@@ -117,9 +117,12 @@ async function ensureIndexes({
   await applicationTickets.createIndex({ createdAt: -1 }); // For sorting by newest
   await applicationTickets.createIndex({ lastActivity: -1 }); // For cleanup queries
 
-  // Application answers
-  await applicationAnswers.createIndex({ ticketId: 1 });
-  await applicationAnswers.createIndex({ guildId: 1, userId: 1 });
+  // Application responses (renamed from applicationAnswers)
+  await applicationResponses.createIndex({ ticketId: 1 });
+  await applicationResponses.createIndex({ guildId: 1, userId: 1 });
+  await applicationResponses.createIndex({ guildId: 1, panelId: 1 });
+  await applicationResponses.createIndex({ guildId: 1, status: 1 });
+  await applicationResponses.createIndex({ submittedAt: -1 });
 
   // Application notes
   await applicationNotes.createIndex({ ticketId: 1 });

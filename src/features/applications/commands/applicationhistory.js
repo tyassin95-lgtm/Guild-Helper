@@ -5,7 +5,7 @@ async function handleApplicationHistory({ interaction, collections }) {
 
   const targetUser = interaction.options.getUser('user');
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [64] });
 
   const applications = await applicationResponses
     .find({

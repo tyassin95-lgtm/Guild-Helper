@@ -27,7 +27,7 @@ async function handleConfigCategory({ interaction, collections }) {
   if (categories.size === 0) {
     return interaction.reply({
       content: '❌ No categories found! Please create a category first.',
-      ephemeral: true
+      flags: [64]
     });
   }
 
@@ -47,7 +47,7 @@ async function handleConfigCategory({ interaction, collections }) {
   await interaction.reply({
     content: '📁 **Select the category where application tickets will be created:**',
     components: [row],
-    ephemeral: true
+    flags: [64]
   });
 }
 
@@ -86,7 +86,7 @@ async function handleConfigRoles({ interaction, collections }) {
   await interaction.reply({
     content: '👥 **Select roles that should have access to application tickets:**\n*These roles will be able to view and respond to applications.*',
     components: [row],
-    ephemeral: true
+    flags: [64]
   });
 }
 
@@ -159,7 +159,7 @@ async function handleNamingModal({ interaction, collections }) {
 
   await interaction.reply({
     content: `✅ **Ticket naming format set to:** \`${format}\`\n\nExample: \`${format.replace('{username}', 'johndoe').replace('{displayName}', 'JohnDoe').replace('{number}', '0042')}\``,
-    ephemeral: true
+    flags: [64]
   });
 }
 
@@ -177,7 +177,7 @@ async function handleConfigQuestions({ interaction, collections }) {
   if (!context) {
     return interaction.reply({
       content: '❌ Configuration session expired. Please start over.',
-      ephemeral: true
+      flags: [64]
     });
   }
 
@@ -186,7 +186,7 @@ async function handleConfigQuestions({ interaction, collections }) {
   if (currentCount >= 15) {
     return interaction.reply({
       content: '❌ Maximum of 15 questions reached!',
-      ephemeral: true
+      flags: [64]
     });
   }
 
@@ -249,7 +249,7 @@ async function handleQuestionModal({ interaction, collections }) {
   if (!['short', 'paragraph', 'select'].includes(type)) {
     return interaction.reply({
       content: '❌ Invalid type! Must be: short, paragraph, or select',
-      ephemeral: true
+      flags: [64]
     });
   }
 
@@ -298,7 +298,7 @@ async function handleQuestionModal({ interaction, collections }) {
   await interaction.reply({
     content: `✅ **Question ${questionCount} added!**\n\n**Current questions:**\n${context.data.questions.map((q, i) => `${i + 1}. ${q.text} (${q.type}${q.required ? ', required' : ''})`).join('\n')}`,
     components: [row],
-    ephemeral: true
+    flags: [64]
   });
 }
 
@@ -342,6 +342,13 @@ async function handleConfigAdvanced({ interaction, collections }) {
     .setValue('7')
     .setRequired(false);
 
+  const roleIdInput = new TextInputBuilder()
+    .setCustomId('roleid')
+    .setLabel('Role ID to assign on acceptance')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Right-click role > Copy ID (leave blank for none)')
+    .setRequired(false);
+
   const acceptMsgInput = new TextInputBuilder()
     .setCustomId('acceptmsg')
     .setLabel('Acceptance Message')
@@ -363,20 +370,12 @@ async function handleConfigAdvanced({ interaction, collections }) {
     .setValue('yes')
     .setRequired(false);
 
-  const autoArchiveInput = new TextInputBuilder()
-    .setCustomId('autoarchive')
-    .setLabel('Auto-archive after X days (0 to disable)')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('e.g., 7')
-    .setValue('0')
-    .setRequired(false);
-
   modal.addComponents(
     new ActionRowBuilder().addComponents(cooldownInput),
+    new ActionRowBuilder().addComponents(roleIdInput),
     new ActionRowBuilder().addComponents(acceptMsgInput),
     new ActionRowBuilder().addComponents(rejectMsgInput),
-    new ActionRowBuilder().addComponents(notifyInput),
-    new ActionRowBuilder().addComponents(autoArchiveInput)
+    new ActionRowBuilder().addComponents(notifyInput)
   );
 
   await interaction.showModal(modal);
@@ -389,22 +388,22 @@ async function handleAdvancedModal({ interaction, collections }) {
   const { dmContexts } = collections;
 
   const cooldownDays = parseInt(interaction.fields.getTextInputValue('cooldown')) || 0;
+  const roleId = interaction.fields.getTextInputValue('roleid') || null;
   const acceptMsg = interaction.fields.getTextInputValue('acceptmsg') || 
     'Congratulations! Your application has been accepted. Welcome to the guild!';
   const rejectMsg = interaction.fields.getTextInputValue('rejectmsg') || 
     'Thank you for your interest. Unfortunately, your application was not accepted at this time.';
   const notify = interaction.fields.getTextInputValue('notify').toLowerCase() === 'yes';
-  const autoArchiveDays = parseInt(interaction.fields.getTextInputValue('autoarchive')) || 0;
 
   await dmContexts.updateOne(
     { userId: interaction.user.id, type: 'app_creation' },
     {
       $set: {
         'data.config.cooldownMs': cooldownDays * 24 * 60 * 60 * 1000,
+        'data.config.acceptRoleId': roleId,
         'data.config.acceptanceMessage': acceptMsg,
         'data.config.rejectionMessage': rejectMsg,
-        'data.config.notifyUserOnDecision': notify,
-        'data.config.autoArchiveDays': autoArchiveDays
+        'data.config.notifyUserOnDecision': notify
       }
     }
   );
@@ -412,9 +411,9 @@ async function handleAdvancedModal({ interaction, collections }) {
   await interaction.reply({
     content: '✅ **Advanced settings saved!**\n' +
       `• Cooldown: ${cooldownDays} days\n` +
-      `• DM notifications: ${notify ? 'Enabled' : 'Disabled'}\n` +
-      `• Auto-archive: ${autoArchiveDays > 0 ? `${autoArchiveDays} days` : 'Disabled'}`,
-    ephemeral: true
+      `• Role on acceptance: ${roleId ? `<@&${roleId}>` : 'None'}\n` +
+      `• DM notifications: ${notify ? 'Enabled' : 'Disabled'}`,
+    flags: [64]
   });
 }
 
@@ -432,7 +431,7 @@ async function handleConfigPreview({ interaction, collections }) {
   if (!context) {
     return interaction.reply({
       content: '❌ Configuration session expired.',
-      ephemeral: true
+      flags: [64]
     });
   }
 
@@ -452,7 +451,7 @@ async function handleConfigPreview({ interaction, collections }) {
     content: '👁️ **Preview of your application panel:**',
     embeds: [embed],
     components: [button],
-    ephemeral: true
+    flags: [64]
   });
 }
 
@@ -470,7 +469,7 @@ async function handleConfigFinish({ interaction, collections }) {
   if (!context) {
     return interaction.reply({
       content: '❌ Configuration session expired.',
-      ephemeral: true
+      flags: [64]
     });
   }
 
@@ -480,21 +479,21 @@ async function handleConfigFinish({ interaction, collections }) {
   if (!panel.config?.ticketCategoryId) {
     return interaction.reply({
       content: '❌ Please set the ticket category first!',
-      ephemeral: true
+      flags: [64]
     });
   }
 
   if (!panel.config?.staffRoleIds || panel.config.staffRoleIds.length === 0) {
     return interaction.reply({
       content: '❌ Please set at least one staff role!',
-      ephemeral: true
+      flags: [64]
     });
   }
 
   if (!panel.questions || panel.questions.length === 0) {
     return interaction.reply({
       content: '❌ Please add at least one question!',
-      ephemeral: true
+      flags: [64]
     });
   }
 
@@ -516,7 +515,7 @@ async function handleConfigFinish({ interaction, collections }) {
   }
 
   // Create panel in channel
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [64] });
 
   const embed = formatPanelEmbed(panel);
 

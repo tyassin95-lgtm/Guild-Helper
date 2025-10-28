@@ -13,14 +13,14 @@ const {
 const {
   handleApplyButton,
   handleStartApplication,
-  handleNextQuestion,
-  handleEditAnswers,
-  handleCancelApplication
+  handleNextBatch,
+  handleEditAnswers
 } = require('./applyFlow');
 const {
   handleAccept,
+  handleAcceptWithMessage,
+  handleAcceptDefault,
   handleReject,
-  handleInterview,
   handleFinalSubmit
 } = require('./reviewFlow');
 const {
@@ -77,8 +77,8 @@ async function handleApplicationButtons({ interaction, collections }) {
   if (customId.startsWith('app_start:')) {
     return handleStartApplication({ interaction, collections });
   }
-  if (customId.startsWith('app_next:')) {
-    return handleNextQuestion({ interaction, collections });
+  if (customId.startsWith('app_next_batch:')) {
+    return handleNextBatch({ interaction, collections });
   }
   if (customId === 'app_edit_answers') {
     return handleEditAnswers({ interaction, collections });
@@ -87,19 +87,26 @@ async function handleApplicationButtons({ interaction, collections }) {
     return handleFinalSubmit({ interaction, collections });
   }
   if (customId === 'app_review_cancel') {
-    return handleCancelApplication({ interaction, collections });
+    return interaction.update({ 
+      content: '❌ Application cancelled.', 
+      components: [] 
+    });
   }
 
   // Review buttons
   if (customId.startsWith('app_accept:')) {
     return handleAccept({ interaction, collections });
   }
+  if (customId.startsWith('app_accept_message:')) {
+    return handleAcceptWithMessage({ interaction, collections });
+  }
+  if (customId.startsWith('app_accept_default:')) {
+    return handleAcceptDefault({ interaction, collections });
+  }
   if (customId.startsWith('app_reject:')) {
     return handleReject({ interaction, collections });
   }
-  if (customId.startsWith('app_interview:')) {
-    return handleInterview({ interaction, collections });
-  }
+  // REMOVED: Interview button handler - feature removed
 
   // Ticket action buttons
   if (customId.startsWith('app_add_note:')) {
@@ -130,6 +137,18 @@ async function handleApplicationButtons({ interaction, collections }) {
   // Delete confirmation
   if (customId.startsWith('app_delete_confirm:')) {
     return handleDeleteConfirm({ interaction, collections });
+  }
+  if (customId === 'app_delete_cancel') {
+    return interaction.update({
+      content: '❌ Deletion cancelled.',
+      components: []
+    });
+  }
+
+  // Toggle active status (from edit panel)
+  if (customId.startsWith('app_toggle_active:')) {
+    const { handleToggleActive } = require('./selects');
+    return handleToggleActive({ interaction, collections });
   }
 }
 

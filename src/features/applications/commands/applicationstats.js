@@ -2,9 +2,9 @@ const { EmbedBuilder } = require('discord.js');
 const { formatStatsEmbed } = require('../utils/applicationFormatter');
 
 async function handleApplicationStats({ interaction, collections }) {
-  const { applicationResponses, applicationPanels, applicationTickets } = collections;
+  const { applicationResponses, applicationPanels } = collections;
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [64] });
 
   const guildId = interaction.guild.id;
 

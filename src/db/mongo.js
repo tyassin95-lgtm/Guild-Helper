@@ -49,10 +49,10 @@ function getCollections(db = _db) {
     pvpBonuses: db.collection('pvpBonuses'),
     pvpActivityRanking: db.collection('pvpActivityRanking'),
 
-    // Application system
+    // Application system - FIXED: Changed applicationAnswers to applicationResponses
     applicationPanels: db.collection('applicationPanels'),
     applicationTickets: db.collection('applicationTickets'),
-    applicationAnswers: db.collection('applicationAnswers'),
+    applicationResponses: db.collection('applicationResponses'),
     applicationNotes: db.collection('applicationNotes'),
     applicationBlacklist: db.collection('applicationBlacklist'),
     applicationCooldowns: db.collection('applicationCooldowns')

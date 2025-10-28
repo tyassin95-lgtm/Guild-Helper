@@ -7,7 +7,7 @@ const {
 async function handleEditApplication({ interaction, collections }) {
   const { applicationPanels } = collections;
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [64] });
 
   // Get all panels in this guild
   const panels = await applicationPanels

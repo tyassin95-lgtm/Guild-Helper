@@ -20,7 +20,7 @@ async function handleBlacklistAdd({ interaction, collections }) {
   const reason = interaction.options.getString('reason') || 'No reason provided';
   const days = interaction.options.getInteger('days') || 0; // 0 = permanent
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [64] });
 
   const duration = days > 0 ? days * 24 * 60 * 60 * 1000 : null;
 
@@ -43,7 +43,7 @@ async function handleBlacklistAdd({ interaction, collections }) {
 async function handleBlacklistRemove({ interaction, collections }) {
   const user = interaction.options.getUser('user');
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [64] });
 
   await removeFromBlacklist({
     userId: user.id,
@@ -59,7 +59,7 @@ async function handleBlacklistRemove({ interaction, collections }) {
 async function handleBlacklistList({ interaction, collections }) {
   const { applicationBlacklist } = collections;
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [64] });
 
   const entries = await applicationBlacklist
     .find({ guildId: interaction.guild.id })

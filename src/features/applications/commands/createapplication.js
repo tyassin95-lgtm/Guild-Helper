@@ -94,7 +94,8 @@ async function handleCreateBasicModal({ interaction, collections }) {
       embedColor,
       thumbnailUrl: thumbnail || null,
       imageUrl: image || null,
-      questions: []
+      questions: [],
+      config: {}
     },
     expiresAt: new Date(Date.now() + 30 * 60 * 1000) // 30 min expiry
   };
@@ -158,7 +159,7 @@ async function handleCreateBasicModal({ interaction, collections }) {
   await interaction.reply({
     content: '✅ **Basic configuration saved!**\n\nNow configure the required settings:',
     components: [row1, row2, row3],
-    ephemeral: true
+    flags: [64]
   });
 }
 

@@ -4,11 +4,10 @@ const {
   handleQuestionModal,
   handleAdvancedModal
 } = require('./configButtons');
-const { handleAnswerSubmit } = require('./applyFlow');
+const { handleBatchAnswerSubmit, handleAnswerSubmit } = require('./applyFlow');
 const {
   handleAcceptConfirm,
-  handleRejectConfirm,
-  handleInterviewMessage
+  handleRejectConfirm
 } = require('./reviewFlow');
 const { handleNoteSubmit } = require('./ticketActions');
 
@@ -32,7 +31,12 @@ async function handleApplicationModals({ interaction, collections }) {
     return handleAdvancedModal({ interaction, collections });
   }
 
-  // Application answer modals
+  // Batch answer modals (5 questions at a time)
+  if (customId.startsWith('app_batch_answer:')) {
+    return handleBatchAnswerSubmit({ interaction, collections });
+  }
+
+  // Single answer modals (for editing individual questions)
   if (customId.startsWith('app_answer:')) {
     return handleAnswerSubmit({ interaction, collections });
   }
@@ -43,9 +47,6 @@ async function handleApplicationModals({ interaction, collections }) {
   }
   if (customId.startsWith('app_reject_confirm:')) {
     return handleRejectConfirm({ interaction, collections });
-  }
-  if (customId.startsWith('app_interview_msg:')) {
-    return handleInterviewMessage({ interaction, collections });
   }
 
   // Ticket action modals

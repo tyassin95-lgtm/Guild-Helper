@@ -2,7 +2,7 @@ const {
   handleSelectCategory,
   handleSelectRoles
 } = require('./configButtons');
-const { handleEditQuestionSelect } = require('./applyFlow');
+const { handleEditBatchSelect, handleEditQuestionSelect } = require('./applyFlow');
 const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 
 /**
@@ -20,6 +20,9 @@ async function handleApplicationSelects({ interaction, collections }) {
   }
 
   // Application flow selects
+  if (customId === 'app_select_edit_batch') {
+    return handleEditBatchSelect({ interaction, collections });
+  }
   if (customId === 'app_select_edit_question') {
     return handleEditQuestionSelect({ interaction, collections });
   }
@@ -50,7 +53,7 @@ async function handleEditSelectPanel({ interaction, collections }) {
   if (!panel) {
     return interaction.reply({
       content: '❌ Panel not found!',
-      ephemeral: true
+      flags: [64]
     });
   }
 
@@ -89,7 +92,7 @@ async function handleDeleteSelectPanel({ interaction, collections }) {
   if (!panel) {
     return interaction.reply({
       content: '❌ Panel not found!',
-      ephemeral: true
+      flags: [64]
     });
   }
 
@@ -128,7 +131,7 @@ async function handleToggleActive({ interaction, collections }) {
   if (!panel) {
     return interaction.reply({
       content: '❌ Panel not found!',
-      ephemeral: true
+      flags: [64]
     });
   }
 

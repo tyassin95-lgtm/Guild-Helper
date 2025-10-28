@@ -4,10 +4,9 @@ const { closeTicket } = require('../utils/ticketManager');
 async function handleClearOldTickets({ interaction, collections }) {
   const { applicationTickets, applicationPanels } = collections;
 
-  const days = interaction.options.getInteger('days');
-  const action = interaction.options.getString('action');
+  const days = interaction.options.getInteger('days') || 30;
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [64] });
 
   const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
@@ -36,7 +35,7 @@ async function handleClearOldTickets({ interaction, collections }) {
       });
 
       const archiveChannelId = panel?.config?.archiveCategoryId || null;
-      const shouldDelete = action === 'delete';
+      const shouldDelete = false; // Don't delete, just archive
 
       const result = await closeTicket({
         guild: interaction.guild,
@@ -63,7 +62,7 @@ async function handleClearOldTickets({ interaction, collections }) {
     .addFields(
       {
         name: '📊 Results',
-        value: `**Total Found:** ${oldTickets.length}\n**Successfully ${action === 'delete' ? 'Deleted' : 'Archived'}:** ${successCount}\n**Errors:** ${errorCount}`,
+        value: `**Total Found:** ${oldTickets.length}\n**Successfully Archived:** ${successCount}\n**Errors:** ${errorCount}`,
         inline: false
       },
       {

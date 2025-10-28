@@ -8,7 +8,7 @@ const {
 async function handleDeleteApplication({ interaction, collections }) {
   const { applicationPanels } = collections;
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [64] });
 
   const panels = await applicationPanels
     .find({ guildId: interaction.guild.id, active: true })
@@ -50,7 +50,7 @@ async function handleDeleteConfirm({ interaction, collections }) {
   if (!panel) {
     return interaction.followUp({
       content: '❌ Panel not found!',
-      ephemeral: true
+      flags: [64]
     });
   }
 
@@ -75,7 +75,7 @@ async function handleDeleteConfirm({ interaction, collections }) {
 
   await interaction.followUp({
     content: '✅ Application panel deleted successfully!',
-    ephemeral: true
+    flags: [64]
   });
 }
 
