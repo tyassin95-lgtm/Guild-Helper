@@ -466,14 +466,40 @@ async function handleMaxPartiesChange(oldMax, newMax, guildId, client, collectio
   console.log(`[Max Parties] Changing from ${oldMax} → ${newMax} for guild ${guildId}`);
 
   if (newMax > oldMax) {
-    // INCREASING - try to promote reserve players to fill new slots
-    console.log(`[Max Parties] Increasing limit - attempting to fill new party slots`);
+    // INCREASING - create empty parties up to new limit, then promote reserve players
+    console.log(`[Max Parties] Increasing limit - creating empty parties up to ${newMax}`);
 
+    const existingParties = await parties.find({ guildId }).sort({ partyNumber: 1 }).toArray();
+    const existingNumbers = new Set(existingParties.map(p => p.partyNumber));
+
+    // Create empty parties for any missing numbers up to newMax
+    let partiesCreated = 0;
+    for (let i = 1; i <= newMax; i++) {
+      if (!existingNumbers.has(i)) {
+        await parties.insertOne({
+          guildId,
+          partyNumber: i,
+          members: [],
+          totalCP: 0,
+          roleComposition: { tank: 0, healer: 0, dps: 0 },
+          createdAt: new Date(),
+          lastRebalanced: new Date()
+        });
+        console.log(`[Max Parties] Created empty Party ${i}`);
+        partiesCreated++;
+      }
+    }
+
+    console.log(`[Max Parties] Created ${partiesCreated} new empty party/parties`);
+
+    // Now try to promote reserve players to fill new slots
+    console.log(`[Max Parties] Attempting to fill new party slots from reserve...`);
     const result = await processReservePool(guildId, client, collections);
     console.log(`[Max Parties] Promoted ${result.promoted} player(s) from reserve`);
 
     return {
       action: 'increased',
+      partiesCreated,
       promoted: result.promoted
     };
   } else if (newMax < oldMax) {
