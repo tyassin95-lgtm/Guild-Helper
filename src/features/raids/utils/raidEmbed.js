@@ -45,22 +45,17 @@ async function buildRaidEmbed(raidEvent, collections, client) {
   // Build buttons
   const allComponents = [];
 
-  for (const slot of raidEvent.timeSlots) {
+  for (let i = 0; i < raidEvent.timeSlots.length; i++) {
+    const slot = raidEvent.timeSlots[i];
     const attendeeCount = slot.attendees.length;
     const isFull = attendeeCount >= slot.maxCapacity;
 
-    const dateObj = new Date(slot.timestamp * 1000);
-    const dateLabel = dateObj.toLocaleString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true
-    });
+    const slotNumber = i + 1;
+    const buttonLabel = isFull ? `Full - Time Slot ${slotNumber}` : `Time Slot ${slotNumber}`;
 
     const button = new ButtonBuilder()
       .setCustomId(`raid_join:${raidIdHex}:${slot.id}`)
-      .setLabel(isFull ? `Full - ${dateLabel}` : dateLabel)
+      .setLabel(buttonLabel)
       .setStyle(isFull || raidEvent.closed ? ButtonStyle.Secondary : ButtonStyle.Success)
       .setDisabled(isFull || raidEvent.closed);
 
