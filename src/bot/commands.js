@@ -231,6 +231,11 @@ async function registerSlashCommands(client) {
       description: 'Admins: Delete a raid event.',
       default_member_permissions: ADMIN
     },
+    {
+      name: 'closeraid',
+      description: 'Admins: Close or reopen a raid event.',
+      default_member_permissions: ADMIN
+    },
     // Application System Commands
     {
       name: 'createapplication',

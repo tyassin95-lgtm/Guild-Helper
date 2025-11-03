@@ -1,4 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ObjectId } = require('mongodb');
+const { buildRaidEmbed } = require('../utils/raidEmbed');
 
 async function handleRaidModals({ interaction, collections }) {
   const customId = interaction.customId;
@@ -6,6 +8,9 @@ async function handleRaidModals({ interaction, collections }) {
   if (customId.startsWith('raid_add_time_modal:')) {
     return handleAddTimeModal({ interaction, collections });
   }
+
+  // Signup modal has been replaced with select menus
+  // No longer needed here
 }
 
 async function handleAddTimeModal({ interaction, collections }) {
@@ -59,10 +64,14 @@ async function handleAddTimeModal({ interaction, collections }) {
     });
   }
 
-  // Add time slot
+  // Add time slot with unique ID
   const tempRaid = global.tempRaids.get(tempRaidId);
+
+  // Generate unique ID using timestamp + random string to prevent duplicates
+  const uniqueId = `${timestamp}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
   tempRaid.timeSlots.push({
-    id: timestamp.toString(),
+    id: uniqueId,
     timestamp,
     maxCapacity: capacity,
     attendees: []

@@ -38,6 +38,7 @@ const { handlePvPModals } = require('../../features/pvp/handlers/modals');
 // Raid system imports
 const { handleCreateRaid, handleCreateBasicModal } = require('../../features/raids/commands/createraid');
 const { handleDeleteRaid } = require('../../features/raids/commands/deleteraid');
+const { handleCloseRaid, handleCloseConfirm } = require('../../features/raids/commands/closeraid');
 const { handleRaidButtons } = require('../../features/raids/handlers/buttons');
 const { handleRaidModals } = require('../../features/raids/handlers/modals');
 
@@ -112,6 +113,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Raid commands
       if (name === 'createraid')  return handleCreateRaid({ interaction, collections });
       if (name === 'deleteraid')  return handleDeleteRaid({ interaction, collections });
+      if (name === 'closeraid')   return handleCloseRaid({ interaction, collections });
 
       // Application commands
       if (name === 'createapplication')   return handleCreateApplication({ interaction, collections });
@@ -153,6 +155,10 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
       // Raid system buttons
       if (interaction.customId.startsWith('raid_')) {
+        // Handle close raid confirmation
+        if (interaction.customId.startsWith('raid_close_confirm:')) {
+          return handleCloseConfirm({ interaction, collections });
+        }
         return handleRaidButtons({ interaction, collections });
       }
 
@@ -224,6 +230,12 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         return handleFreezeBossSelection({ interaction, collections });
       }
 
+      // Raid signup selects
+      if (interaction.customId.startsWith('raid_signup_')) {
+        const { handleRaidSelects } = require('../../features/raids/handlers/selects');
+        return handleRaidSelects({ interaction, collections });
+      }
+
       // PvP system selects
       if (interaction.customId.startsWith('pvp_')) {
         return handlePvPSelects({ interaction, collections });
@@ -271,6 +283,10 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         // Raid creation modal
         if (interaction.customId === 'raid_create_basic') {
           return handleCreateBasicModal({ interaction, collections });
+        }
+        // Raid time slot modal
+        if (interaction.customId.startsWith('raid_add_time_modal:')) {
+          return handleRaidModals({ interaction, collections });
         }
         return handleRaidModals({ interaction, collections });
       }

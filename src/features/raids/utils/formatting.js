@@ -1,8 +1,13 @@
-// src/features/raids/utils/formatting.js - FIXED
+// src/features/raids/utils/formatting.js
 const roleEmojis = {
   tank: '🛡️',
   healer: '💚',
   dps: '⚔️'
+};
+
+const experienceEmojis = {
+  experienced: '⭐',
+  learning: '📚'
 };
 
 const roleOrder = {
@@ -11,44 +16,36 @@ const roleOrder = {
   dps: 3
 };
 
-async function formatAttendeeList(attendeeIds, guildId, partyPlayers, client) {
-  if (attendeeIds.length === 0) return '';
+async function formatAttendeeList(attendees, guildId, partyPlayers, client) {
+  if (attendees.length === 0) return '';
 
   // Fetch guild to get member names
   const guild = await client.guilds.fetch(guildId);
 
-  // Fetch player data for all attendees
+  // Build attendee data
   const attendeeData = [];
 
-  for (const userId of attendeeIds) {
-    const player = await partyPlayers.findOne({ userId, guildId });
-
+  for (const attendee of attendees) {
     let displayName = 'Unknown User';
     try {
-      const member = await guild.members.fetch(userId);
-      displayName = member.displayName; // This gets the server nickname or username
+      const member = await guild.members.fetch(attendee.userId);
+      displayName = member.displayName;
     } catch (err) {
       // User not found, use Unknown
     }
 
-    // Build weapon combo text from weapon1 and weapon2
-    let weaponText = null;
-    if (player && player.weapon1 && player.weapon2) {
-      weaponText = `${player.weapon1} / ${player.weapon2}`;
-    }
-
     attendeeData.push({
-      userId,
+      userId: attendee.userId,
       displayName,
-      role: player?.role || null,
-      cp: player?.cp || null,
-      weapon: weaponText
+      role: attendee.role || null,
+      experience: attendee.experience || null,
+      cp: attendee.cp || null
     });
   }
 
-  // Sort attendees: by role first (tank -> healer -> dps), then by CP descending, then no info last
+  // Sort attendees: by role first (tank -> healer -> dps), then by CP descending
   attendeeData.sort((a, b) => {
-    // Players with no info go last
+    // Players with no role go last
     if (!a.role && b.role) return 1;
     if (a.role && !b.role) return -1;
     if (!a.role && !b.role) return 0;
@@ -84,8 +81,8 @@ async function formatAttendeeList(attendeeIds, guildId, partyPlayers, client) {
   if (grouped.tank.length > 0) {
     result += `   ${roleEmojis.tank} **Tanks (${grouped.tank.length}):**\n`;
     for (const a of grouped.tank) {
-      const weaponText = a.weapon ? ` | ${a.weapon}` : '';
-      result += `      ├ ${a.displayName} (${a.cp || '?'} CP${weaponText})\n`;
+      const expEmoji = a.experience ? experienceEmojis[a.experience] : '';
+      result += `      ├ ${a.displayName} ${expEmoji} (${a.cp || '?'} CP)\n`;
     }
   }
 
@@ -93,8 +90,8 @@ async function formatAttendeeList(attendeeIds, guildId, partyPlayers, client) {
   if (grouped.healer.length > 0) {
     result += `   ${roleEmojis.healer} **Healers (${grouped.healer.length}):**\n`;
     for (const a of grouped.healer) {
-      const weaponText = a.weapon ? ` | ${a.weapon}` : '';
-      result += `      ├ ${a.displayName} (${a.cp || '?'} CP${weaponText})\n`;
+      const expEmoji = a.experience ? experienceEmojis[a.experience] : '';
+      result += `      ├ ${a.displayName} ${expEmoji} (${a.cp || '?'} CP)\n`;
     }
   }
 
@@ -102,14 +99,14 @@ async function formatAttendeeList(attendeeIds, guildId, partyPlayers, client) {
   if (grouped.dps.length > 0) {
     result += `   ${roleEmojis.dps} **DPS (${grouped.dps.length}):**\n`;
     for (const a of grouped.dps) {
-      const weaponText = a.weapon ? ` | ${a.weapon}` : '';
-      result += `      ├ ${a.displayName} (${a.cp || '?'} CP${weaponText})\n`;
+      const expEmoji = a.experience ? experienceEmojis[a.experience] : '';
+      result += `      ├ ${a.displayName} ${expEmoji} (${a.cp || '?'} CP)\n`;
     }
   }
 
   // No info
   if (grouped.noInfo.length > 0) {
-    result += `   👤 **No Party Info (${grouped.noInfo.length}):**\n`;
+    result += `   👤 **No Signup Info (${grouped.noInfo.length}):**\n`;
     for (const a of grouped.noInfo) {
       result += `      ├ ${a.displayName}\n`;
     }
