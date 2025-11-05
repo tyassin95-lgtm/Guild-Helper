@@ -7,6 +7,7 @@ async function handleRemind({ interaction, collections }) {
     return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
   }
 
+  // Immediately defer the reply to prevent timeout
   await interaction.deferReply({ flags: [64] });
 
   // Get excluded roles
@@ -51,8 +52,13 @@ async function handleRemind({ interaction, collections }) {
       }
     }
 
-    return interaction.editReply({ content: message, flags: [64] });
+    return interaction.editReply({ content: message });
   }
+
+  // Send initial status message
+  await interaction.editReply({ 
+    content: `🔄 **Processing reminders...**\n\nSending DMs to **${notSubmitted.size}** user(s) who haven't submitted.\nThis may take a while. You'll receive a follow-up when complete.` 
+  });
 
   // Prepare reminder embed
   const reminderEmbed = new EmbedBuilder()
@@ -70,7 +76,7 @@ async function handleRemind({ interaction, collections }) {
     .setFooter({ text: `Message sent by ${interaction.user.tag}` })
     .setTimestamp();
 
-  // Send DMs with delay
+  // Process DMs asynchronously in the background
   let successCount = 0;
   let failCount = 0;
   const failedUsers = [];
@@ -90,7 +96,7 @@ async function handleRemind({ interaction, collections }) {
   }
 
   // Build response
-  let response = `📨 **Reminder sent!**\n\n`;
+  let response = `📨 **Reminder complete!**\n\n`;
   response += `✅ Successfully sent to: **${successCount}** user(s)\n`;
 
   if (failCount > 0) {
@@ -116,7 +122,8 @@ async function handleRemind({ interaction, collections }) {
     }
   }
 
-  return interaction.editReply({ content: response });
+  // Send as follow-up message
+  return interaction.followUp({ content: response, flags: [64] });
 }
 
 module.exports = { handleRemind };
