@@ -27,7 +27,13 @@ async function createPvPBonusEmbed(guildId, guild, collections) {
   for (const bonus of allBonuses) {
     try {
       const member = await guild.members.fetch(bonus.userId).catch(() => null);
-      const displayName = member ? member.displayName : 'Unknown User';
+
+      // Skip users who have left the server
+      if (!member) {
+        continue;
+      }
+
+      const displayName = member.displayName;
       const bonusAmount = bonus.bonusCount * 10; // +10 per event
       const eventCount = bonus.bonusCount;
 
@@ -35,6 +41,12 @@ async function createPvPBonusEmbed(guildId, guild, collections) {
     } catch (err) {
       console.error('Failed to fetch member:', err);
     }
+  }
+
+  // If no active members have bonuses after filtering
+  if (bonusList.length === 0) {
+    embed.setDescription('*No active members with PvP bonuses*');
+    return embed;
   }
 
   // Split into chunks if needed (Discord has 1024 char limit per field)
@@ -60,7 +72,7 @@ async function createPvPBonusEmbed(guildId, guild, collections) {
 
   embed.addFields({
     name: '📈 Summary',
-    value: `Total players with bonuses: **${allBonuses.length}**`,
+    value: `Total active players with bonuses: **${bonusList.length}**`,
     inline: false
   });
 

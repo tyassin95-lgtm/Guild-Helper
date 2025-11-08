@@ -24,28 +24,42 @@ async function createPvPActivityRankingEmbed(guildId, guild, collections) {
 
   // Build the leaderboard
   const leaderboard = [];
+  let rank = 1; // Track actual rank for active members
 
   for (let i = 0; i < allActivity.length; i++) {
     const activity = allActivity[i];
 
     try {
       const member = await guild.members.fetch(activity.userId).catch(() => null);
-      const displayName = member ? member.displayName : 'Unknown User';
+
+      // Skip users who have left the server
+      if (!member) {
+        continue;
+      }
+
+      const displayName = member.displayName;
 
       // Medal emojis for top 3
-      let rank;
-      if (i === 0) rank = '🥇';
-      else if (i === 1) rank = '🥈';
-      else if (i === 2) rank = '🥉';
-      else rank = `${i + 1}.`;
+      let rankDisplay;
+      if (rank === 1) rankDisplay = '🥇';
+      else if (rank === 2) rankDisplay = '🥈';
+      else if (rank === 3) rankDisplay = '🥉';
+      else rankDisplay = `${rank}.`;
 
       const eventCount = activity.totalEvents;
       const plural = eventCount !== 1 ? 's' : '';
 
-      leaderboard.push(`${rank} **${displayName}** — ${eventCount} event${plural}`);
+      leaderboard.push(`${rankDisplay} **${displayName}** — ${eventCount} event${plural}`);
+      rank++; // Increment rank for the next active member
     } catch (err) {
       console.error('Failed to fetch member for activity ranking:', err);
     }
+  }
+
+  // If no active members have activity after filtering
+  if (leaderboard.length === 0) {
+    embed.setDescription('*No active members in PvP activity ranking*');
+    return embed;
   }
 
   // Split into chunks if needed (Discord has 1024 char limit per field)
@@ -71,7 +85,7 @@ async function createPvPActivityRankingEmbed(guildId, guild, collections) {
 
   embed.addFields({
     name: '📈 Summary',
-    value: `Total active participants: **${allActivity.length}**`,
+    value: `Total active participants: **${leaderboard.length}**`,
     inline: false
   });
 
