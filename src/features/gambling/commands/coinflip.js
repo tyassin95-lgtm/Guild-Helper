@@ -7,7 +7,7 @@ async function handleCoinflip({ interaction, collections }) {
   const userId = interaction.user.id;
   const guildId = interaction.guildId;
 
-  // Validate bet amount
+  // Validate bet amount (fast, no defer needed)
   if (betAmount < 10) {
     return interaction.reply({
       content: '❌ Minimum bet is **10 coins**.',
@@ -22,13 +22,14 @@ async function handleCoinflip({ interaction, collections }) {
     });
   }
 
-  // Check balance
+  // Check balance (needs DB, so defer first)
+  await interaction.deferReply();
+
   const balance = await getBalance({ userId, guildId, collections });
 
   if (balance.balance < betAmount) {
-    return interaction.reply({
-      content: `❌ Insufficient balance! You have **${balance.balance.toLocaleString()} coins** but tried to bet **${betAmount.toLocaleString()} coins**.`,
-      flags: [64] // MessageFlags.Ephemeral
+    return interaction.editReply({
+      content: `❌ Insufficient balance! You have **${balance.balance.toLocaleString()} coins** but tried to bet **${betAmount.toLocaleString()} coins**.`
     });
   }
 
@@ -37,7 +38,7 @@ async function handleCoinflip({ interaction, collections }) {
 
   // Show flipping animation
   const flipEmbed = createCoinflipEmbed(betAmount, choice, true);
-  await interaction.reply({ embeds: [flipEmbed] });
+  await interaction.editReply({ embeds: [flipEmbed] });
 
   // Simulate flip delay
   await new Promise(resolve => setTimeout(resolve, 1500));

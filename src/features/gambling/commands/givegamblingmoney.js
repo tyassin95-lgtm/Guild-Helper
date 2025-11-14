@@ -11,6 +11,9 @@ async function handleGiveGamblingMoney({ interaction, collections }) {
     });
   }
 
+  // Defer immediately before DB operations
+  await interaction.deferReply();
+
   // Add money to the user
   await addBalance({
     userId: targetUser.id,
@@ -26,7 +29,7 @@ async function handleGiveGamblingMoney({ interaction, collections }) {
     collections
   });
 
-  await interaction.reply({
+  await interaction.editReply({
     content: `✅ Successfully granted **${amount.toLocaleString()} coins** to ${targetUser}.\n\n` +
              `Their new balance: **${balance.balance.toLocaleString()} coins**`
   });

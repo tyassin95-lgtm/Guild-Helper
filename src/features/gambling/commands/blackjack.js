@@ -12,7 +12,7 @@ async function handleBlackjack({ interaction, collections }) {
   const userId = interaction.user.id;
   const guildId = interaction.guildId;
 
-  // Validate bet amount
+  // Validate bet amount (fast checks, no defer)
   if (betAmount < 10) {
     return interaction.reply({
       content: '❌ Minimum bet is **10 coins**.',
@@ -35,13 +35,15 @@ async function handleBlackjack({ interaction, collections }) {
     });
   }
 
+  // Defer immediately before DB operations
+  await interaction.deferReply();
+
   // Check balance
   const balance = await getBalance({ userId, guildId, collections });
 
   if (balance.balance < betAmount) {
-    return interaction.reply({
-      content: `❌ Insufficient balance! You have **${balance.balance.toLocaleString()} coins** but tried to bet **${betAmount.toLocaleString()} coins**.`,
-      flags: [64] // MessageFlags.Ephemeral
+    return interaction.editReply({
+      content: `❌ Insufficient balance! You have **${balance.balance.toLocaleString()} coins** but tried to bet **${betAmount.toLocaleString()} coins**.`
     });
   }
 
@@ -69,7 +71,7 @@ async function handleBlackjack({ interaction, collections }) {
 
     // Process result immediately
     const { handleGameEnd } = require('../handlers/blackjackButtons');
-    await handleGameEnd(interaction, gameState, collections, true);
+    await handleGameEnd(interaction, gameState, collections, false, true);
     activeGames.delete(userId);
     return;
   }
@@ -81,7 +83,7 @@ async function handleBlackjack({ interaction, collections }) {
     gameState.status = 'finished';
 
     const { handleGameEnd } = require('../handlers/blackjackButtons');
-    await handleGameEnd(interaction, gameState, collections, true);
+    await handleGameEnd(interaction, gameState, collections, false, true);
     activeGames.delete(userId);
     return;
   }
@@ -92,7 +94,7 @@ async function handleBlackjack({ interaction, collections }) {
   const embed = createBlackjackEmbed(gameState, true);
   embed.setFooter({ text: '⏱️ You have 30 seconds to make each move' });
 
-  await interaction.reply({
+  await interaction.editReply({
     embeds: [embed],
     components: [buttons]
   });
