@@ -56,7 +56,12 @@ function getCollections(db = _db) {
     applicationResponses: db.collection('applicationResponses'),
     applicationNotes: db.collection('applicationNotes'),
     applicationBlacklist: db.collection('applicationBlacklist'),
-    applicationCooldowns: db.collection('applicationCooldowns')
+    applicationCooldowns: db.collection('applicationCooldowns'),
+
+    // Gambling system
+    gamblingBalances: db.collection('gamblingBalances'),
+    gamblingDailies: db.collection('gamblingDailies'),
+    gamblingGames: db.collection('gamblingGames')
   };
 }
 

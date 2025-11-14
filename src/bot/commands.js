@@ -339,6 +339,28 @@ async function registerSlashCommands(client) {
         }
       ]
     },
+    // Gambling Commands (Admin)
+    {
+      name: 'givegamblingmoney',
+      description: 'Admins: Grant gambling coins to a user.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 6, // USER
+          name: 'user',
+          description: 'User to give money to',
+          required: true
+        },
+        {
+          type: 4, // INTEGER
+          name: 'amount',
+          description: 'Amount of coins to give',
+          required: true,
+          min_value: 1,
+          max_value: 1000000
+        }
+      ]
+    },
 
     // ----- Everyone -----
     {
@@ -352,6 +374,61 @@ async function registerSlashCommands(client) {
     {
       name: 'viewparties',
       description: 'View all static parties.'
+    },
+    // Gambling Commands (Everyone)
+    {
+      name: 'gamblingbalance',
+      description: 'Check your or another user\'s gambling balance.',
+      options: [
+        {
+          type: 6, // USER
+          name: 'user',
+          description: 'User to check balance for (optional)',
+          required: false
+        }
+      ]
+    },
+    {
+      name: 'gamblingdaily',
+      description: 'Claim your daily gambling reward (500 coins, +streak bonuses).'
+    },
+    {
+      name: 'blackjack',
+      description: 'Play blackjack and bet your gambling coins!',
+      options: [
+        {
+          type: 4, // INTEGER
+          name: 'bet',
+          description: 'Amount to bet (10-50,000 coins)',
+          required: true,
+          min_value: 10,
+          max_value: 50000
+        }
+      ]
+    },
+    {
+      name: 'coinflip',
+      description: 'Flip a coin and bet on the outcome!',
+      options: [
+        {
+          type: 4, // INTEGER
+          name: 'bet',
+          description: 'Amount to bet (10-50,000 coins)',
+          required: true,
+          min_value: 10,
+          max_value: 50000
+        },
+        {
+          type: 3, // STRING
+          name: 'choice',
+          description: 'Heads or Tails?',
+          required: true,
+          choices: [
+            { name: 'Heads 🦅', value: 'heads' },
+            { name: 'Tails 🌊', value: 'tails' }
+          ]
+        }
+      ]
     }
   ];
 

@@ -70,6 +70,14 @@ const {
   handleInterview
 } = require('../../features/applications/handlers/reviewFlow');
 
+// Gambling system imports
+const { handleGamblingBalance } = require('../../features/gambling/commands/gamblingbalance');
+const { handleGamblingDaily } = require('../../features/gambling/commands/gamblingdaily');
+const { handleGiveGamblingMoney } = require('../../features/gambling/commands/givegamblingmoney');
+const { handleBlackjack } = require('../../features/gambling/commands/blackjack');
+const { handleCoinflip } = require('../../features/gambling/commands/coinflip');
+const { handleBlackjackButtons } = require('../../features/gambling/handlers/blackjackButtons');
+
 // Safe execution wrapper
 const { safeExecute } = require('../../utils/safeExecute');
 
@@ -123,6 +131,13 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'applicationhistory')  return handleApplicationHistory({ interaction, collections });
       if (name === 'blacklist')           return handleBlacklist({ interaction, collections });
       if (name === 'clearoldtickets')     return handleClearOldTickets({ interaction, collections });
+
+      // Gambling commands
+      if (name === 'gamblingbalance')     return handleGamblingBalance({ interaction, collections });
+      if (name === 'gamblingdaily')       return handleGamblingDaily({ interaction, collections });
+      if (name === 'givegamblingmoney')   return handleGiveGamblingMoney({ interaction, collections });
+      if (name === 'blackjack')           return handleBlackjack({ interaction, collections });
+      if (name === 'coinflip')            return handleCoinflip({ interaction, collections });
     }
 
     // Button Interactions
@@ -146,6 +161,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Handle reset bonuses confirmation buttons
       if (interaction.customId.startsWith('confirm_reset_bonuses_')) {
         return handleResetBonusesConfirmation({ interaction, collections });
+      }
+
+      // Gambling blackjack buttons
+      if (interaction.customId.startsWith('bj_')) {
+        return handleBlackjackButtons({ interaction, collections });
       }
 
       // PvP system buttons

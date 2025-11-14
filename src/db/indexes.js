@@ -20,7 +20,10 @@ async function ensureIndexes({
   applicationResponses,
   applicationNotes,
   applicationBlacklist,
-  applicationCooldowns
+  applicationCooldowns,
+  gamblingBalances,
+  gamblingDailies,
+  gamblingGames
 }) {
   // Wishlists index
   await wishlists.createIndex({ userId: 1, guildId: 1 }, { unique: true });
@@ -146,6 +149,23 @@ async function ensureIndexes({
   // Application cooldowns (with TTL)
   await applicationCooldowns.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
   await applicationCooldowns.createIndex({ userId: 1, guildId: 1, panelId: 1 });
+
+  // Gambling System Indexes
+  // Gambling balances
+  await gamblingBalances.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await gamblingBalances.createIndex({ guildId: 1 });
+  await gamblingBalances.createIndex({ guildId: 1, balance: -1 }); // Sort by balance descending
+
+  // Gambling dailies
+  await gamblingDailies.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await gamblingDailies.createIndex({ guildId: 1 });
+  await gamblingDailies.createIndex({ lastClaimed: 1 });
+
+  // Gambling games (history)
+  await gamblingGames.createIndex({ guildId: 1 });
+  await gamblingGames.createIndex({ userId: 1, guildId: 1 });
+  await gamblingGames.createIndex({ timestamp: -1 }); // Sort by timestamp descending
+  await gamblingGames.createIndex({ gameType: 1 });
 
   console.log('All indexes created successfully');
 }
