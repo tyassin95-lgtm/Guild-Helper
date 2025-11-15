@@ -23,7 +23,12 @@ async function ensureIndexes({
   applicationCooldowns,
   gamblingBalances,
   gamblingDailies,
-  gamblingGames
+  gamblingGames,
+  triviaStats,
+  triviaSessions,
+  robCooldowns,
+  robStats,
+  transferHistory
 }) {
   // Wishlists index
   await wishlists.createIndex({ userId: 1, guildId: 1 }, { unique: true });
@@ -166,6 +171,27 @@ async function ensureIndexes({
   await gamblingGames.createIndex({ userId: 1, guildId: 1 });
   await gamblingGames.createIndex({ timestamp: -1 }); // Sort by timestamp descending
   await gamblingGames.createIndex({ gameType: 1 });
+
+  // Trivia System Indexes
+  await triviaStats.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await triviaStats.createIndex({ guildId: 1 });
+  await triviaStats.createIndex({ guildId: 1, totalCorrect: -1 }); // Leaderboard
+
+  await triviaSessions.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await triviaSessions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL
+
+  // Rob System Indexes
+  await robCooldowns.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await robCooldowns.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL
+
+  await robStats.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await robStats.createIndex({ guildId: 1 });
+  await robStats.createIndex({ guildId: 1, successfulRobs: -1 }); // Leaderboard
+
+  // Transfer History Indexes
+  await transferHistory.createIndex({ guildId: 1, timestamp: -1 });
+  await transferHistory.createIndex({ fromUserId: 1, guildId: 1 });
+  await transferHistory.createIndex({ toUserId: 1, guildId: 1 });
 
   console.log('All indexes created successfully');
 }

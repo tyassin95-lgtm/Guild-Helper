@@ -429,6 +429,42 @@ async function registerSlashCommands(client) {
           ]
         }
       ]
+    },
+    {
+      name: 'trivia',
+      description: 'Answer trivia questions to earn coins! (50 per correct, 250 bonus for 10/10)'
+    },
+    {
+      name: 'rob',
+      description: 'Attempt to rob another user (8 hour cooldown, risky!)',
+      options: [
+        {
+          type: 6, // USER
+          name: 'target',
+          description: 'User to rob',
+          required: true
+        }
+      ]
+    },
+    {
+      name: 'send',
+      description: 'Send coins to another user',
+      options: [
+        {
+          type: 6, // USER
+          name: 'user',
+          description: 'User to send coins to',
+          required: true
+        },
+        {
+          type: 4, // INTEGER
+          name: 'amount',
+          description: 'Amount of coins to send',
+          required: true,
+          min_value: 10,
+          max_value: 50000
+        }
+      ]
     }
   ];
 

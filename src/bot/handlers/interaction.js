@@ -76,7 +76,11 @@ const { handleGamblingDaily } = require('../../features/gambling/commands/gambli
 const { handleGiveGamblingMoney } = require('../../features/gambling/commands/givegamblingmoney');
 const { handleBlackjack } = require('../../features/gambling/commands/blackjack');
 const { handleCoinflip } = require('../../features/gambling/commands/coinflip');
+const { handleTrivia } = require('../../features/gambling/commands/trivia');
+const { handleRob } = require('../../features/gambling/commands/rob');
+const { handleSend, handleSendConfirmation } = require('../../features/gambling/commands/send');
 const { handleBlackjackButtons } = require('../../features/gambling/handlers/blackjackButtons');
+const { handleTriviaButtons } = require('../../features/gambling/handlers/triviaButtons');
 
 // Safe execution wrapper
 const { safeExecute } = require('../../utils/safeExecute');
@@ -138,6 +142,9 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'givegamblingmoney')   return handleGiveGamblingMoney({ interaction, collections });
       if (name === 'blackjack')           return handleBlackjack({ interaction, collections });
       if (name === 'coinflip')            return handleCoinflip({ interaction, collections });
+      if (name === 'trivia')              return handleTrivia({ interaction, collections });
+      if (name === 'rob')                 return handleRob({ interaction, collections });
+      if (name === 'send')                return handleSend({ interaction, collections });
     }
 
     // Button Interactions
@@ -166,6 +173,16 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Gambling blackjack buttons
       if (interaction.customId.startsWith('bj_')) {
         return handleBlackjackButtons({ interaction, collections });
+      }
+
+      // Trivia buttons
+      if (interaction.customId.startsWith('trivia_')) {
+        return handleTriviaButtons({ interaction, collections });
+      }
+
+      // Send confirmation buttons
+      if (interaction.customId.startsWith('send_confirm:')) {
+        return handleSendConfirmation({ interaction, collections });
       }
 
       // PvP system buttons

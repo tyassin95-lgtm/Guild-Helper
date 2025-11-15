@@ -61,7 +61,18 @@ function getCollections(db = _db) {
     // Gambling system
     gamblingBalances: db.collection('gamblingBalances'),
     gamblingDailies: db.collection('gamblingDailies'),
-    gamblingGames: db.collection('gamblingGames')
+    gamblingGames: db.collection('gamblingGames'),
+
+    // Trivia system
+    triviaStats: db.collection('triviaStats'),
+    triviaSessions: db.collection('triviaSessions'),
+
+    // Rob system
+    robCooldowns: db.collection('robCooldowns'),
+    robStats: db.collection('robStats'),
+
+    // Transfer system
+    transferHistory: db.collection('transferHistory')
   };
 }
 
