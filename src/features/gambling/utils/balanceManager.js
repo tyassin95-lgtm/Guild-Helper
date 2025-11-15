@@ -1,3 +1,4 @@
+// balanceManager.js
 const { safeExecute } = require('../../../utils/safeExecute');
 
 /**
@@ -6,24 +7,29 @@ const { safeExecute } = require('../../../utils/safeExecute');
 async function getBalance({ userId, guildId, collections }) {
   const { gamblingBalances } = collections;
 
+  // Try to find existing
   let balance = await gamblingBalances.findOne({ userId, guildId });
+  if (balance) return balance;
 
-  if (!balance) {
-    // Create initial balance
-    balance = {
-      userId,
-      guildId,
-      balance: 0, // Starting balance
-      totalWon: 0,
-      totalLost: 0,
-      gamesPlayed: 0,
-      createdAt: new Date()
-    };
+  // Create initial balance atomically (upsert) and return the document after creation
+  const result = await gamblingBalances.findOneAndUpdate(
+    { userId, guildId },
+    {
+      $setOnInsert: {
+        userId,
+        guildId,
+        balance: 0,
+        totalWon: 0,
+        totalLost: 0,
+        gamesPlayed: 0,
+        createdAt: new Date(),
+        lastUpdated: new Date()
+      }
+    },
+    { upsert: true, returnDocument: 'after' } // MongoDB v4+ option
+  );
 
-    await gamblingBalances.insertOne(balance);
-  }
-
-  return balance;
+  return result.value;
 }
 
 /**
@@ -32,19 +38,23 @@ async function getBalance({ userId, guildId, collections }) {
 async function addBalance({ userId, guildId, amount, collections }) {
   const { gamblingBalances } = collections;
 
-  // Ensure user exists first
+  // Ensure user exists first (atomic upsert)
   await getBalance({ userId, guildId, collections });
 
   const result = await gamblingBalances.findOneAndUpdate(
     { userId, guildId },
-    { 
+    {
       $inc: { balance: amount },
       $set: { lastUpdated: new Date() }
     },
     { returnDocument: 'after' }
   );
 
-  return result.balance;
+  if (!result || !result.value) {
+    throw new Error('FAILED_TO_ADD_BALANCE');
+  }
+
+  return result.value; // return the full updated document
 }
 
 /**
@@ -53,26 +63,24 @@ async function addBalance({ userId, guildId, amount, collections }) {
 async function subtractBalance({ userId, guildId, amount, collections }) {
   const { gamblingBalances } = collections;
 
-  const balance = await getBalance({ userId, guildId, collections });
-
-  if (balance.balance < amount) {
-    throw new Error('INSUFFICIENT_BALANCE');
-  }
+  // Ensure user exists
+  await getBalance({ userId, guildId, collections });
 
   const result = await gamblingBalances.findOneAndUpdate(
-    { userId, guildId, balance: { $gte: amount } },
-    { 
+    { userId, guildId, balance: { $gte: amount } }, // conditional update
+    {
       $inc: { balance: -amount },
       $set: { lastUpdated: new Date() }
     },
     { returnDocument: 'after' }
   );
 
-  if (!result) {
+  // If no document matched (insufficient balance or missing user), result.value will be null
+  if (!result || !result.value) {
     throw new Error('INSUFFICIENT_BALANCE');
   }
 
-  return result.balance;
+  return result.value;
 }
 
 /**
@@ -92,20 +100,18 @@ async function recordGame({ userId, guildId, gameType, betAmount, result, payout
     timestamp: new Date()
   });
 
-  // Update statistics
-  const updates = {
-    $inc: { gamesPlayed: 1 }
-  };
-
+  // Update statistics safely
+  const inc = { gamesPlayed: 1 };
   if (result === 'win') {
-    updates.$inc.totalWon = payout;
+    // payout is expected to be the winnings (positive)
+    inc.totalWon = payout;
   } else if (result === 'loss') {
-    updates.$inc.totalLost = Math.abs(payout);
+    inc.totalLost = Math.abs(payout);
   }
 
   await gamblingBalances.updateOne(
     { userId, guildId },
-    updates
+    { $inc: inc, $set: { lastUpdated: new Date() } }
   );
 }
 
@@ -119,9 +125,13 @@ async function hasBalance({ userId, guildId, amount, collections }) {
 
 /**
  * Process a game win (atomic)
+ *
+ * Note: we assume the bet was already deducted when the game started.
+ * - `payout` should be the winnings (not including the original bet).
+ * To restore the bet + winnings, we add (betAmount + payout).
  */
 async function processWin({ userId, guildId, betAmount, payout, gameType, collections }) {
-  // Add the winnings to balance (this is NET winnings, bet was already deducted)
+  // Add the bet back + winnings
   await addBalance({ userId, guildId, amount: betAmount + payout, collections });
   await recordGame({ userId, guildId, gameType, betAmount, result: 'win', payout, collections });
 }
@@ -130,6 +140,7 @@ async function processWin({ userId, guildId, betAmount, payout, gameType, collec
  * Process a game loss (atomic)
  */
 async function processLoss({ userId, guildId, betAmount, gameType, collections }) {
+  // Bet already deducted; record the loss (payout negative bet)
   await recordGame({ userId, guildId, gameType, betAmount, result: 'loss', payout: -betAmount, collections });
 }
 
@@ -137,6 +148,8 @@ async function processLoss({ userId, guildId, betAmount, gameType, collections }
  * Process a push/tie (no money change, just record)
  */
 async function processPush({ userId, guildId, betAmount, gameType, collections }) {
+  // Return bet to the player
+  await addBalance({ userId, guildId, amount: betAmount, collections });
   await recordGame({ userId, guildId, gameType, betAmount, result: 'push', payout: 0, collections });
 }
 
