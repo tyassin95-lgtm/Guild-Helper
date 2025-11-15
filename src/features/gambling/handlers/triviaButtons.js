@@ -142,7 +142,7 @@ async function handleTriviaButtons({ interaction, collections }) {
           $set: {
             currentQuestionIndex: nextQuestionIndex,
             currentStreak,
-            expiresAt: new Date(Date.now() + 10000)
+            expiresAt: new Date(Date.now() + 20000)
           }
         }
       );
@@ -200,7 +200,7 @@ async function handleTriviaButtons({ interaction, collections }) {
                 // Message may have been deleted
               }
             }
-          }, 10000);
+          }, 20000);
 
         } catch (err) {
           // Message may have been deleted or interaction no longer valid
