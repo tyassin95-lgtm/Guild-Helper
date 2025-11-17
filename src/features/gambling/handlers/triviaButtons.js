@@ -1,270 +1,275 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { ObjectId } = require('mongodb');
-const { addBalance } = require('../utils/balanceManager');
-const { createTriviaEmbed, createTriviaResultEmbed } = require('../embeds/triviaEmbeds');
+const { activeGames, createGameButtons } = require('../commands/blackjack');
+const { hit, stand, doubleDown, split, dealerPlay, determineWinner, determineSplitWinner } = require('../utils/blackjackLogic');
+const { createBlackjackEmbed, createBlackjackResultEmbed } = require('../embeds/gameEmbeds');
+const { addBalance, processWin, processLoss, processPush, getBalance, subtractBalance } = require('../utils/balanceManager');
+const { calculateHandValue } = require('../utils/cardDeck');
 
-function createTriviaButtons(sessionId) {
-  const row = new ActionRowBuilder();
+// Store timeouts for auto-stand
+const gameTimeouts = new Map();
 
-  const labels = ['A', 'B', 'C', 'D'];
-
-  for (let i = 0; i < 4; i++) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`trivia_answer:${sessionId}:${i}`)
-        .setLabel(labels[i])
-        .setStyle(ButtonStyle.Primary)
-    );
-  }
-
-  return row;
-}
-
-async function handleTriviaButtons({ interaction, collections }) {
-  // FIXED: only three parts in the customId (action, sessionId, answerIndex)
-  const [action, sessionId, answerIndex] = interaction.customId.split(':');
+async function handleBlackjackButtons({ interaction, collections }) {
   const userId = interaction.user.id;
-  const guildId = interaction.guildId;
 
-  const { triviaSessions, triviaStats } = collections;
+  // Get active game
+  const gameData = activeGames.get(userId);
 
-  // Validate ObjectId format
-  if (!ObjectId.isValid(sessionId)) {
-    return interaction.update({
-      content: '❌ Invalid session. Please start a new trivia game with `/trivia`.',
-      embeds: [],
-      components: []
-    });
-  }
-
-  // Get session
-  const session = await triviaSessions.findOne({ _id: new ObjectId(sessionId) });
-
-  if (!session) {
-    return interaction.update({
-      content: '❌ Session expired or not found.',
-      embeds: [],
-      components: []
-    });
-  }
-
-  // Verify it's the right user
-  if (session.userId !== userId) {
+  if (!gameData) {
     return interaction.reply({
-      content: '❌ This is not your trivia session!',
+      content: '❌ No active game found. Start a new game with `/blackjack`.',
       flags: [64]
     });
   }
 
-  const currentQuestion = session.questions[session.currentQuestionIndex];
-  const selectedAnswer = parseInt(answerIndex, 10);
-  const isCorrect = selectedAnswer === currentQuestion.correctIndex;
+  const { gameState, guildId } = gameData;
 
-  let currentStreak = session.currentStreak;
-  let totalEarned = 0;
+  // Clear existing timeout
+  clearGameTimeout(userId);
 
-  if (isCorrect) {
-    currentStreak++;
-    totalEarned = 50; // 50 coins per correct answer
+  const action = interaction.customId.split('_')[1];
 
-    // Award coins (NO gambling stat tracking - it's earned from trivia, not gambling)
-    await addBalance({
+  try {
+    let statusMessage = '';
+
+    switch (action) {
+      case 'hit':
+        hit(gameState);
+        const playerValue = calculateHandValue(gameState.playerHand);
+        const lastCard = gameState.playerHand[gameState.playerHand.length - 1];
+        statusMessage = `🎴 **Drew:** ${lastCard.rank}${lastCard.suit}`;
+
+        if (gameState.status === 'playerBusted') {
+          statusMessage = `💥 **BUST!** Over 21`;
+          await handleGameEnd(interaction, gameState, collections);
+          activeGames.delete(userId);
+        } else {
+          const embed = createBlackjackEmbed(gameState, true);
+          embed.setDescription(`${embed.data.description}\n\n${statusMessage}`);
+          embed.setFooter({ text: '⏱️ 30 seconds to make your next move' });
+
+          const buttons = createGameButtons(gameState);
+          await interaction.update({ embeds: [embed], components: [buttons] });
+
+          setGameTimeout(userId, interaction, gameState, collections);
+        }
+        break;
+
+      case 'stand':
+        stand(gameState);
+
+        if (gameState.status === 'dealerTurn') {
+          statusMessage = `✋ **You stood with ${calculateHandValue(gameState.playerHand)}**\n\n*Dealer reveals hidden card and plays...*`;
+
+          const standEmbed = createBlackjackEmbed(gameState, true);
+          standEmbed.setDescription(`${standEmbed.data.description}\n\n${statusMessage}`);
+          await interaction.update({ embeds: [standEmbed], components: [] });
+
+          await new Promise(resolve => setTimeout(resolve, 1500));
+
+          dealerPlay(gameState);
+
+          // If there's a split hand, determine both results
+          if (gameState.splitHand) {
+            determineSplitWinner(gameState);
+          } else {
+            determineWinner(gameState);
+          }
+
+          await handleGameEnd(interaction, gameState, collections, false, true);
+          activeGames.delete(userId);
+        } else if (gameState.activeHand === 'split') {
+          statusMessage = `✋ **First hand complete!**\n\nNow playing your **split hand**...`;
+          const embed = createBlackjackEmbed(gameState, true);
+          embed.setDescription(`${embed.data.description}\n\n${statusMessage}`);
+          embed.setFooter({ text: '⏱️ 30 seconds to make your next move' });
+
+          const buttons = createGameButtons(gameState);
+          await interaction.update({ embeds: [embed], components: [buttons] });
+
+          setGameTimeout(userId, interaction, gameState, collections);
+        }
+        break;
+
+      case 'double':
+        const balance = await getBalance({ userId, guildId, collections });
+
+        if (balance.balance < gameState.betAmount) {
+          return interaction.reply({
+            content: '❌ Insufficient balance to double down!',
+            flags: [64]
+          });
+        }
+
+        await subtractBalance({ userId, guildId, amount: gameState.betAmount, collections });
+
+        const originalBet = gameState.betAmount;
+        doubleDown(gameState);
+
+        const doubValue = calculateHandValue(gameState.playerHand);
+        const doubleCard = gameState.playerHand[gameState.playerHand.length - 1];
+        statusMessage = `💰 **Doubled down!** ${originalBet.toLocaleString()} → **${gameState.betAmount.toLocaleString()} coins**\n🎴 **Drew:** ${doubleCard.rank}${doubleCard.suit}`;
+
+        if (gameState.status === 'playerBusted') {
+          statusMessage += `\n\n💥 **BUST!** Over 21`;
+          await handleGameEnd(interaction, gameState, collections);
+          activeGames.delete(userId);
+        } else {
+          const doubleEmbed = createBlackjackEmbed(gameState, true);
+          doubleEmbed.setDescription(`${doubleEmbed.data.description}\n\n${statusMessage}\n\n*Dealer reveals hidden card and plays...*`);
+          await interaction.update({ embeds: [doubleEmbed], components: [] });
+
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          dealerPlay(gameState);
+          determineWinner(gameState);
+
+          await handleGameEnd(interaction, gameState, collections, false, true);
+          activeGames.delete(userId);
+        }
+        break;
+
+      case 'split':
+        const balanceForSplit = await getBalance({ userId, guildId, collections });
+
+        if (balanceForSplit.balance < gameState.betAmount) {
+          return interaction.reply({
+            content: '❌ Insufficient balance to split!',
+            flags: [64]
+          });
+        }
+
+        await subtractBalance({ userId, guildId, amount: gameState.betAmount, collections });
+
+        split(gameState);
+
+        statusMessage = `✂️ **Split!** Your pair has been split into two hands.\n\nPlaying **first hand** now...`;
+
+        const embedAfterSplit = createBlackjackEmbed(gameState, true);
+        embedAfterSplit.setDescription(`${embedAfterSplit.data.description}\n\n${statusMessage}`);
+        embedAfterSplit.setFooter({ text: '⏱️ 30 seconds to make your next move' });
+
+        const buttonsAfterSplit = createGameButtons(gameState);
+        await interaction.update({ embeds: [embedAfterSplit], components: [buttonsAfterSplit] });
+
+        setGameTimeout(userId, interaction, gameState, collections);
+        break;
+    }
+  } catch (error) {
+    console.error('Blackjack button error:', error);
+
+    activeGames.delete(userId);
+    clearGameTimeout(userId);
+
+    await interaction.reply({
+      content: `❌ Error: ${error.message}`,
+      flags: [64]
+    }).catch(() => {});
+  }
+}
+
+function setGameTimeout(userId, interaction, gameState, collections) {
+  const timeout = setTimeout(async () => {
+    console.log(`⏱️ Auto-standing for user ${userId} due to 30s timeout`);
+
+    stand(gameState);
+
+    if (gameState.status === 'dealerTurn') {
+      dealerPlay(gameState);
+
+      // If there's a split hand, determine both results
+      if (gameState.splitHand) {
+        determineSplitWinner(gameState);
+      } else {
+        determineWinner(gameState);
+      }
+
+      try {
+        await handleGameEnd(interaction, gameState, collections, false, true, true);
+      } catch (error) {
+        console.error('Error in auto-stand:', error);
+      }
+    }
+
+    activeGames.delete(userId);
+    gameTimeouts.delete(userId);
+  }, 30000);
+
+  gameTimeouts.set(userId, timeout);
+}
+
+function clearGameTimeout(userId) {
+  if (gameTimeouts.has(userId)) {
+    clearTimeout(gameTimeouts.get(userId));
+    gameTimeouts.delete(userId);
+  }
+}
+
+async function handleGameEnd(interaction, gameState, collections, isReply = false, isEdit = false, isTimeout = false) {
+  const userId = gameState.userId;
+  const guildId = activeGames.get(userId)?.guildId;
+
+  clearGameTimeout(userId);
+
+  // If split hand exists, process BOTH results
+  if (gameState.splitHand && gameState.splitResult) {
+    // Process main hand
+    await processSingleHandResult(userId, guildId, gameState.betAmount, gameState.result, gameState.payout, collections);
+
+    // Process split hand
+    await processSingleHandResult(userId, guildId, gameState.betAmount, gameState.splitResult, gameState.splitPayout, collections);
+  } else {
+    // Process single hand result
+    await processSingleHandResult(userId, guildId, gameState.betAmount, gameState.result, gameState.payout, collections);
+  }
+
+  const newBalance = await getBalance({ userId, guildId, collections });
+  const resultEmbed = createBlackjackResultEmbed(gameState, newBalance.balance);
+
+  if (isTimeout) {
+    resultEmbed.setFooter({ text: '⏱️ Game auto-completed (no action for 30 seconds)' });
+  }
+
+  if (isReply) {
+    await interaction.reply({ embeds: [resultEmbed], components: [] });
+  } else if (isEdit) {
+    await interaction.editReply({ embeds: [resultEmbed], components: [] });
+  } else {
+    await interaction.update({ embeds: [resultEmbed], components: [] });
+  }
+}
+
+async function processSingleHandResult(userId, guildId, betAmount, result, payout, collections) {
+  if (result === 'win' || result === 'blackjack') {
+    await processWin({
       userId,
       guildId,
-      amount: 50,
+      betAmount,
+      payout,
+      gameType: 'blackjack',
       collections
     });
-
-    // Update trivia-specific stats
-    await triviaStats.updateOne(
-      { userId, guildId },
-      {
-        $inc: {
-          totalCorrect: 1,
-          totalEarned: 50
-        },
-        $set: {
-          lastPlayed: new Date()
-        },
-        $setOnInsert: {
-          totalIncorrect: 0,
-          longestStreak: 0,
-          perfectRuns: 0
-        }
-      },
-      { upsert: true }
-    );
-
-    // Check if this is question 10 and they got all 10 correct
-    if (session.currentQuestionIndex === 9 && currentStreak === 10) {
-      // Perfect run! 250 bonus (NO gambling stat tracking)
-      await addBalance({
-        userId,
-        guildId,
-        amount: 250,
-        collections
-      });
-
-      totalEarned = 50 + 250; // This question + bonus
-
-      await triviaStats.updateOne(
-        { userId, guildId },
-        {
-          $inc: {
-            perfectRuns: 1,
-            totalEarned: 250
-          },
-          $max: {
-            longestStreak: currentStreak
-          }
-        }
-      );
-
-      // Delete session
-      await triviaSessions.deleteOne({ _id: session._id });
-
-      const resultEmbed = createTriviaResultEmbed(true, currentQuestion, selectedAnswer, currentStreak, totalEarned, true);
-
-      return interaction.update({
-        embeds: [resultEmbed],
-        components: []
-      });
-    }
-
-    // Move to next question
-    const nextQuestionIndex = session.currentQuestionIndex + 1;
-
-    if (nextQuestionIndex < session.questions.length) {
-      // Update session
-      await triviaSessions.updateOne(
-        { _id: session._id },
-        {
-          $set: {
-            currentQuestionIndex: nextQuestionIndex,
-            currentStreak,
-            expiresAt: new Date(Date.now() + 20000)
-          }
-        }
-      );
-
-      // Show result briefly, then next question
-      const resultEmbed = createTriviaResultEmbed(true, currentQuestion, selectedAnswer, currentStreak, totalEarned);
-
-      await interaction.update({
-        embeds: [resultEmbed],
-        components: []
-      });
-
-      // Wait 2 seconds, then show next question
-      setTimeout(async () => {
-        // re-fetch session to get latest questions/indices in case of race conditions
-        const freshSession = await triviaSessions.findOne({ _id: session._id });
-        if (!freshSession) return; // session ended meanwhile
-
-        const nextQuestion = freshSession.questions[nextQuestionIndex];
-        const nextEmbed = createTriviaEmbed(nextQuestion, nextQuestionIndex, freshSession.questions.length, currentStreak);
-        const nextButtons = createTriviaButtons(sessionId);
-
-        try {
-          await interaction.editReply({
-            embeds: [nextEmbed],
-            components: [nextButtons]
-          });
-
-          // Set timeout for next question
-          setTimeout(async () => {
-            const stillActive = await triviaSessions.findOne({ _id: session._id });
-
-            if (stillActive && stillActive.currentQuestionIndex === nextQuestionIndex) {
-              // User didn't answer in time - end session
-              await triviaSessions.deleteOne({ _id: session._id });
-
-              // Update stats for longest streak
-              await triviaStats.updateOne(
-                { userId, guildId },
-                {
-                  $max: {
-                    longestStreak: currentStreak
-                  }
-                }
-              );
-
-              const timeoutEmbed = createTriviaResultEmbed(false, nextQuestion, -1, currentStreak, 0, false, true);
-
-              try {
-                await interaction.editReply({
-                  embeds: [timeoutEmbed],
-                  components: []
-                });
-              } catch (err) {
-                // Message may have been deleted
-              }
-            }
-          }, 20000);
-
-        } catch (err) {
-          // Message may have been deleted or interaction no longer valid
-          await triviaSessions.deleteOne({ _id: session._id });
-        }
-      }, 2000);
-
-    } else {
-      // Last question, session complete
-      await triviaSessions.deleteOne({ _id: session._id });
-
-      await triviaStats.updateOne(
-        { userId, guildId },
-        {
-          $max: {
-            longestStreak: currentStreak
-          }
-        }
-      );
-
-      const resultEmbed = createTriviaResultEmbed(true, currentQuestion, selectedAnswer, currentStreak, totalEarned, false, false, true);
-
-      return interaction.update({
-        embeds: [resultEmbed],
-        components: []
-      });
-    }
-
-  } else {
-    // Wrong answer - session ends
-    await triviaSessions.deleteOne({ _id: session._id });
-
-    // Update stats
-    await triviaStats.updateOne(
-      { userId, guildId },
-      {
-        $inc: {
-          totalIncorrect: 1
-        },
-        $max: {
-          longestStreak: currentStreak
-        },
-        $set: {
-          lastPlayed: new Date()
-        },
-        $setOnInsert: {
-          totalCorrect: 0,
-          totalEarned: 0,
-          perfectRuns: 0
-        }
-      },
-      { upsert: true }
-    );
-
-    const resultEmbed = createTriviaResultEmbed(false, currentQuestion, selectedAnswer, currentStreak, 0);
-
-    return interaction.update({
-      embeds: [resultEmbed],
-      components: []
+  } else if (result === 'loss') {
+    await processLoss({
+      userId,
+      guildId,
+      betAmount,
+      gameType: 'blackjack',
+      collections
+    });
+  } else if (result === 'push') {
+    // processPush already returns the bet, so just call it once
+    await processPush({
+      userId,
+      guildId,
+      betAmount,
+      gameType: 'blackjack',
+      collections
     });
   }
 }
 
-module.exports = {
-  handleTriviaButtons,
-  createTriviaButtons
+module.exports = { 
+  handleBlackjackButtons,
+  handleGameEnd,
+  clearGameTimeout,
+  gameTimeouts
 };
