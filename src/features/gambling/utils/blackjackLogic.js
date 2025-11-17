@@ -32,7 +32,9 @@ function createGame(userId, betAmount) {
     activeHand: 'main', // 'main' or 'split'
     doubledDown: false,
     result: null, // Will be set when game ends
-    payout: 0
+    payout: 0,
+    splitResult: null, // For split hand
+    splitPayout: 0
   };
 }
 
@@ -160,7 +162,7 @@ function dealerPlay(gameState) {
 }
 
 /**
- * Determine the winner and calculate payout
+ * Determine the winner and calculate payout (for single hand or main hand)
  */
 function determineWinner(gameState) {
   const playerValue = calculateHandValue(gameState.playerHand);
@@ -214,6 +216,77 @@ function determineWinner(gameState) {
   return gameState;
 }
 
+/**
+ * Determine winner for BOTH hands when split (called after dealer plays)
+ */
+function determineSplitWinner(gameState) {
+  if (!gameState.splitHand) {
+    throw new Error('No split hand to determine winner for');
+  }
+
+  const dealerValue = calculateHandValue(gameState.dealerHand);
+  const dealerBusted = isBusted(gameState.dealerHand);
+  const dealerBlackjack = isBlackjack(gameState.dealerHand);
+
+  // Determine main hand result
+  const mainValue = calculateHandValue(gameState.playerHand);
+  const mainBusted = isBusted(gameState.playerHand);
+  const mainBlackjack = isBlackjack(gameState.playerHand);
+
+  if (mainBusted) {
+    gameState.result = 'loss';
+    gameState.payout = -gameState.betAmount;
+  } else if (mainBlackjack && dealerBlackjack) {
+    gameState.result = 'push';
+    gameState.payout = 0;
+  } else if (mainBlackjack) {
+    gameState.result = 'blackjack';
+    gameState.payout = Math.floor(gameState.betAmount * 1.5);
+  } else if (dealerBusted) {
+    gameState.result = 'win';
+    gameState.payout = gameState.betAmount;
+  } else if (mainValue > dealerValue) {
+    gameState.result = 'win';
+    gameState.payout = gameState.betAmount;
+  } else if (mainValue < dealerValue) {
+    gameState.result = 'loss';
+    gameState.payout = -gameState.betAmount;
+  } else {
+    gameState.result = 'push';
+    gameState.payout = 0;
+  }
+
+  // Determine split hand result
+  const splitValue = calculateHandValue(gameState.splitHand);
+  const splitBusted = isBusted(gameState.splitHand);
+  const splitBlackjack = isBlackjack(gameState.splitHand);
+
+  if (splitBusted) {
+    gameState.splitResult = 'loss';
+    gameState.splitPayout = -gameState.betAmount;
+  } else if (splitBlackjack && dealerBlackjack) {
+    gameState.splitResult = 'push';
+    gameState.splitPayout = 0;
+  } else if (splitBlackjack) {
+    gameState.splitResult = 'blackjack';
+    gameState.splitPayout = Math.floor(gameState.betAmount * 1.5);
+  } else if (dealerBusted) {
+    gameState.splitResult = 'win';
+    gameState.splitPayout = gameState.betAmount;
+  } else if (splitValue > dealerValue) {
+    gameState.splitResult = 'win';
+    gameState.splitPayout = gameState.betAmount;
+  } else if (splitValue < dealerValue) {
+    gameState.splitResult = 'loss';
+    gameState.splitPayout = -gameState.betAmount;
+  } else {
+    gameState.splitResult = 'push';
+    gameState.splitPayout = 0;
+  }
+
+  return gameState;
+}
+
 module.exports = {
   createGame,
   hit,
@@ -221,5 +294,6 @@ module.exports = {
   doubleDown,
   split,
   dealerPlay,
-  determineWinner
+  determineWinner,
+  determineSplitWinner
 };

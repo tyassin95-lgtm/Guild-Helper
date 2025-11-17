@@ -67,7 +67,7 @@ async function handleTriviaButtons({ interaction, collections }) {
     currentStreak++;
     totalEarned = 50; // 50 coins per correct answer
 
-    // Award coins
+    // Award coins (NO gambling stat tracking - it's earned from trivia, not gambling)
     await addBalance({
       userId,
       guildId,
@@ -75,7 +75,7 @@ async function handleTriviaButtons({ interaction, collections }) {
       collections
     });
 
-    // Update stats
+    // Update trivia-specific stats
     await triviaStats.updateOne(
       { userId, guildId },
       {
@@ -97,7 +97,7 @@ async function handleTriviaButtons({ interaction, collections }) {
 
     // Check if this is question 10 and they got all 10 correct
     if (session.currentQuestionIndex === 9 && currentStreak === 10) {
-      // Perfect run! 250 bonus
+      // Perfect run! 250 bonus (NO gambling stat tracking)
       await addBalance({
         userId,
         guildId,

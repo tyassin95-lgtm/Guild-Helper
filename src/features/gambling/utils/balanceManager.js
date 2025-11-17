@@ -1,4 +1,3 @@
-// balanceManager.js
 const { safeExecute } = require('../../../utils/safeExecute');
 
 /**
@@ -19,9 +18,9 @@ async function getBalance({ userId, guildId, collections }) {
         userId,
         guildId,
         balance: 0,
-        totalWon: 0,
-        totalLost: 0,
-        gamesPlayed: 0,
+        totalWon: 0,        // Only from gambling games (blackjack, coinflip)
+        totalLost: 0,       // Only from gambling games
+        gamesPlayed: 0,     // Only gambling games
         createdAt: new Date(),
         lastUpdated: new Date()
       }
@@ -34,6 +33,8 @@ async function getBalance({ userId, guildId, collections }) {
 
 /**
  * Add money to a user's balance (atomic operation)
+ * This is for balance changes that DON'T affect gambling stats
+ * (daily rewards, trivia, transfers, pushes, etc.)
  */
 async function addBalance({ userId, guildId, amount, collections }) {
   const { gamblingBalances } = collections;
@@ -85,6 +86,8 @@ async function subtractBalance({ userId, guildId, amount, collections }) {
 
 /**
  * Record a game result and update statistics
+ * This is ONLY for gambling games (blackjack, coinflip)
+ * Daily rewards, trivia, transfers do NOT use this
  */
 async function recordGame({ userId, guildId, gameType, betAmount, result, payout, collections }) {
   const { gamblingBalances, gamblingGames } = collections;
@@ -100,14 +103,16 @@ async function recordGame({ userId, guildId, gameType, betAmount, result, payout
     timestamp: new Date()
   });
 
-  // Update statistics safely
+  // Update statistics ONLY for wins and losses (not pushes)
   const inc = { gamesPlayed: 1 };
   if (result === 'win') {
-    // payout is expected to be the winnings (positive)
+    // payout is the actual winnings (not including bet return)
     inc.totalWon = payout;
   } else if (result === 'loss') {
+    // payout is negative, so we take absolute value
     inc.totalLost = Math.abs(payout);
   }
+  // push has gamesPlayed++ but no totalWon/totalLost changes
 
   await gamblingBalances.updateOne(
     { userId, guildId },
@@ -125,31 +130,38 @@ async function hasBalance({ userId, guildId, amount, collections }) {
 
 /**
  * Process a game win (atomic)
+ * ONLY for gambling games (blackjack, coinflip)
  *
  * Note: we assume the bet was already deducted when the game started.
  * - `payout` should be the winnings (not including the original bet).
  * To restore the bet + winnings, we add (betAmount + payout).
+ * 
+ * Stats are updated by recordGame()
  */
 async function processWin({ userId, guildId, betAmount, payout, gameType, collections }) {
-  // Add the bet back + winnings
+  // Add the bet back + winnings (no stat tracking here)
   await addBalance({ userId, guildId, amount: betAmount + payout, collections });
+  // Record the game and update stats (adds payout to totalWon)
   await recordGame({ userId, guildId, gameType, betAmount, result: 'win', payout, collections });
 }
 
 /**
  * Process a game loss (atomic)
+ * ONLY for gambling games (blackjack, coinflip)
  */
 async function processLoss({ userId, guildId, betAmount, gameType, collections }) {
-  // Bet already deducted; record the loss (payout negative bet)
+  // Bet already deducted; just record the loss (payout negative bet)
   await recordGame({ userId, guildId, gameType, betAmount, result: 'loss', payout: -betAmount, collections });
 }
 
 /**
  * Process a push/tie (no money change, just record)
+ * ONLY for gambling games (blackjack)
  */
 async function processPush({ userId, guildId, betAmount, gameType, collections }) {
-  // Return bet to the player
+  // Return bet to the player (no stat tracking)
   await addBalance({ userId, guildId, amount: betAmount, collections });
+  // Record the push (gamesPlayed++ but no totalWon/totalLost changes)
   await recordGame({ userId, guildId, gameType, betAmount, result: 'push', payout: 0, collections });
 }
 

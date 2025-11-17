@@ -54,9 +54,9 @@ async function handleBlackjack({ interaction, collections }) {
   const gameState = createGame(userId, betAmount);
   activeGames.set(userId, { gameState, guildId, collections });
 
-  // Check for immediate blackjack
+  // Check for immediate player blackjack
   if (isBlackjack(gameState.playerHand)) {
-    // Check dealer for blackjack too
+    // Reveal dealer's hand to check for dealer blackjack
     if (isBlackjack(gameState.dealerHand)) {
       // Push
       gameState.result = 'push';
@@ -76,17 +76,8 @@ async function handleBlackjack({ interaction, collections }) {
     return;
   }
 
-  // Check dealer blackjack
-  if (isBlackjack(gameState.dealerHand)) {
-    gameState.result = 'loss';
-    gameState.payout = -betAmount;
-    gameState.status = 'finished';
-
-    const { handleGameEnd } = require('../handlers/blackjackButtons');
-    await handleGameEnd(interaction, gameState, collections, false, true);
-    activeGames.delete(userId);
-    return;
-  }
+  // Don't check for dealer blackjack yet - let the game play out naturally
+  // The dealer's hole card will be revealed when the player stands
 
   // Create buttons
   const buttons = createGameButtons(gameState);

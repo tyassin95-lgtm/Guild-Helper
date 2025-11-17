@@ -14,12 +14,18 @@ function createBalanceEmbed(user, balance, stats = null) {
     .setTimestamp();
 
   if (stats) {
+    const netProfitLoss = balance.totalWon - balance.totalLost;
+    const profitLossDisplay = netProfitLoss >= 0 
+      ? `+${netProfitLoss.toLocaleString()}` 
+      : `${netProfitLoss.toLocaleString()}`;
+
     embed.addFields(
-      { name: '📊 Games Played', value: balance.gamesPlayed.toString(), inline: true },
-      { name: '✅ Total Won', value: `${balance.totalWon.toLocaleString()} coins`, inline: true },
-      { name: '❌ Total Lost', value: `${balance.totalLost.toLocaleString()} coins`, inline: true },
-      { name: '📈 Net Profit/Loss', value: `${(balance.totalWon - balance.totalLost).toLocaleString()} coins`, inline: true }
-    );
+      { name: '🎰 Games Played', value: balance.gamesPlayed.toString(), inline: true },
+      { name: '✅ Total Won (Gambling)', value: `${balance.totalWon.toLocaleString()} coins`, inline: true },
+      { name: '❌ Total Lost (Gambling)', value: `${balance.totalLost.toLocaleString()} coins`, inline: true },
+      { name: '📈 Net Gambling Profit', value: `${profitLossDisplay} coins`, inline: true }
+    )
+    .setFooter({ text: '💡 Stats only track gambling games (Blackjack, Coinflip)' });
   }
 
   return embed;
@@ -141,6 +147,83 @@ function createBlackjackResultEmbed(gameState, newBalance) {
 
   let color, title, resultText, resultEmoji;
 
+  // If there's a split hand, show combined results
+  if (gameState.splitHand && gameState.splitResult) {
+    const splitValue = calculateHandValue(gameState.splitHand);
+    const mainPayout = gameState.payout;
+    const splitPayout = gameState.splitPayout;
+    const totalPayout = mainPayout + splitPayout;
+
+    // Determine overall color based on net result
+    if (totalPayout > 0) {
+      color = 0x00FF00; // Green
+      title = '✅ NET WIN!';
+      resultEmoji = '💰';
+    } else if (totalPayout < 0) {
+      color = 0xFF0000; // Red
+      title = '❌ NET LOSS';
+      resultEmoji = '💸';
+    } else {
+      color = 0xFFFF00; // Yellow
+      title = '🤝 EVEN';
+      resultEmoji = '⚖️';
+    }
+
+    // Build result text
+    const mainResultText = formatSingleResult(gameState.result, mainPayout);
+    const splitResultText = formatSingleResult(gameState.splitResult, splitPayout);
+
+    resultText = 
+      `**Hand 1:** ${mainResultText}\n` +
+      `**Hand 2:** ${splitResultText}\n\n` +
+      `**Net Result:** ${totalPayout >= 0 ? '+' : ''}${totalPayout.toLocaleString()} coins`;
+
+    const embed = new EmbedBuilder()
+      .setColor(color)
+      .setTitle(`${resultEmoji} ${title} (SPLIT)`)
+      .setDescription(`**💰 Bet Per Hand:** ${gameState.betAmount.toLocaleString()} coins\n${resultText}`)
+      .addFields(
+        { 
+          name: '═══════════════════════════════════════',
+          value: '** **',
+          inline: false
+        },
+        { 
+          name: `🤖 Dealer's Hand`, 
+          value: `🃏 ${formatHand(gameState.dealerHand)}\n**Total:** ${dealerValue}`,
+          inline: false 
+        },
+        { 
+          name: '─────────────────────────────────────',
+          value: '** **',
+          inline: false
+        },
+        { 
+          name: `👤 Your Hand 1`, 
+          value: `🃏 ${formatHand(gameState.playerHand)}\n**Total:** ${playerValue}\n**Result:** ${formatResultEmoji(gameState.result)}`,
+          inline: true 
+        },
+        { 
+          name: `👤 Your Hand 2`, 
+          value: `🃏 ${formatHand(gameState.splitHand)}\n**Total:** ${splitValue}\n**Result:** ${formatResultEmoji(gameState.splitResult)}`,
+          inline: true 
+        },
+        { 
+          name: '═══════════════════════════════════════',
+          value: '** **',
+          inline: false
+        },
+        {
+          name: '💵 New Balance',
+          value: `**${newBalance.toLocaleString()} coins**`,
+          inline: false
+        }
+      );
+
+    return embed;
+  }
+
+  // Single hand result (original logic)
   switch (gameState.result) {
     case 'blackjack':
       color = 0xFFD700; // Gold
@@ -206,6 +289,37 @@ function createBlackjackResultEmbed(gameState, newBalance) {
     );
 
   return embed;
+}
+
+/**
+ * Helper: Format a single hand result
+ */
+function formatSingleResult(result, payout) {
+  switch (result) {
+    case 'blackjack':
+      return `Blackjack! +${payout.toLocaleString()} coins 🎉`;
+    case 'win':
+      return `Win! +${payout.toLocaleString()} coins ✅`;
+    case 'loss':
+      return `Loss ${payout.toLocaleString()} coins ❌`;
+    case 'push':
+      return `Push (tie) 🤝`;
+    default:
+      return 'Unknown';
+  }
+}
+
+/**
+ * Helper: Get result emoji
+ */
+function formatResultEmoji(result) {
+  switch (result) {
+    case 'blackjack': return '🎉 Blackjack';
+    case 'win': return '✅ Win';
+    case 'loss': return '❌ Loss';
+    case 'push': return '🤝 Push';
+    default: return '❓';
+  }
 }
 
 /**

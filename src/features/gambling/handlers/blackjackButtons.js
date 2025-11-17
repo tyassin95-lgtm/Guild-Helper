@@ -1,5 +1,5 @@
 const { activeGames, createGameButtons } = require('../commands/blackjack');
-const { hit, stand, doubleDown, split, dealerPlay, determineWinner } = require('../utils/blackjackLogic');
+const { hit, stand, doubleDown, split, dealerPlay, determineWinner, determineSplitWinner } = require('../utils/blackjackLogic');
 const { createBlackjackEmbed, createBlackjackResultEmbed } = require('../embeds/gameEmbeds');
 const { addBalance, processWin, processLoss, processPush, getBalance, subtractBalance } = require('../utils/balanceManager');
 const { calculateHandValue } = require('../utils/cardDeck');
@@ -66,7 +66,13 @@ async function handleBlackjackButtons({ interaction, collections }) {
           await new Promise(resolve => setTimeout(resolve, 1500));
 
           dealerPlay(gameState);
-          determineWinner(gameState);
+
+          // If there's a split hand, determine both results
+          if (gameState.splitHand) {
+            determineSplitWinner(gameState);
+          } else {
+            determineWinner(gameState);
+          }
 
           await handleGameEnd(interaction, gameState, collections, false, true);
           activeGames.delete(userId);
@@ -168,7 +174,13 @@ function setGameTimeout(userId, interaction, gameState, collections) {
 
     if (gameState.status === 'dealerTurn') {
       dealerPlay(gameState);
-      determineWinner(gameState);
+
+      // If there's a split hand, determine both results
+      if (gameState.splitHand) {
+        determineSplitWinner(gameState);
+      } else {
+        determineWinner(gameState);
+      }
 
       try {
         await handleGameEnd(interaction, gameState, collections, false, true, true);
@@ -197,38 +209,16 @@ async function handleGameEnd(interaction, gameState, collections, isReply = fals
 
   clearGameTimeout(userId);
 
-  // Process result
-  if (gameState.result === 'win' || gameState.result === 'blackjack') {
-    await processWin({
-      userId,
-      guildId,
-      betAmount: gameState.betAmount,
-      payout: gameState.payout,
-      gameType: 'blackjack',
-      collections
-    });
-  } else if (gameState.result === 'loss') {
-    await processLoss({
-      userId,
-      guildId,
-      betAmount: gameState.betAmount,
-      gameType: 'blackjack',
-      collections
-    });
-  } else if (gameState.result === 'push') {
-    await addBalance({
-      userId,
-      guildId,
-      amount: gameState.betAmount,
-      collections
-    });
-    await processPush({
-      userId,
-      guildId,
-      betAmount: gameState.betAmount,
-      gameType: 'blackjack',
-      collections
-    });
+  // If split hand exists, process BOTH results
+  if (gameState.splitHand && gameState.splitResult) {
+    // Process main hand
+    await processSingleHandResult(userId, guildId, gameState.betAmount, gameState.result, gameState.payout, collections);
+
+    // Process split hand
+    await processSingleHandResult(userId, guildId, gameState.betAmount, gameState.splitResult, gameState.splitPayout, collections);
+  } else {
+    // Process single hand result
+    await processSingleHandResult(userId, guildId, gameState.betAmount, gameState.result, gameState.payout, collections);
   }
 
   const newBalance = await getBalance({ userId, guildId, collections });
@@ -244,6 +234,36 @@ async function handleGameEnd(interaction, gameState, collections, isReply = fals
     await interaction.editReply({ embeds: [resultEmbed], components: [] });
   } else {
     await interaction.update({ embeds: [resultEmbed], components: [] });
+  }
+}
+
+async function processSingleHandResult(userId, guildId, betAmount, result, payout, collections) {
+  if (result === 'win' || result === 'blackjack') {
+    await processWin({
+      userId,
+      guildId,
+      betAmount,
+      payout,
+      gameType: 'blackjack',
+      collections
+    });
+  } else if (result === 'loss') {
+    await processLoss({
+      userId,
+      guildId,
+      betAmount,
+      gameType: 'blackjack',
+      collections
+    });
+  } else if (result === 'push') {
+    // processPush already returns the bet, so just call it once
+    await processPush({
+      userId,
+      guildId,
+      betAmount,
+      gameType: 'blackjack',
+      collections
+    });
   }
 }
 

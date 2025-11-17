@@ -118,7 +118,7 @@ async function claimDaily({ userId, guildId, collections }) {
     { upsert: true }
   );
 
-  // Add money to balance
+  // Add money to balance (NO gambling stat tracking - it's free money)
   await addBalance({
     userId,
     guildId,
