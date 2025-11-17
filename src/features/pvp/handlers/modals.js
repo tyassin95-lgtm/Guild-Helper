@@ -41,7 +41,7 @@ async function handlePvPModals({ interaction, collections }) {
     }
 
     if (event.closed) {
-      return interaction.editReply({ content: '❌ Attendance period is closed.' });
+      return interaction.editReply({ content: '❌ Event is closed.' });
     }
 
     // Verify password first (before checking attendance to save a DB query)
@@ -57,7 +57,15 @@ async function handlePvPModals({ interaction, collections }) {
         attendees: { $ne: interaction.user.id }, // Only match if user NOT in array
         closed: false // Also verify event is still open
       },
-      { $push: { attendees: interaction.user.id } }
+      { 
+        $push: { attendees: interaction.user.id },
+        // Remove user from all RSVP lists when they record attendance
+        $pull: {
+          rsvpAttending: interaction.user.id,
+          rsvpNotAttending: interaction.user.id,
+          rsvpMaybe: interaction.user.id
+        }
+      }
     );
 
     // If matchedCount is 0, either the user already recorded attendance or event was closed
@@ -70,7 +78,7 @@ async function handlePvPModals({ interaction, collections }) {
       }
 
       if (currentEvent.closed) {
-        return interaction.editReply({ content: '❌ Attendance period is closed.' });
+        return interaction.editReply({ content: '❌ Event is closed.' });
       }
 
       if (currentEvent.attendees && currentEvent.attendees.includes(interaction.user.id)) {
@@ -160,7 +168,10 @@ async function handlePvPModals({ interaction, collections }) {
       imageUrl: imageUrl || null,
       message,
       password,
-      attendees: [],
+      attendees: [], // Users who recorded attendance with password
+      rsvpAttending: [], // Users who clicked "Attending"
+      rsvpNotAttending: [], // Users who clicked "Not Attending"
+      rsvpMaybe: [], // Users who clicked "Maybe"
       closed: false,
       createdBy: interaction.user.id,
       createdAt: new Date()

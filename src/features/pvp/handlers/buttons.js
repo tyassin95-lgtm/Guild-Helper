@@ -5,6 +5,24 @@ const { updateEventEmbed } = require('../embed');
 async function handlePvPButtons({ interaction, collections }) {
   const { pvpEvents, pvpBonuses } = collections;
 
+  // RSVP Attending button
+  if (interaction.customId.startsWith('pvp_rsvp_attending:')) {
+    const eventId = interaction.customId.split(':')[1];
+    return handleRSVP(interaction, eventId, 'attending', collections);
+  }
+
+  // RSVP Not Attending button
+  if (interaction.customId.startsWith('pvp_rsvp_not_attending:')) {
+    const eventId = interaction.customId.split(':')[1];
+    return handleRSVP(interaction, eventId, 'not_attending', collections);
+  }
+
+  // RSVP Maybe button
+  if (interaction.customId.startsWith('pvp_rsvp_maybe:')) {
+    const eventId = interaction.customId.split(':')[1];
+    return handleRSVP(interaction, eventId, 'maybe', collections);
+  }
+
   // Continue setup button (after location input)
   if (interaction.customId.startsWith('pvp_continue_setup:')) {
     const parts = interaction.customId.split(':');
@@ -58,7 +76,7 @@ async function handlePvPButtons({ interaction, collections }) {
     }
 
     if (event.closed) {
-      return interaction.reply({ content: '❌ Attendance period is closed.', flags: [64] });
+      return interaction.reply({ content: '❌ Event is closed.', flags: [64] });
     }
 
     // Check if user already recorded attendance
@@ -107,10 +125,78 @@ async function handlePvPButtons({ interaction, collections }) {
     await updateEventEmbed(interaction, event, collections);
 
     return interaction.followUp({
-      content: '✅ Attendance has been closed for this event.',
+      content: '✅ Event has been closed.',
       flags: [64]
     });
   }
+}
+
+/**
+ * Handle RSVP button clicks
+ */
+async function handleRSVP(interaction, eventId, rsvpType, collections) {
+  const { pvpEvents } = collections;
+
+  await interaction.deferUpdate();
+
+  const event = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
+
+  if (!event) {
+    return interaction.followUp({ 
+      content: '❌ Event not found.', 
+      flags: [64] 
+    });
+  }
+
+  if (event.closed) {
+    return interaction.followUp({ 
+      content: '❌ Event is closed.', 
+      flags: [64] 
+    });
+  }
+
+  const userId = interaction.user.id;
+
+  // Remove user from all RSVP lists first
+  await pvpEvents.updateOne(
+    { _id: new ObjectId(eventId) },
+    { 
+      $pull: { 
+        rsvpAttending: userId,
+        rsvpNotAttending: userId,
+        rsvpMaybe: userId
+      }
+    }
+  );
+
+  // Add user to the selected RSVP list
+  const fieldMap = {
+    'attending': 'rsvpAttending',
+    'not_attending': 'rsvpNotAttending',
+    'maybe': 'rsvpMaybe'
+  };
+
+  const field = fieldMap[rsvpType];
+
+  await pvpEvents.updateOne(
+    { _id: new ObjectId(eventId) },
+    { $addToSet: { [field]: userId } }
+  );
+
+  // Fetch updated event and update embed
+  const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
+  await updateEventEmbed(interaction, updatedEvent, collections);
+
+  const responseMap = {
+    'attending': '✅ You marked yourself as **Attending**!',
+    'not_attending': '❌ You marked yourself as **Not Attending**.',
+    'maybe': '❓ You marked yourself as **Maybe**.'
+  };
+
+  return interaction.followUp({
+    content: responseMap[rsvpType],
+    flags: [64]
+  });
 }
 
 module.exports = { handlePvPButtons };
