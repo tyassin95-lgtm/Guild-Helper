@@ -79,6 +79,7 @@ const { handleCoinflip } = require('../../features/gambling/commands/coinflip');
 const { handleTrivia } = require('../../features/gambling/commands/trivia');
 const { handleRob } = require('../../features/gambling/commands/rob');
 const { handleSend, handleSendConfirmation } = require('../../features/gambling/commands/send');
+const { handleLeaderboard } = require('../../features/gambling/commands/leaderboard');
 const { handleBlackjackButtons } = require('../../features/gambling/handlers/blackjackButtons');
 const { handleTriviaButtons } = require('../../features/gambling/handlers/triviaButtons');
 
@@ -145,6 +146,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'trivia')              return handleTrivia({ interaction, collections });
       if (name === 'rob')                 return handleRob({ interaction, collections });
       if (name === 'send')                return handleSend({ interaction, collections });
+      if (name === 'leaderboard')         return handleLeaderboard({ interaction, collections });
     }
 
     // Button Interactions

@@ -465,6 +465,24 @@ async function registerSlashCommands(client) {
           max_value: 50000
         }
       ]
+    },
+    {
+      name: 'leaderboard',
+      description: 'View the server gambling leaderboard.',
+      options: [
+        {
+          type: 3, // STRING
+          name: 'type',
+          description: 'Type of leaderboard to view',
+          required: false,
+          choices: [
+            { name: '💰 Balance (Current Coins)', value: 'balance' },
+            { name: '📈 Net Profit (Total Won - Lost)', value: 'profit' },
+            { name: '✅ Total Winnings', value: 'wins' },
+            { name: '🎰 Games Played', value: 'games' }
+          ]
+        }
+      ]
     }
   ];
 
