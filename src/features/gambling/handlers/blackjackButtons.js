@@ -39,6 +39,11 @@ async function handleBlackjackButtons({ interaction, collections }) {
 
         if (gameState.status === 'playerBusted') {
           statusMessage = `💥 **BUST!** Over 21`;
+
+          // CRITICAL: Set result and payout for the bust
+          const { determineWinner } = require('../utils/blackjackLogic');
+          determineWinner(gameState);
+
           await handleGameEnd(interaction, gameState, collections);
           activeGames.delete(userId);
         } else {
@@ -110,6 +115,11 @@ async function handleBlackjackButtons({ interaction, collections }) {
 
         if (gameState.status === 'playerBusted') {
           statusMessage += `\n\n💥 **BUST!** Over 21`;
+
+          // CRITICAL: Set result and payout for the bust
+          const { determineWinner } = require('../utils/blackjackLogic');
+          determineWinner(gameState);
+
           await handleGameEnd(interaction, gameState, collections);
           activeGames.delete(userId);
         } else {
