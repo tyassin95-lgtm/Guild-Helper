@@ -124,6 +124,90 @@ async function handlePvPModals({ interaction, collections }) {
     });
   }
 
+  // Manual attendance modal (admin only)
+  if (interaction.customId.startsWith('pvp_manual_attendance_modal:')) {
+    const eventId = interaction.customId.split(':')[1];
+    const userIdInput = interaction.fields.getTextInputValue('user_id');
+
+    await interaction.deferReply({ flags: [64] });
+
+    const event = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
+
+    if (!event) {
+      return interaction.editReply({ content: '❌ Event not found.' });
+    }
+
+    if (!event.closed) {
+      return interaction.editReply({ content: '❌ This feature is only available for closed events.' });
+    }
+
+    // Validate user ID
+    const userId = userIdInput.trim();
+
+    // Try to fetch the user to ensure they exist
+    try {
+      const member = await interaction.guild.members.fetch(userId);
+
+      if (!member) {
+        return interaction.editReply({ content: '❌ User not found in this server.' });
+      }
+
+      // Check if user already has attendance recorded
+      if (event.attendees && event.attendees.includes(userId)) {
+        return interaction.editReply({ content: `❌ ${member.displayName} already has attendance recorded for this event.` });
+      }
+
+      // Add attendance for the user
+      await pvpEvents.updateOne(
+        { _id: new ObjectId(eventId) },
+        { 
+          $push: { attendees: userId },
+          // Remove user from all RSVP lists when they get attendance
+          $pull: {
+            rsvpAttending: userId,
+            rsvpNotAttending: userId,
+            rsvpMaybe: userId
+          }
+        }
+      );
+
+      // Add +10 bonus to user (weekly bonus - can be reset)
+      await pvpBonuses.updateOne(
+        { userId: userId, guildId: interaction.guildId },
+        { 
+          $inc: { bonusCount: 1 },
+          $set: { lastUpdated: new Date() }
+        },
+        { upsert: true }
+      );
+
+      // Increment all-time activity ranking (permanent - never reset)
+      await pvpActivityRanking.updateOne(
+        { userId: userId, guildId: interaction.guildId },
+        { 
+          $inc: { totalEvents: 1 },
+          $set: { lastEventDate: new Date() }
+        },
+        { upsert: true }
+      );
+
+      // Update the event embed
+      const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
+      await updateEventEmbed(interaction, updatedEvent, collections);
+
+      // Update live summary to show new bonus AND activity ranking
+      await scheduleLiveSummaryUpdate(interaction, collections);
+
+      return interaction.editReply({ 
+        content: `✅ **Attendance manually recorded for ${member.displayName}!**\n\nThey've been awarded a +10 PvP bonus.` 
+      });
+
+    } catch (err) {
+      console.error('Failed to fetch user for manual attendance:', err);
+      return interaction.editReply({ content: '❌ Invalid User ID or user not found in this server.' });
+    }
+  }
+
   // Event details modal (from admin setup flow)
   if (interaction.customId.startsWith('pvp_event_details:')) {
     const [_, eventType, location] = interaction.customId.split(':');

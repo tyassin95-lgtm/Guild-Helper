@@ -4,13 +4,15 @@ async function createEventEmbed(event, client, collections) {
   const eventTypeEmojis = {
     siege: '🏰',
     riftstone: '💎',
-    boonstone: '🔮'
+    boonstone: '🔮',
+    wargames: '⚔️'
   };
 
   const eventTypeNames = {
     siege: 'Siege',
     riftstone: 'Riftstone Fight',
-    boonstone: 'Boonstone Fight'
+    boonstone: 'Boonstone Fight',
+    wargames: 'Wargames'
   };
 
   const emoji = eventTypeEmojis[event.eventType] || '⚔️';
@@ -137,6 +139,17 @@ async function createEventEmbed(event, client, collections) {
     );
 
     components.push(rsvpRow, adminRow);
+  } else {
+    // For closed events, show admin manual attendance button
+    const closedAdminRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`pvp_manual_attendance:${event._id}`)
+        .setLabel('Manually Record Attendance (Admin)')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('✏️')
+    );
+
+    components.push(closedAdminRow);
   }
 
   return { embed, components };

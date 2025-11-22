@@ -15,7 +15,8 @@ async function handlePvPEvent({ interaction, collections }) {
       .addOptions([
         { label: 'Siege', value: 'siege', emoji: '🏰' },
         { label: 'Riftstone Fight', value: 'riftstone', emoji: '💎' },
-        { label: 'Boonstone Fight', value: 'boonstone', emoji: '🔮' }
+        { label: 'Boonstone Fight', value: 'boonstone', emoji: '🔮' },
+        { label: 'Wargames', value: 'wargames', emoji: '⚔️' }
       ])
   );
 

@@ -1,4 +1,4 @@
-const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, UserSelectMenuBuilder } = require('discord.js');
 const { ObjectId } = require('mongodb');
 const { updateEventEmbed } = require('../embed');
 
@@ -128,6 +128,42 @@ async function handlePvPButtons({ interaction, collections }) {
       content: '✅ Event has been closed.',
       flags: [64]
     });
+  }
+
+  // Manual Attendance button (admin only, for closed events)
+  if (interaction.customId.startsWith('pvp_manual_attendance:')) {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
+    }
+
+    const eventId = interaction.customId.split(':')[1];
+
+    const event = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
+
+    if (!event) {
+      return interaction.reply({ content: '❌ Event not found.', flags: [64] });
+    }
+
+    if (!event.closed) {
+      return interaction.reply({ content: '❌ This button is only available for closed events.', flags: [64] });
+    }
+
+    // Show user select menu to choose who to add attendance for
+    const modal = new ModalBuilder()
+      .setCustomId(`pvp_manual_attendance_modal:${eventId}`)
+      .setTitle('Manually Record Attendance');
+
+    const userIdInput = new TextInputBuilder()
+      .setCustomId('user_id')
+      .setLabel('User ID to add attendance for')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Enter the Discord User ID')
+      .setRequired(true);
+
+    const row = new ActionRowBuilder().addComponents(userIdInput);
+    modal.addComponents(row);
+
+    return interaction.showModal(modal);
   }
 }
 

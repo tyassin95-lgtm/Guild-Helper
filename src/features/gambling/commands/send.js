@@ -64,7 +64,7 @@ async function handleSend({ interaction, collections }) {
       .setStyle(ButtonStyle.Success);
 
     const cancelButton = new ButtonBuilder()
-      .setCustomId(`send_cancel`)
+      .setCustomId(`send_cancel:${targetId}:${amount}`)
       .setLabel('❌ Cancel')
       .setStyle(ButtonStyle.Danger);
 
@@ -89,9 +89,13 @@ async function handleSend({ interaction, collections }) {
 }
 
 async function handleSendConfirmation({ interaction, collections }) {
-  const [_, action, targetId, amountStr] = interaction.customId.split(':');
+  const parts = interaction.customId.split(':');
+  const action = parts[0]; // 'send_confirm' or 'send_cancel'
+  const targetId = parts[1];
+  const amountStr = parts[2];
 
-  if (action === 'cancel') {
+  // Handle cancel
+  if (action === 'send_cancel') {
     return interaction.update({
       content: '❌ Transfer cancelled.',
       embeds: [],
@@ -104,14 +108,26 @@ async function handleSendConfirmation({ interaction, collections }) {
   const amount = parseInt(amountStr);
   const guildId = interaction.guildId;
 
+  // Defer update to prevent timeout
+  await interaction.deferUpdate();
+
   // Get target user
-  const targetUser = await interaction.client.users.fetch(targetId);
+  let targetUser;
+  try {
+    targetUser = await interaction.client.users.fetch(targetId);
+  } catch (err) {
+    return interaction.editReply({
+      content: '❌ Failed to fetch target user. Transfer cancelled.',
+      embeds: [],
+      components: []
+    });
+  }
 
   // Re-check balance (in case it changed)
   const senderBalance = await getBalance({ userId: senderId, guildId, collections });
 
   if (senderBalance.balance < amount) {
-    return interaction.update({
+    return interaction.editReply({
       content: `❌ Insufficient balance! You now have **${senderBalance.balance.toLocaleString()} coins** but need **${amount.toLocaleString()} coins**.`,
       embeds: [],
       components: []
@@ -125,7 +141,7 @@ async function handleSendConfirmation({ interaction, collections }) {
     targetUser,
     amount,
     guildId,
-    isEdit: false
+    isEdit: true
   });
 }
 
@@ -159,18 +175,11 @@ async function processTransfer({ interaction, collections, senderId, targetUser,
     targetBalance.balance
   );
 
-  // Send to sender
-  if (isEdit) {
-    await interaction.editReply({
-      embeds: [receiptEmbed],
-      components: []
-    });
-  } else {
-    await interaction.update({
-      embeds: [receiptEmbed],
-      components: []
-    });
-  }
+  // Send to sender (always use editReply since we always defer now)
+  await interaction.editReply({
+    embeds: [receiptEmbed],
+    components: []
+  });
 
   // Notify recipient via DM
   try {

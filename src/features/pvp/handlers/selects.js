@@ -25,7 +25,7 @@ async function handlePvPSelects({ interaction, collections }) {
       return interaction.showModal(modal);
     }
 
-    // For Siege, skip to event details modal
+    // For Siege and Wargames, skip to event details modal (no location needed)
     return showEventDetailsModal(interaction, eventType, 'none');
   }
 }
