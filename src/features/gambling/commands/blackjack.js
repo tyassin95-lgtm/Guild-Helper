@@ -4,121 +4,134 @@ const { createGame } = require('../utils/blackjackLogic');
 const { createBlackjackEmbed } = require('../embeds/gameEmbeds');
 const { isBlackjack, calculateHandValue } = require('../utils/cardDeck');
 
-// Store active games in memory (in production, consider using Redis or DB)
-const activeGames = new Map();
-
 async function handleBlackjack({ interaction, collections }) {
+  // REPLY IMMEDIATELY FIRST - before any logic or validation
+  await interaction.reply({
+    content: '⏳ Starting game...'
+  });
+
   const betAmount = interaction.options.getInteger('bet');
   const userId = interaction.user.id;
   const guildId = interaction.guildId;
 
-  // Validate bet amount (fast checks, no defer)
+  // Validate bet amount AFTER reply
   if (betAmount < 10) {
-    return interaction.reply({
+    return interaction.editReply({
       content: '❌ Minimum bet is **10 coins**.',
-      flags: [64] // MessageFlags.Ephemeral
+      components: []
     });
   }
 
   if (betAmount > 5000000) {
-    return interaction.reply({
-      content: '❌ Maximum bet is **5,000,000 coins**.',
-      flags: [64] // MessageFlags.Ephemeral
-    });
-  }
-
-  // Check if user already has an active game
-  if (activeGames.has(userId)) {
-    return interaction.reply({
-      content: '❌ You already have an active blackjack game! Finish it first.',
-      flags: [64] // MessageFlags.Ephemeral
-    });
-  }
-
-  // Defer immediately before DB operations
-  await interaction.deferReply();
-
-  // Check balance
-  const balance = await getBalance({ userId, guildId, collections });
-
-  if (balance.balance < betAmount) {
     return interaction.editReply({
-      content: `❌ Insufficient balance! You have **${balance.balance.toLocaleString()} coins** but tried to bet **${betAmount.toLocaleString()} coins**.`
+      content: '❌ Maximum bet is **5,000,000 coins**.',
+      components: []
     });
   }
 
-  // Deduct bet amount
-  await subtractBalance({ userId, guildId, amount: betAmount, collections });
+  try {
+    // Check if user already has an active game
+    const { blackjackGames } = collections;
+    const existingGame = await blackjackGames.findOne({ userId, guildId });
 
-  // Create game
-  const gameState = createGame(userId, betAmount);
-  activeGames.set(userId, { gameState, guildId, collections });
-
-  // Check for immediate player blackjack
-  if (isBlackjack(gameState.playerHand)) {
-    // Reveal dealer's hand to check for dealer blackjack
-    if (isBlackjack(gameState.dealerHand)) {
-      // Push
-      gameState.result = 'push';
-      gameState.payout = 0;
-    } else {
-      // Player blackjack wins 3:2
-      gameState.result = 'blackjack';
-      gameState.payout = Math.floor(betAmount * 1.5);
+    if (existingGame) {
+      return interaction.editReply({
+        content: '❌ You already have an active blackjack game! Finish it first.',
+        components: []
+      });
     }
 
-    gameState.status = 'finished';
+    // Check balance
+    const balance = await getBalance({ userId, guildId, collections });
 
-    // Process result immediately
-    const { handleGameEnd } = require('../handlers/blackjackButtons');
-    await handleGameEnd(interaction, gameState, collections, false, true);
-    activeGames.delete(userId);
-    return;
-  }
+    if (balance.balance < betAmount) {
+      return interaction.editReply({
+        content: `❌ Insufficient balance! You have **${balance.balance.toLocaleString()} coins** but tried to bet **${betAmount.toLocaleString()} coins**.`,
+        components: []
+      });
+    }
 
-  // Don't check for dealer blackjack yet - let the game play out naturally
-  // The dealer's hole card will be revealed when the player stands
+    // Deduct bet amount
+    await subtractBalance({ userId, guildId, amount: betAmount, collections });
 
-  // Create buttons
-  const buttons = createGameButtons(gameState);
+    // Create game
+    const gameState = createGame(userId, betAmount);
 
-  const embed = createBlackjackEmbed(gameState, true);
-  embed.setFooter({ text: '⏱️ You have 30 seconds to make each move' });
-
-  await interaction.editReply({
-    embeds: [embed],
-    components: [buttons]
-  });
-
-  // Set initial 30-second timeout
-  const { gameTimeouts, clearGameTimeout } = require('../handlers/blackjackButtons');
-
-  const timeout = setTimeout(async () => {
-    console.log(`⏱️ Auto-standing for user ${userId} due to initial timeout`);
-
-    if (!activeGames.has(userId)) return;
-
-    const { stand, dealerPlay, determineWinner } = require('../utils/blackjackLogic');
-    const { handleGameEnd } = require('../handlers/blackjackButtons');
-
-    stand(gameState);
-
-    if (gameState.status === 'dealerTurn') {
-      dealerPlay(gameState);
-      determineWinner(gameState);
-
-      try {
-        await handleGameEnd(interaction, gameState, collections, false, true, true);
-      } catch (error) {
-        console.error('Error in auto-stand:', error);
+    // Check for immediate player blackjack
+    if (isBlackjack(gameState.playerHand)) {
+      // Reveal dealer's hand to check for dealer blackjack
+      if (isBlackjack(gameState.dealerHand)) {
+        // Push
+        gameState.result = 'push';
+        gameState.payout = 0;
+      } else {
+        // Player blackjack wins 3:2
+        gameState.result = 'blackjack';
+        gameState.payout = Math.floor(betAmount * 1.5);
       }
+
+      gameState.status = 'finished';
+
+      // Process result immediately
+      const { handleGameEnd } = require('../handlers/blackjackButtons');
+      await handleGameEnd(interaction, gameState, collections, false, true);
+      return;
     }
 
-    activeGames.delete(userId);
-    gameTimeouts.delete(userId);
-  }, 30000);
+    // Store game in database with 5 minute expiry
+    await blackjackGames.insertOne({
+      userId,
+      guildId,
+      gameState,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+    });
 
-  gameTimeouts.set(userId, timeout);
+    // Create buttons
+    const buttons = createGameButtons(gameState);
+
+    const embed = createBlackjackEmbed(gameState, true);
+    embed.setFooter({ text: '⏱️ You have 60 seconds to make each move' });
+
+    await interaction.editReply({
+      content: null,
+      embeds: [embed],
+      components: [buttons]
+    });
+
+    // Set initial 60-second timeout
+    setTimeout(async () => {
+      console.log(`⏱️ Auto-standing for user ${userId} due to initial timeout`);
+
+      const game = await blackjackGames.findOne({ userId, guildId });
+      if (!game) return;
+
+      const { stand, dealerPlay, determineWinner } = require('../utils/blackjackLogic');
+      const { handleGameEnd } = require('../handlers/blackjackButtons');
+
+      stand(game.gameState);
+
+      if (game.gameState.status === 'dealerTurn') {
+        dealerPlay(game.gameState);
+        determineWinner(game.gameState);
+
+        try {
+          await handleGameEnd(interaction, game.gameState, collections, false, true, true);
+        } catch (error) {
+          console.error('Error in auto-stand:', error);
+        }
+      }
+
+      await blackjackGames.deleteOne({ userId, guildId });
+    }, 60000);
+
+  } catch (error) {
+    await interaction.editReply({
+      content: '❌ Failed to start game. Please try again.',
+      components: []
+    });
+    throw error;
+  }
 }
 
 function createGameButtons(gameState) {
@@ -167,7 +180,6 @@ function createGameButtons(gameState) {
 }
 
 module.exports = { 
-  handleBlackjack, 
-  activeGames,
+  handleBlackjack,
   createGameButtons
 };

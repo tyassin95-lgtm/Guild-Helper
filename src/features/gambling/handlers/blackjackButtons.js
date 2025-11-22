@@ -1,29 +1,26 @@
-const { activeGames, createGameButtons } = require('../commands/blackjack');
+const { createGameButtons } = require('../commands/blackjack');
 const { hit, stand, doubleDown, split, dealerPlay, determineWinner, determineSplitWinner } = require('../utils/blackjackLogic');
 const { createBlackjackEmbed, createBlackjackResultEmbed } = require('../embeds/gameEmbeds');
 const { addBalance, processWin, processLoss, processPush, getBalance, subtractBalance } = require('../utils/balanceManager');
 const { calculateHandValue } = require('../utils/cardDeck');
 
-// Store timeouts for auto-stand
-const gameTimeouts = new Map();
-
 async function handleBlackjackButtons({ interaction, collections }) {
   const userId = interaction.user.id;
+  const guildId = interaction.guildId;
+  const { blackjackGames } = collections;
 
-  // Get active game
-  const gameData = activeGames.get(userId);
+  // Get active game from database
+  const gameDoc = await blackjackGames.findOne({ userId, guildId });
 
-  if (!gameData) {
-    return interaction.reply({
+  if (!gameDoc) {
+    return interaction.update({
       content: '❌ No active game found. Start a new game with `/blackjack`.',
-      flags: [64]
+      embeds: [],
+      components: []
     });
   }
 
-  const { gameState, guildId } = gameData;
-
-  // Clear existing timeout
-  clearGameTimeout(userId);
+  const gameState = gameDoc.gameState;
 
   const action = interaction.customId.split('_')[1];
 
@@ -44,17 +41,21 @@ async function handleBlackjackButtons({ interaction, collections }) {
           const { determineWinner } = require('../utils/blackjackLogic');
           determineWinner(gameState);
 
-          await handleGameEnd(interaction, gameState, collections);
-          activeGames.delete(userId);
+          await handleGameEnd(interaction, gameState, collections, true);
+          await blackjackGames.deleteOne({ userId, guildId });
         } else {
+          // Update game in database
+          await blackjackGames.updateOne(
+            { userId, guildId },
+            { $set: { gameState } }
+          );
+
           const embed = createBlackjackEmbed(gameState, true);
           embed.setDescription(`${embed.data.description}\n\n${statusMessage}`);
-          embed.setFooter({ text: '⏱️ 30 seconds to make your next move' });
+          embed.setFooter({ text: '⏱️ 60 seconds to make your next move' });
 
           const buttons = createGameButtons(gameState);
           await interaction.update({ embeds: [embed], components: [buttons] });
-
-          setGameTimeout(userId, interaction, gameState, collections);
         }
         break;
 
@@ -80,17 +81,22 @@ async function handleBlackjackButtons({ interaction, collections }) {
           }
 
           await handleGameEnd(interaction, gameState, collections, false, true);
-          activeGames.delete(userId);
+          await blackjackGames.deleteOne({ userId, guildId });
         } else if (gameState.activeHand === 'split') {
           statusMessage = `✋ **First hand complete!**\n\nNow playing your **split hand**...`;
+
+          // Update game in database
+          await blackjackGames.updateOne(
+            { userId, guildId },
+            { $set: { gameState } }
+          );
+
           const embed = createBlackjackEmbed(gameState, true);
           embed.setDescription(`${embed.data.description}\n\n${statusMessage}`);
-          embed.setFooter({ text: '⏱️ 30 seconds to make your next move' });
+          embed.setFooter({ text: '⏱️ 60 seconds to make your next move' });
 
           const buttons = createGameButtons(gameState);
           await interaction.update({ embeds: [embed], components: [buttons] });
-
-          setGameTimeout(userId, interaction, gameState, collections);
         }
         break;
 
@@ -98,9 +104,10 @@ async function handleBlackjackButtons({ interaction, collections }) {
         const balance = await getBalance({ userId, guildId, collections });
 
         if (balance.balance < gameState.betAmount) {
-          return interaction.reply({
+          return interaction.update({
             content: '❌ Insufficient balance to double down!',
-            flags: [64]
+            embeds: [],
+            components: []
           });
         }
 
@@ -120,8 +127,8 @@ async function handleBlackjackButtons({ interaction, collections }) {
           const { determineWinner } = require('../utils/blackjackLogic');
           determineWinner(gameState);
 
-          await handleGameEnd(interaction, gameState, collections);
-          activeGames.delete(userId);
+          await handleGameEnd(interaction, gameState, collections, true);
+          await blackjackGames.deleteOne({ userId, guildId });
         } else {
           const doubleEmbed = createBlackjackEmbed(gameState, true);
           doubleEmbed.setDescription(`${doubleEmbed.data.description}\n\n${statusMessage}\n\n*Dealer reveals hidden card and plays...*`);
@@ -133,7 +140,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
           determineWinner(gameState);
 
           await handleGameEnd(interaction, gameState, collections, false, true);
-          activeGames.delete(userId);
+          await blackjackGames.deleteOne({ userId, guildId });
         }
         break;
 
@@ -141,9 +148,10 @@ async function handleBlackjackButtons({ interaction, collections }) {
         const balanceForSplit = await getBalance({ userId, guildId, collections });
 
         if (balanceForSplit.balance < gameState.betAmount) {
-          return interaction.reply({
+          return interaction.update({
             content: '❌ Insufficient balance to split!',
-            flags: [64]
+            embeds: [],
+            components: []
           });
         }
 
@@ -153,71 +161,40 @@ async function handleBlackjackButtons({ interaction, collections }) {
 
         statusMessage = `✂️ **Split!** Your pair has been split into two hands.\n\nPlaying **first hand** now...`;
 
+        // Update game in database
+        await blackjackGames.updateOne(
+          { userId, guildId },
+          { $set: { gameState } }
+        );
+
         const embedAfterSplit = createBlackjackEmbed(gameState, true);
         embedAfterSplit.setDescription(`${embedAfterSplit.data.description}\n\n${statusMessage}`);
-        embedAfterSplit.setFooter({ text: '⏱️ 30 seconds to make your next move' });
+        embedAfterSplit.setFooter({ text: '⏱️ 60 seconds to make your next move' });
 
         const buttonsAfterSplit = createGameButtons(gameState);
         await interaction.update({ embeds: [embedAfterSplit], components: [buttonsAfterSplit] });
-
-        setGameTimeout(userId, interaction, gameState, collections);
         break;
     }
   } catch (error) {
     console.error('Blackjack button error:', error);
 
-    activeGames.delete(userId);
-    clearGameTimeout(userId);
+    await blackjackGames.deleteOne({ userId, guildId });
 
-    await interaction.reply({
-      content: `❌ Error: ${error.message}`,
-      flags: [64]
-    }).catch(() => {});
-  }
-}
-
-function setGameTimeout(userId, interaction, gameState, collections) {
-  const timeout = setTimeout(async () => {
-    console.log(`⏱️ Auto-standing for user ${userId} due to 30s timeout`);
-
-    stand(gameState);
-
-    if (gameState.status === 'dealerTurn') {
-      dealerPlay(gameState);
-
-      // If there's a split hand, determine both results
-      if (gameState.splitHand) {
-        determineSplitWinner(gameState);
-      } else {
-        determineWinner(gameState);
-      }
-
-      try {
-        await handleGameEnd(interaction, gameState, collections, false, true, true);
-      } catch (error) {
-        console.error('Error in auto-stand:', error);
-      }
+    try {
+      await interaction.update({
+        content: `❌ Error: ${error.message}`,
+        embeds: [],
+        components: []
+      });
+    } catch (e) {
+      console.error('Failed to update interaction:', e);
     }
-
-    activeGames.delete(userId);
-    gameTimeouts.delete(userId);
-  }, 30000);
-
-  gameTimeouts.set(userId, timeout);
-}
-
-function clearGameTimeout(userId) {
-  if (gameTimeouts.has(userId)) {
-    clearTimeout(gameTimeouts.get(userId));
-    gameTimeouts.delete(userId);
   }
 }
 
-async function handleGameEnd(interaction, gameState, collections, isReply = false, isEdit = false, isTimeout = false) {
+async function handleGameEnd(interaction, gameState, collections, isUpdate = false, isEdit = false, isTimeout = false) {
   const userId = gameState.userId;
-  const guildId = activeGames.get(userId)?.guildId;
-
-  clearGameTimeout(userId);
+  const guildId = interaction.guildId;
 
   // If split hand exists, process BOTH results
   if (gameState.splitHand && gameState.splitResult) {
@@ -235,11 +212,11 @@ async function handleGameEnd(interaction, gameState, collections, isReply = fals
   const resultEmbed = createBlackjackResultEmbed(gameState, newBalance.balance);
 
   if (isTimeout) {
-    resultEmbed.setFooter({ text: '⏱️ Game auto-completed (no action for 30 seconds)' });
+    resultEmbed.setFooter({ text: '⏱️ Game auto-completed (no action for 60 seconds)' });
   }
 
-  if (isReply) {
-    await interaction.reply({ embeds: [resultEmbed], components: [] });
+  if (isUpdate) {
+    await interaction.update({ embeds: [resultEmbed], components: [] });
   } else if (isEdit) {
     await interaction.editReply({ embeds: [resultEmbed], components: [] });
   } else {
@@ -279,7 +256,5 @@ async function processSingleHandResult(userId, guildId, betAmount, result, payou
 
 module.exports = { 
   handleBlackjackButtons,
-  handleGameEnd,
-  clearGameTimeout,
-  gameTimeouts
+  handleGameEnd
 };

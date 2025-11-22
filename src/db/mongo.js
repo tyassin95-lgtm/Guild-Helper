@@ -62,6 +62,7 @@ function getCollections(db = _db) {
     gamblingBalances: db.collection('gamblingBalances'),
     gamblingDailies: db.collection('gamblingDailies'),
     gamblingGames: db.collection('gamblingGames'),
+    blackjackGames: db.collection('blackjackGames'),
 
     // Trivia system
     triviaStats: db.collection('triviaStats'),
