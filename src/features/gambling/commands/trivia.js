@@ -45,7 +45,7 @@ async function handleTrivia({ interaction, collections }) {
   const currentQuestion = questions[0];
 
   // Create embed and buttons
-  const embed = createTriviaEmbed(currentQuestion, 0, 20, 0);
+  const embed = createTriviaEmbed(currentQuestion, 0, 10, 0);
   const buttons = createTriviaButtons(sessionId);
 
   await interaction.reply({
