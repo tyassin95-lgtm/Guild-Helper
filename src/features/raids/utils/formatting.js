@@ -1,4 +1,40 @@
-// src/features/raids/utils/formatting.js
+const CLASSES = {
+  // Pure Tank classes
+  'Guardian': { roles: ['tank'], weapons: 'Orb + Sword & Shield' },
+  'Crusader': { roles: ['tank'], weapons: 'Greatsword + Sword & Shield' },
+  'Templar': { roles: ['tank'], weapons: 'Wand/Tome + Sword & Shield' },
+  'Warden': { roles: ['tank'], weapons: 'Longbow + Sword & Shield' },
+  'Disciple': { roles: ['tank'], weapons: 'Staff + Sword & Shield' },
+  'Paladin': { roles: ['tank'], weapons: 'Greatsword + Wand/Tome' },
+  'Berserker': { roles: ['tank'], weapons: 'Daggers + Sword & Shield' },
+  'Raider': { roles: ['tank'], weapons: 'Sword & Shield + Crossbow' },
+
+  // Flex classes (can play multiple roles)
+  'Oracle': { roles: ['healer', 'dps'], weapons: 'Orb + Wand/Tome' },
+  'Seeker': { roles: ['healer', 'dps'], weapons: 'Longbow + Wand/Tome' },
+
+  // Pure DPS classes
+  'Fury': { roles: ['dps'], weapons: 'Wand/Tome + Crossbow' },
+  'Battleweaver': { roles: ['dps'], weapons: 'Staff + Crossbow' },
+  'Scout': { roles: ['dps'], weapons: 'Longbow + Crossbow' },
+  'Scryer': { roles: ['dps'], weapons: 'Orb + Longbow' },
+  'Ranger': { roles: ['dps'], weapons: 'Longbow + Greatsword' },
+  'Crucifix': { roles: ['dps'], weapons: 'Orb + Crossbow' },
+  'Invocator': { roles: ['dps'], weapons: 'Staff + Wand/Tome' },
+  'Sentinel': { roles: ['dps'], weapons: 'Staff + Longsword' },
+  'Liberator': { roles: ['dps'], weapons: 'Staff + Longbow' },
+  'Enigma': { roles: ['dps'], weapons: 'Orb + Staff' },
+  'Ravager': { roles: ['dps'], weapons: 'Greatsword + Daggers' },
+  'Darkblighter': { roles: ['dps'], weapons: 'Daggers + Wand/Tome' },
+  'Scorpion': { roles: ['dps'], weapons: 'Daggers + Crossbow' },
+  'Infiltrator': { roles: ['dps'], weapons: 'Daggers + Longbow' },
+  'Spellblade': { roles: ['dps'], weapons: 'Staff + Daggers' },
+  'Lunarch': { roles: ['dps'], weapons: 'Orb + Daggers' },
+  'Polaris': { roles: ['dps'], weapons: 'Orb + Spear' },
+  'Outrider': { roles: ['dps'], weapons: 'Greatsword + Crossbow' },
+  'Justicar': { roles: ['dps'], weapons: 'Orb + Greatsword' }
+};
+
 const roleEmojis = {
   tank: '🛡️',
   healer: '💚',
@@ -19,10 +55,7 @@ const roleOrder = {
 async function formatAttendeeList(attendees, guildId, partyPlayers, client) {
   if (attendees.length === 0) return '';
 
-  // Fetch guild to get member names
   const guild = await client.guilds.fetch(guildId);
-
-  // Build attendee data
   const attendeeData = [];
 
   for (const attendee of attendees) {
@@ -31,41 +64,29 @@ async function formatAttendeeList(attendees, guildId, partyPlayers, client) {
       const member = await guild.members.fetch(attendee.userId);
       displayName = member.displayName;
     } catch (err) {
-      // User not found, use Unknown
+      // User not found
     }
 
     attendeeData.push({
       userId: attendee.userId,
       displayName,
+      class: attendee.class || null,
       role: attendee.role || null,
       experience: attendee.experience || null,
       cp: attendee.cp || null
     });
   }
 
-  // Sort attendees: by role first (tank -> healer -> dps), then by CP descending
   attendeeData.sort((a, b) => {
-    // Players with no role go last
     if (!a.role && b.role) return 1;
     if (a.role && !b.role) return -1;
     if (!a.role && !b.role) return 0;
-
-    // Sort by role
     const roleComparison = roleOrder[a.role] - roleOrder[b.role];
     if (roleComparison !== 0) return roleComparison;
-
-    // Sort by CP descending within same role
     return (b.cp || 0) - (a.cp || 0);
   });
 
-  // Group by role
-  const grouped = {
-    tank: [],
-    healer: [],
-    dps: [],
-    noInfo: []
-  };
-
+  const grouped = { tank: [], healer: [], dps: [], noInfo: [] };
   for (const attendee of attendeeData) {
     if (!attendee.role) {
       grouped.noInfo.push(attendee);
@@ -74,37 +95,35 @@ async function formatAttendeeList(attendees, guildId, partyPlayers, client) {
     }
   }
 
-  // Build formatted string
   let result = '';
 
-  // Tanks
   if (grouped.tank.length > 0) {
     result += `   ${roleEmojis.tank} **Tanks (${grouped.tank.length}):**\n`;
     for (const a of grouped.tank) {
       const expEmoji = a.experience ? experienceEmojis[a.experience] : '';
-      result += `      ├ ${a.displayName} ${expEmoji} (${a.cp || '?'} CP)\n`;
+      const classInfo = a.class ? ` [${a.class}]` : '';
+      result += `      ├ ${a.displayName}${classInfo} ${expEmoji} (${a.cp || '?'} CP)\n`;
     }
   }
 
-  // Healers
   if (grouped.healer.length > 0) {
     result += `   ${roleEmojis.healer} **Healers (${grouped.healer.length}):**\n`;
     for (const a of grouped.healer) {
       const expEmoji = a.experience ? experienceEmojis[a.experience] : '';
-      result += `      ├ ${a.displayName} ${expEmoji} (${a.cp || '?'} CP)\n`;
+      const classInfo = a.class ? ` [${a.class}]` : '';
+      result += `      ├ ${a.displayName}${classInfo} ${expEmoji} (${a.cp || '?'} CP)\n`;
     }
   }
 
-  // DPS
   if (grouped.dps.length > 0) {
     result += `   ${roleEmojis.dps} **DPS (${grouped.dps.length}):**\n`;
     for (const a of grouped.dps) {
       const expEmoji = a.experience ? experienceEmojis[a.experience] : '';
-      result += `      ├ ${a.displayName} ${expEmoji} (${a.cp || '?'} CP)\n`;
+      const classInfo = a.class ? ` [${a.class}]` : '';
+      result += `      ├ ${a.displayName}${classInfo} ${expEmoji} (${a.cp || '?'} CP)\n`;
     }
   }
 
-  // No info
   if (grouped.noInfo.length > 0) {
     result += `   👤 **No Signup Info (${grouped.noInfo.length}):**\n`;
     for (const a of grouped.noInfo) {
@@ -115,4 +134,4 @@ async function formatAttendeeList(attendees, guildId, partyPlayers, client) {
   return result;
 }
 
-module.exports = { formatAttendeeList };
+module.exports = { formatAttendeeList, CLASSES, roleEmojis, experienceEmojis, roleOrder };

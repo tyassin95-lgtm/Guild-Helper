@@ -1,5 +1,6 @@
 const { buildRaidEmbed } = require('../utils/raidEmbed');
 const { ObjectId } = require('mongodb');
+const { CLASSES } = require('../utils/formatting');
 const { 
   ActionRowBuilder, 
   ButtonBuilder, 
@@ -15,7 +16,6 @@ async function handleRaidButtons({ interaction, collections }) {
   const { raidEvents, partyPlayers } = collections;
   const customId = interaction.customId;
 
-  // Handle temp raid setup buttons
   if (customId.startsWith('raid_add_time:')) {
     return handleAddTimeButton({ interaction, collections });
   }
@@ -28,7 +28,6 @@ async function handleRaidButtons({ interaction, collections }) {
     return handleCancelButton({ interaction, collections });
   }
 
-  // Handle join/leave buttons on posted raids
   if (customId.startsWith('raid_join:')) {
     return handleJoinButton({ interaction, collections });
   }
@@ -86,7 +85,6 @@ async function handleAddTimeButton({ interaction, collections }) {
 
 async function handleFinishButton({ interaction, collections }) {
   const { raidEvents } = collections;
-
   const tempRaidId = interaction.customId.split(':')[1];
 
   if (!global.tempRaids || !global.tempRaids.has(tempRaidId)) {
@@ -105,7 +103,6 @@ async function handleFinishButton({ interaction, collections }) {
     });
   }
 
-  // Reply first to prevent "error occurred" message
   await interaction.update({
     content: '⏳ Creating raid event...',
     embeds: [],
@@ -113,41 +110,34 @@ async function handleFinishButton({ interaction, collections }) {
   });
 
   try {
-    // Get the actual channel where the raid should be posted
     const channel = await interaction.client.channels.fetch(tempRaid.channelId);
 
-    // Save to database first to get the _id
     const raidEvent = {
       ...tempRaid,
-      messageId: 'placeholder', // Temporary placeholder
+      messageId: 'placeholder',
       createdAt: new Date(),
       active: true,
-      closed: false // New field to track if raid is closed
+      closed: false
     };
 
     const result = await raidEvents.insertOne(raidEvent);
     raidEvent._id = result.insertedId;
 
-    // Now build the embed with the real _id
     const { embed, components } = await buildRaidEmbed(raidEvent, collections, interaction.client);
 
-    // Post with @everyone mention
     const message = await channel.send({
       content: '@everyone',
       embeds: [embed],
       components
     });
 
-    // Update the database with the actual messageId
     await raidEvents.updateOne(
       { _id: result.insertedId },
       { $set: { messageId: message.id } }
     );
 
-    // Clean up temp data
     global.tempRaids.delete(tempRaidId);
 
-    // Update the setup message
     await interaction.followUp({
       content: '✅ Raid event posted successfully!',
       flags: [64]
@@ -177,7 +167,6 @@ async function handleCancelButton({ interaction, collections }) {
 async function handleJoinButton({ interaction, collections }) {
   const { raidEvents } = collections;
 
-  // Parse customId: raid_join:OBJECTID:TIMESTAMP
   const parts = interaction.customId.split(':');
   const raidIdStr = parts[1];
   const timeSlotId = parts[2];
@@ -204,7 +193,6 @@ async function handleJoinButton({ interaction, collections }) {
     });
   }
 
-  // Check if raid is closed
   if (raidEvent.closed) {
     return interaction.reply({
       content: '❌ This raid event is closed and no longer accepting signups.',
@@ -221,7 +209,6 @@ async function handleJoinButton({ interaction, collections }) {
     });
   }
 
-  // Check if user is already signed up
   const existingAttendee = slot.attendees.find(a => a.userId === userId);
 
   if (existingAttendee) {
@@ -233,7 +220,6 @@ async function handleJoinButton({ interaction, collections }) {
 
     await interaction.deferUpdate();
 
-    // Refresh and update the embed
     const updatedRaid = await raidEvents.findOne({ _id: new ObjectId(raidIdStr) });
     const { embed, components } = await buildRaidEmbed(updatedRaid, collections, interaction.client);
 
@@ -245,7 +231,6 @@ async function handleJoinButton({ interaction, collections }) {
     return;
   }
 
-  // Check capacity
   if (slot.attendees.length >= slot.maxCapacity) {
     return interaction.reply({
       content: '❌ This time slot is full!',
@@ -253,69 +238,39 @@ async function handleJoinButton({ interaction, collections }) {
     });
   }
 
-  // Show signup form with select menus
+  // Show class selection dropdown
   const embed = new EmbedBuilder()
     .setColor(0x5865F2)
     .setTitle('🗡️ Raid Signup')
-    .setDescription('Please select your role, experience level, and combat power range to sign up for this raid time slot.');
+    .setDescription('Select your class to continue with signup.');
 
-  const roleSelect = new StringSelectMenuBuilder()
-    .setCustomId(`raid_signup_role:${raidIdStr}:${timeSlotId}`)
-    .setPlaceholder('Select your role')
-    .addOptions([
-      {
-        label: 'Tank',
-        description: 'Front-line defender',
-        value: 'tank',
-        emoji: '🛡️'
-      },
-      {
-        label: 'Healer',
-        description: 'Support and healing',
-        value: 'healer',
-        emoji: '💚'
-      },
-      {
-        label: 'DPS',
-        description: 'Damage dealer',
-        value: 'dps',
-        emoji: '⚔️'
-      }
-    ]);
+  const classOptions = [];
 
-  const experienceSelect = new StringSelectMenuBuilder()
-    .setCustomId(`raid_signup_exp:${raidIdStr}:${timeSlotId}`)
-    .setPlaceholder('Select your experience level')
-    .addOptions([
-      {
-        label: 'Experienced',
-        description: 'Know mechanics and strategies',
-        value: 'experienced',
-        emoji: '⭐'
-      },
-      {
-        label: 'Learning',
-        description: 'New or still learning',
-        value: 'learning',
-        emoji: '📚'
-      }
-    ]);
+  // Add all classes
+  for (const [className, classData] of Object.entries(CLASSES)) {
+    // Use first role for emoji (or show flex icon for multi-role)
+    let emoji = '⚔️'; // Default to DPS
+    if (classData.roles.includes('tank')) emoji = '🛡️';
+    else if (classData.roles.includes('healer')) emoji = '💚';
 
-  const cpSelect = new StringSelectMenuBuilder()
-    .setCustomId(`raid_signup_cp:${raidIdStr}:${timeSlotId}`)
-    .setPlaceholder('Select your combat power range')
-    .addOptions([
-      { label: '8000+ CP', value: '8000', emoji: '🔥' },
-      { label: '7750-7999 CP', value: '7875', emoji: '💎' },
-      { label: '7500-7749 CP', value: '7625', emoji: '👑' },
-      { label: '7250-7499 CP', value: '7375', emoji: '💪' },
-      { label: '7000-7249 CP', value: '7125', emoji: '⚡' },
-      { label: '6750-6999 CP', value: '6875', emoji: '✨' },
-      { label: '6500-6749 CP', value: '6625', emoji: '💫' },
-      { label: '6250-6499 CP', value: '6375', emoji: '🌟' },
-      { label: '6000-6249 CP', value: '6125', emoji: '⭐' },
-      { label: 'Under 6000 CP', value: '5500', emoji: '📈' }
-    ]);
+    // For flex classes, show that they're flexible
+    const isFlexClass = classData.roles.length > 1;
+    const description = isFlexClass 
+      ? `${classData.weapons} [Flex]` 
+      : classData.weapons;
+
+    classOptions.push({
+      label: className,
+      value: className,
+      description: description.substring(0, 100), // Discord limit
+      emoji: emoji
+    });
+  }
+
+  const classSelect = new StringSelectMenuBuilder()
+    .setCustomId(`raid_signup_class:${raidIdStr}:${timeSlotId}`)
+    .setPlaceholder('Select your class')
+    .addOptions(classOptions.slice(0, 25));
 
   const cancelButton = new ButtonBuilder()
     .setCustomId(`raid_signup_cancel:${raidIdStr}:${timeSlotId}`)
@@ -323,21 +278,28 @@ async function handleJoinButton({ interaction, collections }) {
     .setStyle(ButtonStyle.Danger)
     .setEmoji('❌');
 
+  const components = [new ActionRowBuilder().addComponents(classSelect)];
+
+  // If more than 25 classes, add second menu
+  if (classOptions.length > 25) {
+    const classSelect2 = new StringSelectMenuBuilder()
+      .setCustomId(`raid_signup_class2:${raidIdStr}:${timeSlotId}`)
+      .setPlaceholder('More classes...')
+      .addOptions(classOptions.slice(25, Math.min(50, classOptions.length)));
+    components.push(new ActionRowBuilder().addComponents(classSelect2));
+  }
+
+  components.push(new ActionRowBuilder().addComponents(cancelButton));
+
   await interaction.reply({
     embeds: [embed],
-    components: [
-      new ActionRowBuilder().addComponents(roleSelect),
-      new ActionRowBuilder().addComponents(experienceSelect),
-      new ActionRowBuilder().addComponents(cpSelect),
-      new ActionRowBuilder().addComponents(cancelButton)
-    ],
-    flags: [64] // Ephemeral
+    components,
+    flags: [64]
   });
 }
 
 async function handleLeaveAllButton({ interaction, collections }) {
   const { raidEvents } = collections;
-
   const raidIdStr = interaction.customId.split(':')[1];
   const userId = interaction.user.id;
 
@@ -364,7 +326,6 @@ async function handleLeaveAllButton({ interaction, collections }) {
     });
   }
 
-  // Remove user from all time slots
   for (const slot of raidEvent.timeSlots) {
     await raidEvents.updateOne(
       { _id: new ObjectId(raidIdStr), 'timeSlots.id': slot.id },
@@ -372,7 +333,6 @@ async function handleLeaveAllButton({ interaction, collections }) {
     );
   }
 
-  // Refresh and update the embed
   const updatedRaid = await raidEvents.findOne({ _id: new ObjectId(raidIdStr) });
   const { embed, components } = await buildRaidEmbed(updatedRaid, collections, interaction.client);
 
@@ -384,8 +344,12 @@ async function handleLeaveAllButton({ interaction, collections }) {
 
 async function handleCloseButton({ interaction, collections }) {
   const { raidEvents } = collections;
-
   const raidIdStr = interaction.customId.split(':')[1];
+
+  // Check if interaction is still valid
+  if (interaction.replied || interaction.deferred) {
+    return;
+  }
 
   await interaction.deferUpdate();
 
@@ -410,7 +374,6 @@ async function handleCloseButton({ interaction, collections }) {
     });
   }
 
-  // Toggle closed status
   const newClosedStatus = !raidEvent.closed;
 
   await raidEvents.updateOne(
@@ -418,7 +381,6 @@ async function handleCloseButton({ interaction, collections }) {
     { $set: { closed: newClosedStatus } }
   );
 
-  // Refresh and update the embed
   const updatedRaid = await raidEvents.findOne({ _id: new ObjectId(raidIdStr) });
   const { embed, components } = await buildRaidEmbed(updatedRaid, collections, interaction.client);
 
