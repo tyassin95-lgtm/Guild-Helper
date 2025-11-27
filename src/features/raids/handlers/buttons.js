@@ -40,6 +40,10 @@ async function handleRaidButtons({ interaction, collections }) {
     return handleClassButton({ interaction, collections });
   }
 
+  if (customId.startsWith('raid_signup_more_classes:')) {
+    return handleMoreClassesButton({ interaction, collections });
+  }
+
   if (customId.startsWith('raid_leave_all:')) {
     return handleLeaveAllButton({ interaction, collections });
   }
@@ -321,48 +325,80 @@ async function showClassSelection(interaction, signupData, availableClasses, col
     .setColor(0x5865F2)
     .setTitle('🗡️ Raid Signup')
     .setDescription(`**Role Selected:** ${roleEmojis[signupData.role]} ${signupData.role.charAt(0).toUpperCase() + signupData.role.slice(1)}\n\nSelect your class:`)
-    .setFooter({ text: 'Classes are grouped by weapon combinations' });
+    .setFooter({ text: `Page 1 of ${Math.ceil(availableClasses.length / 20)} • Classes grouped by weapon combinations` });
 
-  // Create class buttons - max 5 per row, max 5 rows (25 buttons total)
+  // Create class buttons - max 5 per row, max 4 rows per page (20 buttons per page)
   const classButtons = [];
 
   for (const className of availableClasses) {
     const classData = CLASSES[className];
     const isFlexClass = classData.roles.length > 1;
 
-    // Create button
+    // Shorten weapon names for button labels
+    const shortWeapons = classData.weapons
+      .replace('Sword & Shield', 'SnS')
+      .replace('Wand/Tome', 'Wand')
+      .replace('Longbow', 'Bow')
+      .replace('Greatsword', 'GS')
+      .replace('Crossbow', 'XBow')
+      .replace('Daggers', 'Dagger');
+
+    // Create button label with class name and weapons
+    const buttonLabel = `${className} (${shortWeapons})`;
+
+    // Create button - truncate if too long (Discord limit is 80 chars)
     const button = new ButtonBuilder()
       .setCustomId(`raid_signup_class_btn:${signupData.raidId}:${signupData.slotId}:${className}`)
-      .setLabel(isFlexClass ? `${className} 🔄` : className)
+      .setLabel(buttonLabel.length > 80 ? `${className}${isFlexClass ? ' 🔄' : ''}` : buttonLabel)
       .setStyle(ButtonStyle.Secondary);
 
     classButtons.push(button);
   }
 
-  // Split into rows (5 buttons per row)
+  // Split into rows (5 buttons per row, max 4 rows = 20 buttons per page)
   const rows = [];
-  for (let i = 0; i < classButtons.length; i += 5) {
-    rows.push(new ActionRowBuilder().addComponents(classButtons.slice(i, i + 5)));
+  const maxButtonsPerPage = 20;
+  const buttonsToShow = classButtons.slice(0, maxButtonsPerPage);
+
+  for (let i = 0; i < buttonsToShow.length; i += 5) {
+    rows.push(new ActionRowBuilder().addComponents(buttonsToShow.slice(i, i + 5)));
   }
 
-  // Add cancel button in last row
-  const cancelButton = new ButtonBuilder()
-    .setCustomId(`raid_signup_cancel:${signupData.raidId}:${signupData.slotId}`)
-    .setLabel('Cancel')
-    .setStyle(ButtonStyle.Danger)
-    .setEmoji('❌');
+  // If more than 20 classes, add "More Classes" button
+  if (availableClasses.length > maxButtonsPerPage) {
+    const moreButton = new ButtonBuilder()
+      .setCustomId(`raid_signup_more_classes:${signupData.raidId}:${signupData.slotId}:${signupData.role}:1`)
+      .setLabel(`More Classes (${availableClasses.length - maxButtonsPerPage} more)`)
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('➡️');
 
-  if (rows.length < 5) {
-    const lastRow = rows[rows.length - 1];
-    if (lastRow.components.length < 5) {
-      lastRow.addComponents(cancelButton);
-    } else {
-      rows.push(new ActionRowBuilder().addComponents(cancelButton));
-    }
+    const cancelButton = new ButtonBuilder()
+      .setCustomId(`raid_signup_cancel:${signupData.raidId}:${signupData.slotId}`)
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('❌');
+
+    rows.push(new ActionRowBuilder().addComponents(moreButton, cancelButton));
   } else {
-    // If we're at max rows, replace last button with cancel
-    const lastRow = rows[rows.length - 1];
-    lastRow.components[lastRow.components.length - 1] = cancelButton;
+    // Add cancel button in last row if under 20 classes
+    const cancelButton = new ButtonBuilder()
+      .setCustomId(`raid_signup_cancel:${signupData.raidId}:${signupData.slotId}`)
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('❌');
+
+    if (rows.length < 5) {
+      const lastRow = rows[rows.length - 1];
+      if (lastRow.components.length < 5) {
+        lastRow.addComponents(cancelButton);
+      } else {
+        rows.push(new ActionRowBuilder().addComponents(cancelButton));
+      }
+    } else {
+      // If we're at max rows, replace last button with cancel
+      const lastRow = rows[rows.length - 1];
+      lastRow.components[lastRow.components.length - 1] = cancelButton;
+    }
   }
 
   await interaction.update({
@@ -393,6 +429,117 @@ async function handleClassButton({ interaction, collections }) {
 
   // Now show experience and CP selection
   await updateSignupMessage(interaction, signupData, collections);
+}
+
+async function handleMoreClassesButton({ interaction, collections }) {
+  const parts = interaction.customId.split(':');
+  const raidIdStr = parts[1];
+  const timeSlotId = parts[2];
+  const role = parts[3];
+  const currentPage = parseInt(parts[4]);
+  const userId = interaction.user.id;
+
+  const key = `${userId}:${raidIdStr}:${timeSlotId}`;
+  let signupData = global.raidSignupData.get(key);
+
+  if (!signupData) {
+    return interaction.reply({
+      content: '❌ Signup session expired. Please start over.',
+      flags: [64]
+    });
+  }
+
+  // Get all classes for this role
+  const availableClasses = getClassesForRole(role);
+
+  // Calculate pagination
+  const maxButtonsPerPage = 20;
+  const totalPages = Math.ceil(availableClasses.length / maxButtonsPerPage);
+  const nextPage = currentPage + 1;
+  const startIdx = currentPage * maxButtonsPerPage;
+  const endIdx = Math.min(startIdx + maxButtonsPerPage, availableClasses.length);
+  const classesOnPage = availableClasses.slice(startIdx, endIdx);
+
+  const roleEmojis = { tank: '🛡️', healer: '💚', dps: '⚔️' };
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle('🗡️ Raid Signup')
+    .setDescription(`**Role Selected:** ${roleEmojis[signupData.role]} ${signupData.role.charAt(0).toUpperCase() + signupData.role.slice(1)}\n\nSelect your class:`)
+    .setFooter({ text: `Page ${nextPage} of ${totalPages} • Classes grouped by weapon combinations` });
+
+  // Create class buttons for this page
+  const classButtons = [];
+
+  for (const className of classesOnPage) {
+    const classData = CLASSES[className];
+    const isFlexClass = classData.roles.length > 1;
+
+    // Shorten weapon names for button labels
+    const shortWeapons = classData.weapons
+      .replace('Sword & Shield', 'SnS')
+      .replace('Wand/Tome', 'Wand')
+      .replace('Longbow', 'Bow')
+      .replace('Greatsword', 'GS')
+      .replace('Crossbow', 'XBow')
+      .replace('Daggers', 'Dagger');
+
+    const buttonLabel = `${className} (${shortWeapons})`;
+
+    const button = new ButtonBuilder()
+      .setCustomId(`raid_signup_class_btn:${signupData.raidId}:${signupData.slotId}:${className}`)
+      .setLabel(buttonLabel.length > 80 ? `${className}${isFlexClass ? ' 🔄' : ''}` : buttonLabel)
+      .setStyle(ButtonStyle.Secondary);
+
+    classButtons.push(button);
+  }
+
+  // Split into rows
+  const rows = [];
+  for (let i = 0; i < classButtons.length; i += 5) {
+    rows.push(new ActionRowBuilder().addComponents(classButtons.slice(i, i + 5)));
+  }
+
+  // Add navigation buttons
+  const navButtons = [];
+
+  // Back button
+  if (currentPage > 0) {
+    navButtons.push(
+      new ButtonBuilder()
+        .setCustomId(`raid_signup_more_classes:${raidIdStr}:${timeSlotId}:${role}:${currentPage - 1}`)
+        .setLabel('Previous Page')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('⬅️')
+    );
+  }
+
+  // Next button (if there are more pages)
+  if (endIdx < availableClasses.length) {
+    navButtons.push(
+      new ButtonBuilder()
+        .setCustomId(`raid_signup_more_classes:${raidIdStr}:${timeSlotId}:${role}:${nextPage}`)
+        .setLabel(`More Classes (${availableClasses.length - endIdx} more)`)
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('➡️')
+    );
+  }
+
+  // Cancel button
+  navButtons.push(
+    new ButtonBuilder()
+      .setCustomId(`raid_signup_cancel:${signupData.raidId}:${signupData.slotId}`)
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('❌')
+  );
+
+  rows.push(new ActionRowBuilder().addComponents(navButtons));
+
+  await interaction.update({
+    embeds: [embed],
+    components: rows
+  });
 }
 
 async function handleLeaveAllButton({ interaction, collections }) {

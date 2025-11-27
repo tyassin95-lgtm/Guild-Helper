@@ -8,6 +8,7 @@ const CLASSES = {
   'Paladin': { roles: ['tank'], weapons: 'Greatsword + Wand/Tome' },
   'Berserker': { roles: ['tank'], weapons: 'Daggers + Sword & Shield' },
   'Raider': { roles: ['tank'], weapons: 'Sword & Shield + Crossbow' },
+  'Steelheart': { roles: ['tank'], weapons: 'Spear + Sword & Shield' },
 
   // Flex classes (can play multiple roles)
   'Oracle': { roles: ['healer', 'dps'], weapons: 'Orb + Wand/Tome' },
@@ -30,9 +31,15 @@ const CLASSES = {
   'Infiltrator': { roles: ['dps'], weapons: 'Daggers + Longbow' },
   'Spellblade': { roles: ['dps'], weapons: 'Staff + Daggers' },
   'Lunarch': { roles: ['dps'], weapons: 'Orb + Daggers' },
-  'Polaris': { roles: ['dps'], weapons: 'Orb + Spear' },
+  'Polaris': { roles: ['dps'], weapons: 'Spear + Orb' },
   'Outrider': { roles: ['dps'], weapons: 'Greatsword + Crossbow' },
-  'Justicar': { roles: ['dps'], weapons: 'Orb + Greatsword' }
+  'Justicar': { roles: ['dps'], weapons: 'Orb + Greatsword' },
+  'Eradicator': { roles: ['dps'], weapons: 'Spear + Staff' },
+  'Cavalier': { roles: ['dps'], weapons: 'Spear + Crossbow' },
+  'Shadowdancer': { roles: ['dps'], weapons: 'Spear + Daggers' },
+  'Gladiator': { roles: ['dps'], weapons: 'Greatsword + Spear' },
+  'Impaler': { roles: ['dps'], weapons: 'Spear + Longbow' },
+  'Voidlance': { roles: ['dps'], weapons: 'Spear + Wand/Tome' }
 };
 
 const roleEmojis = {
