@@ -52,6 +52,23 @@ const roleOrder = {
   dps: 3
 };
 
+/**
+ * Get all classes that can play a specific role
+ * This includes flex classes (Oracle, Seeker) in both healer and dps
+ */
+function getClassesForRole(role) {
+  const classes = [];
+
+  for (const [className, classData] of Object.entries(CLASSES)) {
+    if (classData.roles.includes(role)) {
+      classes.push(className);
+    }
+  }
+
+  // Sort alphabetically for consistent display
+  return classes.sort();
+}
+
 async function formatAttendeeList(attendees, guildId, partyPlayers, client) {
   if (attendees.length === 0) return '';
 
@@ -134,4 +151,4 @@ async function formatAttendeeList(attendees, guildId, partyPlayers, client) {
   return result;
 }
 
-module.exports = { formatAttendeeList, CLASSES, roleEmojis, experienceEmojis, roleOrder };
+module.exports = { formatAttendeeList, CLASSES, roleEmojis, experienceEmojis, roleOrder, getClassesForRole };

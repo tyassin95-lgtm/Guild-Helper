@@ -8,13 +8,8 @@ if (!global.raidSignupData) global.raidSignupData = new Map();
 async function handleRaidSelects({ interaction, collections }) {
   const customId = interaction.customId;
 
-  if (customId.startsWith('raid_signup_class:') || customId.startsWith('raid_signup_class2:')) {
-    return handleClassSelect({ interaction, collections });
-  }
-
-  if (customId.startsWith('raid_signup_role:')) {
-    return handleRoleSelect({ interaction, collections });
-  }
+  // We no longer need class selection handlers since we use buttons
+  // We only need experience and CP selection handlers
 
   if (customId.startsWith('raid_signup_exp:')) {
     return handleExperienceSelect({ interaction, collections });
@@ -23,122 +18,6 @@ async function handleRaidSelects({ interaction, collections }) {
   if (customId.startsWith('raid_signup_cp:')) {
     return handleCPSelect({ interaction, collections });
   }
-}
-
-async function handleClassSelect({ interaction, collections }) {
-  const parts = interaction.customId.split(':');
-  const raidIdStr = parts[1];
-  const timeSlotId = parts[2];
-  const userId = interaction.user.id;
-  const selectedClass = interaction.values[0];
-
-  const key = `${userId}:${raidIdStr}:${timeSlotId}`;
-  let signupData = global.raidSignupData.get(key) || {
-    raidId: raidIdStr,
-    slotId: timeSlotId,
-    class: null,
-    role: null,
-    experience: null,
-    cp: null
-  };
-
-  signupData.class = selectedClass;
-
-  // Get available roles for this class
-  const classData = CLASSES[selectedClass];
-  const availableRoles = classData ? classData.roles : [];
-
-  // If class only has one role, auto-assign it
-  if (availableRoles.length === 1) {
-    signupData.role = availableRoles[0];
-    global.raidSignupData.set(key, signupData);
-    await updateSignupMessage(interaction, signupData, collections);
-  } else {
-    // Multiple roles available - let user choose
-    global.raidSignupData.set(key, signupData);
-    await showRoleSelection(interaction, signupData, availableRoles, collections);
-  }
-}
-
-async function showRoleSelection(interaction, signupData, availableRoles, collections) {
-  const { EmbedBuilder, StringSelectMenuBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
-  const roleEmojis = { tank: '🛡️', healer: '💚', dps: '⚔️' };
-  const classWeapons = CLASSES[signupData.class]?.weapons;
-
-  const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle('🗡️ Raid Signup')
-    .setDescription(`You selected **${signupData.class}**${classWeapons ? ` (${classWeapons})` : ''}\n\nThis class can play multiple roles. Choose which role you'll play:`)
-    .addFields([
-      { 
-        name: 'Class', 
-        value: `${signupData.class}\n*${classWeapons || 'N/A'}*`, 
-        inline: true 
-      },
-      { 
-        name: 'Role', 
-        value: '❓ Choose below', 
-        inline: true 
-      }
-    ]);
-
-  const roleOptions = [];
-  for (const role of availableRoles) {
-    const emoji = roleEmojis[role];
-    const label = role.charAt(0).toUpperCase() + role.slice(1);
-    roleOptions.push({
-      label: label,
-      value: role,
-      emoji: emoji
-    });
-  }
-
-  const roleSelect = new StringSelectMenuBuilder()
-    .setCustomId(`raid_signup_role:${signupData.raidId}:${signupData.slotId}`)
-    .setPlaceholder('Select your role')
-    .addOptions(roleOptions);
-
-  const cancelButton = new ButtonBuilder()
-    .setCustomId(`raid_signup_cancel:${signupData.raidId}:${signupData.slotId}`)
-    .setLabel('Cancel')
-    .setStyle(ButtonStyle.Danger)
-    .setEmoji('❌');
-
-  await interaction.update({
-    embeds: [embed],
-    components: [
-      new ActionRowBuilder().addComponents(roleSelect),
-      new ActionRowBuilder().addComponents(cancelButton)
-    ]
-  });
-}
-
-async function handleRoleSelect({ interaction, collections }) {
-  const parts = interaction.customId.split(':');
-  const raidIdStr = parts[1];
-  const timeSlotId = parts[2];
-  const userId = interaction.user.id;
-  const selectedRole = interaction.values[0];
-
-  const key = `${userId}:${raidIdStr}:${timeSlotId}`;
-  let signupData = global.raidSignupData.get(key);
-
-  if (!signupData) {
-    // Check if already replied
-    if (!interaction.replied && !interaction.deferred) {
-      return interaction.reply({
-        content: '❌ Signup session expired. Please start over.',
-        flags: [64]
-      });
-    }
-    return;
-  }
-
-  signupData.role = selectedRole;
-  global.raidSignupData.set(key, signupData);
-
-  await updateSignupMessage(interaction, signupData, collections);
 }
 
 async function handleExperienceSelect({ interaction, collections }) {
@@ -281,16 +160,16 @@ async function updateSignupMessage(interaction, signupData, collections) {
     .setDescription('Fill in all fields to complete your signup.')
     .addFields([
       { 
-        name: 'Class', 
-        value: signupData.class 
-          ? `${signupData.class}${classWeapons ? `\n*${classWeapons}*` : ''}` 
+        name: 'Role', 
+        value: signupData.role 
+          ? `${roleEmoji} ${signupData.role.charAt(0).toUpperCase() + signupData.role.slice(1)}` 
           : '❓ Not selected', 
         inline: true 
       },
       { 
-        name: 'Role', 
-        value: signupData.role 
-          ? `${roleEmoji} ${signupData.role.charAt(0).toUpperCase() + signupData.role.slice(1)}` 
+        name: 'Class', 
+        value: signupData.class 
+          ? `${signupData.class}${classWeapons ? `\n*${classWeapons}*` : ''}` 
           : '❓ Not selected', 
         inline: true 
       },
