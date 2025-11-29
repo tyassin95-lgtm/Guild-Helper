@@ -57,7 +57,7 @@ class StreamServer {
 
       // Create a new passthrough with MINIMAL buffering for low latency
       const listenerStream = new PassThrough({
-        highWaterMark: 16384 // 16KB buffer (reduced from 512KB)
+        highWaterMark: 16384 // 16KB buffer
       });
 
       // Track listener
@@ -67,14 +67,24 @@ class StreamServer {
 
       console.log(`[StreamServer] 📊 Active Opus listeners for guild ${guildId}: ${streamData.opusListeners.size}`);
 
-      // Pipe the stream
-      streamData.opusStream.pipe(listenerStream, { end: false });
+      // CRITICAL FIX: Don't pipe old data, only new data from this point forward
+      // We track when this listener connected and only send data after that
+      let shouldStream = false;
+
+      const dataHandler = (chunk) => {
+        if (!shouldStream) {
+          shouldStream = true; // Start streaming from first new chunk
+        }
+        listenerStream.write(chunk);
+      };
+
+      streamData.opusStream.on('data', dataHandler);
       listenerStream.pipe(res);
 
       // Handle client disconnect
       req.on('close', () => {
         console.log(`[StreamServer] 👋 Opus listener disconnected from guild ${guildId}`);
-        streamData.opusStream.unpipe(listenerStream);
+        streamData.opusStream.removeListener('data', dataHandler);
         listenerStream.destroy();
         streamData.opusListeners.delete(listenerId);
         console.log(`[StreamServer] 📊 Remaining Opus listeners for guild ${guildId}: ${streamData.opusListeners.size}`);
@@ -83,12 +93,13 @@ class StreamServer {
       // Handle errors
       listenerStream.on('error', (err) => {
         console.error(`[StreamServer] ❌ Opus listener error:`, err);
+        streamData.opusStream.removeListener('data', dataHandler);
         streamData.opusListeners.delete(listenerId);
       });
 
       res.on('error', (err) => {
         console.error(`[StreamServer] ❌ Response error:`, err);
-        streamData.opusStream.unpipe(listenerStream);
+        streamData.opusStream.removeListener('data', dataHandler);
         listenerStream.destroy();
         streamData.opusListeners.delete(listenerId);
       });
@@ -126,7 +137,7 @@ class StreamServer {
 
       // Create a new listener stream with MINIMAL buffering for low latency
       const pcmListener = new PassThrough({
-        highWaterMark: 16384 // 16KB buffer (reduced from 512KB)
+        highWaterMark: 16384 // 16KB buffer
       });
 
       const listenerId = Date.now() + Math.random();
@@ -135,13 +146,22 @@ class StreamServer {
 
       console.log(`[StreamServer] 📊 Active PCM listeners for guild ${guildId}: ${streamData.pcmListeners.size}`);
 
-      // Pipe from the PCM broadcast stream
-      streamData.pcmBroadcast.pipe(pcmListener, { end: false });
+      // CRITICAL FIX: Don't pipe old data, only new data from this point forward
+      let shouldStream = false;
+
+      const dataHandler = (chunk) => {
+        if (!shouldStream) {
+          shouldStream = true; // Start streaming from first new chunk
+        }
+        pcmListener.write(chunk);
+      };
+
+      streamData.pcmBroadcast.on('data', dataHandler);
       pcmListener.pipe(res);
 
       req.on('close', () => {
         console.log(`[StreamServer] 👋 PCM listener disconnected from guild ${guildId}`);
-        streamData.pcmBroadcast.unpipe(pcmListener);
+        streamData.pcmBroadcast.removeListener('data', dataHandler);
         pcmListener.destroy();
         streamData.pcmListeners.delete(listenerId);
         console.log(`[StreamServer] 📊 Remaining PCM listeners for guild ${guildId}: ${streamData.pcmListeners.size}`);
@@ -149,12 +169,13 @@ class StreamServer {
 
       pcmListener.on('error', (err) => {
         console.error(`[StreamServer] ❌ PCM listener error:`, err);
+        streamData.pcmBroadcast.removeListener('data', dataHandler);
         streamData.pcmListeners.delete(listenerId);
       });
 
       res.on('error', (err) => {
         console.error(`[StreamServer] ❌ Response error:`, err);
-        streamData.pcmBroadcast.unpipe(pcmListener);
+        streamData.pcmBroadcast.removeListener('data', dataHandler);
         pcmListener.destroy();
         streamData.pcmListeners.delete(listenerId);
       });
@@ -201,12 +222,12 @@ class StreamServer {
 
     // Create the Opus stream with MINIMAL buffering
     const opusStream = new PassThrough({
-      highWaterMark: 16384 // 16KB buffer (reduced from 512KB)
+      highWaterMark: 16384 // 16KB buffer
     });
 
     // Create PCM broadcast stream with MINIMAL buffering
     const pcmBroadcast = new PassThrough({
-      highWaterMark: 16384 // 16KB buffer (reduced from 512KB)
+      highWaterMark: 16384 // 16KB buffer
     });
 
     const streamData = {
@@ -269,7 +290,6 @@ class StreamServer {
     if (streamData.opusListeners) {
       for (const [id, listener] of streamData.opusListeners) {
         try {
-          streamData.opusStream.unpipe(listener);
           listener.destroy();
         } catch (err) {
           // Ignore
@@ -281,7 +301,6 @@ class StreamServer {
     if (streamData.pcmListeners) {
       for (const [id, listener] of streamData.pcmListeners) {
         try {
-          streamData.pcmBroadcast.unpipe(listener);
           listener.destroy();
         } catch (err) {
           // Ignore

@@ -1,7 +1,3 @@
-/**
- * Audio mixer - combines multiple PCM audio streams into one
- */
-
 const { Transform } = require('stream');
 
 class AudioMixer extends Transform {
@@ -11,11 +7,10 @@ class AudioMixer extends Transform {
     this.frameSize = 960 * 2 * 2; // 960 samples * 2 bytes per sample * 2 channels
     this.silenceBuffer = Buffer.alloc(this.frameSize);
 
-    // Send silence frames when no audio is being mixed
+    // ALWAYS send frames at 20ms intervals to maintain continuous stream
+    // This ensures constant bitrate even when no one is speaking
     this.silenceInterval = setInterval(() => {
-      if (this.sources.size === 0) {
-        this.push(this.silenceBuffer);
-      }
+      this.mixAndPush();
     }, 20);
 
     this.mixCount = 0;
@@ -34,7 +29,7 @@ class AudioMixer extends Transform {
     stream.on('data', (chunk) => {
       sourceData.buffer = chunk;
       sourceData.lastUpdate = Date.now();
-      this.mixAndPush();
+      // Don't call mixAndPush here - let the interval handle it
     });
 
     stream.on('end', () => {
@@ -103,7 +98,7 @@ class AudioMixer extends Transform {
   }
 
   _transform(chunk, encoding, callback) {
-    // Just pass through - mixing happens on data events
+    // Just pass through - mixing happens on interval
     callback();
   }
 
