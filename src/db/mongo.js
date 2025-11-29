@@ -73,7 +73,11 @@ function getCollections(db = _db) {
     robStats: db.collection('robStats'),
 
     // Transfer system
-    transferHistory: db.collection('transferHistory')
+    transferHistory: db.collection('transferHistory'),
+
+    // Broadcast system
+    broadcastSessions: db.collection('broadcastSessions'),
+    broadcastUsers: db.collection('broadcastUsers')
   };
 }
 

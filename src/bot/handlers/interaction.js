@@ -83,6 +83,14 @@ const { handleLeaderboard } = require('../../features/gambling/commands/leaderbo
 const { handleBlackjackButtons } = require('../../features/gambling/handlers/blackjackButtons');
 const { handleTriviaButtons } = require('../../features/gambling/handlers/triviaButtons');
 
+// Broadcast system imports
+const { handleStartBroadcast } = require('../../features/broadcast/commands/startbroadcast');
+const { handleStopBroadcast } = require('../../features/broadcast/commands/stopbroadcast');
+const { handleAddBroadcaster } = require('../../features/broadcast/commands/addbroadcaster');
+const { handleRemoveBroadcaster } = require('../../features/broadcast/commands/removebroadcaster');
+const { handleListBroadcasters } = require('../../features/broadcast/commands/listbroadcasters');
+const { handleBroadcastStatus } = require('../../features/broadcast/commands/broadcaststatus');
+
 // Safe execution wrapper
 const { safeExecute } = require('../../utils/safeExecute');
 
@@ -147,6 +155,14 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'rob')                 return handleRob({ interaction, collections });
       if (name === 'send')                return handleSend({ interaction, collections });
       if (name === 'leaderboard')         return handleLeaderboard({ interaction, collections });
+
+      // Broadcast commands
+      if (name === 'startbroadcast')      return handleStartBroadcast({ interaction, collections, client });
+      if (name === 'stopbroadcast')       return handleStopBroadcast({ interaction, collections, client });
+      if (name === 'addbroadcaster')      return handleAddBroadcaster({ interaction, collections });
+      if (name === 'removebroadcaster')   return handleRemoveBroadcaster({ interaction, collections });
+      if (name === 'listbroadcasters')    return handleListBroadcasters({ interaction, collections });
+      if (name === 'broadcaststatus')     return handleBroadcastStatus({ interaction, collections, client });
     }
 
     // Button Interactions

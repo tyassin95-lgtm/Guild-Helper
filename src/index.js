@@ -9,6 +9,8 @@ const { startTokenRegenerationChecker } = require('./bot/tokenRegeneration');
 const { startPartyPanelUpdater } = require('./features/parties/panelUpdater');
 const { startPeriodicRebalancer } = require('./features/parties/rebalancing');
 const { resumeActiveRaidCountdowns, clearAllCountdownIntervals } = require('./features/raids/raidSession');
+const { streamServer } = require('./features/broadcast/server/streamServer');
+const { broadcastManager } = require('./features/broadcast/utils/broadcastManager');
 
 const client = new Client({
   intents: [
@@ -29,6 +31,9 @@ const client = new Client({
       console.log(`Logged in as ${client.user.tag}!`);
       await registerSlashCommands(client);
       console.log('Slash commands registered.');
+
+      // Start the HTTP stream server
+      streamServer.start();
 
       // Start the token regeneration checker
       startTokenRegenerationChecker(client, collections);
@@ -60,6 +65,10 @@ const client = new Client({
     process.on('SIGINT', async () => {
       console.log('\n🛑 Shutting down gracefully...');
 
+      // Stop all broadcasts
+      broadcastManager.stopAll();
+      streamServer.stop();
+
       // Clear all raid countdown intervals
       clearAllCountdownIntervals();
 
@@ -72,6 +81,10 @@ const client = new Client({
 
     process.on('SIGTERM', async () => {
       console.log('\n🛑 SIGTERM received, shutting down...');
+
+      // Stop all broadcasts
+      broadcastManager.stopAll();
+      streamServer.stop();
 
       // Clear all raid countdown intervals
       clearAllCountdownIntervals();

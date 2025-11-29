@@ -361,6 +361,62 @@ async function registerSlashCommands(client) {
         }
       ]
     },
+    // Broadcast Commands (Admin)
+    {
+      name: 'startbroadcast',
+      description: 'Admins: Start broadcasting selected users as an audio stream.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 7, // CHANNEL
+          name: 'source_channel',
+          description: 'Voice channel to monitor (leadership channel)',
+          required: true,
+          channel_types: [2] // Voice channel only
+        }
+      ]
+    },
+    {
+      name: 'stopbroadcast',
+      description: 'Admins: Stop active broadcast stream.',
+      default_member_permissions: ADMIN
+    },
+    {
+      name: 'addbroadcaster',
+      description: 'Admins: Add user to broadcast list (their voice will be streamed).',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 6, // USER
+          name: 'user',
+          description: 'User whose voice should be broadcast',
+          required: true
+        }
+      ]
+    },
+    {
+      name: 'removebroadcaster',
+      description: 'Admins: Remove user from broadcast list.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 6, // USER
+          name: 'user',
+          description: 'User to remove from broadcast',
+          required: true
+        }
+      ]
+    },
+    {
+      name: 'listbroadcasters',
+      description: 'Admins: View all users being broadcast.',
+      default_member_permissions: ADMIN
+    },
+    {
+      name: 'broadcaststatus',
+      description: 'Admins: View current broadcast status and stream URL.',
+      default_member_permissions: ADMIN
+    },
 
     // ----- Everyone -----
     {
