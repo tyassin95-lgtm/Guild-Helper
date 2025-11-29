@@ -40,14 +40,19 @@ class StreamServer {
 
       console.log(`[StreamServer] 🎧 New Opus listener connected for guild ${guildId}`);
 
-      // Set headers immediately (don't wait for data)
-      res.setHeader('Content-Type', 'audio/opus');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Connection', 'keep-alive');
-      res.status(200);
+      // Write headers immediately and flush
+      res.writeHead(200, {
+        'Content-Type': 'audio/opus',
+        'Transfer-Encoding': 'chunked',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Access-Control-Allow-Origin': '*',
+        'Connection': 'keep-alive'
+      });
+
+      // Force flush headers
+      res.flushHeaders();
 
       // Create a new passthrough for this listener
       const listenerStream = new PassThrough({
@@ -100,17 +105,22 @@ class StreamServer {
 
       console.log(`[StreamServer] 🎧 New PCM listener connected for guild ${guildId}`);
 
-      // Set headers immediately (don't wait for data)
-      res.setHeader('Content-Type', 'audio/pcm');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('X-Audio-Channels', '2');
-      res.setHeader('X-Audio-Sample-Rate', '48000');
-      res.setHeader('X-Audio-Format', 's16le');
-      res.setHeader('Connection', 'keep-alive');
-      res.status(200);
+      // Write headers immediately and flush
+      res.writeHead(200, {
+        'Content-Type': 'audio/pcm',
+        'Transfer-Encoding': 'chunked',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Access-Control-Allow-Origin': '*',
+        'X-Audio-Channels': '2',
+        'X-Audio-Sample-Rate': '48000',
+        'X-Audio-Format': 's16le',
+        'Connection': 'keep-alive'
+      });
+
+      // Force flush headers immediately
+      res.flushHeaders();
 
       // Create a new listener stream with larger buffer
       const pcmListener = new PassThrough({
