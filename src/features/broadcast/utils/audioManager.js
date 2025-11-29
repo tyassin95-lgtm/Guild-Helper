@@ -7,23 +7,19 @@ const {
   EndBehaviorType,
   StreamType
 } = require('@discordjs/voice');
-const prism = require('prism-media');
 
 class AudioManager {
   constructor() {
     this.sourceConnection = null;
-    this.targetConnections = new Map(); // channelId -> VoiceConnection
-    this.audioPlayers = new Map();      // channelId -> AudioPlayer
+    this.targetConnections = new Map();
+    this.audioPlayers = new Map();
     this.audioReceiver = null;
-    this.activeStreams = new Map();     // userId -> Set of streams
-    this.volumeLevel = 100; // 0-100
+    this.activeStreams = new Map();
+    this.volumeLevel = 100;
     this.guildId = null;
     this.sourceChannelId = null;
   }
 
-  /**
-   * Start broadcasting from source channel to target channels
-   */
   async startBroadcast(guild, sourceChannelId, targetChannelIds, settings = {}) {
     try {
       this.guildId = guild.id;
@@ -35,14 +31,12 @@ class AudioManager {
         channelId: sourceChannelId,
         guildId: guild.id,
         adapterCreator: guild.voiceAdapterCreator,
-        selfDeaf: false, // MUST be false to receive audio
-        selfMute: true   // Bot doesn't speak in source
+        selfDeaf: false,
+        selfMute: true
       });
 
-      // Wait for connection to be ready
       await this.waitForConnection(this.sourceConnection);
 
-      // Set up audio receiver
       this.audioReceiver = this.sourceConnection.receiver;
 
       // Join all target channels
@@ -50,7 +44,6 @@ class AudioManager {
         await this.joinTargetChannel(guild, targetId, settings);
       }
 
-      // Listen for users speaking in source channel
       this.setupSpeakingListeners();
 
       console.log(`✅ Broadcast started: ${sourceChannelId} -> ${targetChannelIds.length} channels`);
@@ -63,10 +56,7 @@ class AudioManager {
     }
   }
 
-  /**
-   * Wait for voice connection to be ready
-   */
-  async waitForConnection(connection, timeout = 10000) {
+  async waitForConnection(connection, timeout = 20000) {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error('Voice connection timeout'));
@@ -78,33 +68,47 @@ class AudioManager {
         return;
       }
 
-      connection.once(VoiceConnectionStatus.Ready, () => {
+      const readyHandler = () => {
         clearTimeout(timer);
+        cleanup();
         resolve();
-      });
+      };
 
-      connection.once(VoiceConnectionStatus.Destroyed, () => {
+      const destroyHandler = () => {
         clearTimeout(timer);
+        cleanup();
         reject(new Error('Voice connection destroyed'));
-      });
+      };
 
-      connection.once(VoiceConnectionStatus.Disconnected, () => {
-        clearTimeout(timer);
-        reject(new Error('Voice connection disconnected'));
-      });
+      const disconnectHandler = async () => {
+        // Don't reject immediately, wait a bit for reconnection
+        await new Promise(r => setTimeout(r, 2000));
+        if (connection.state.status !== VoiceConnectionStatus.Ready) {
+          clearTimeout(timer);
+          cleanup();
+          reject(new Error('Voice connection disconnected'));
+        }
+      };
+
+      const cleanup = () => {
+        connection.off(VoiceConnectionStatus.Ready, readyHandler);
+        connection.off(VoiceConnectionStatus.Destroyed, destroyHandler);
+        connection.off(VoiceConnectionStatus.Disconnected, disconnectHandler);
+      };
+
+      connection.once(VoiceConnectionStatus.Ready, readyHandler);
+      connection.once(VoiceConnectionStatus.Destroyed, destroyHandler);
+      connection.once(VoiceConnectionStatus.Disconnected, disconnectHandler);
     });
   }
 
-  /**
-   * Join a target channel and set up audio player
-   */
   async joinTargetChannel(guild, channelId, settings) {
     const connection = joinVoiceChannel({
       channelId: channelId,
       guildId: guild.id,
       adapterCreator: guild.voiceAdapterCreator,
-      selfDeaf: true,  // Bot doesn't need to hear in targets
-      selfMute: false  // Bot speaks in targets
+      selfDeaf: true,
+      selfMute: false
     });
 
     await this.waitForConnection(connection);
@@ -115,25 +119,20 @@ class AudioManager {
     this.targetConnections.set(channelId, connection);
     this.audioPlayers.set(channelId, player);
 
-    // Handle connection state changes
-    connection.on(VoiceConnectionStatus.Disconnected, async () => {
+    // Simplified connection handling - no auto-reconnect
+    connection.on(VoiceConnectionStatus.Disconnected, () => {
       console.warn(`Disconnected from target channel: ${channelId}`);
-      try {
-        await Promise.race([
-          new Promise((resolve) => connection.once(VoiceConnectionStatus.Signalling, resolve)),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Reconnect timeout')), 5000))
-        ]);
-      } catch {
-        connection.destroy();
-        this.targetConnections.delete(channelId);
-        this.audioPlayers.delete(channelId);
-      }
+      // Just remove it, don't try to reconnect automatically
+      this.targetConnections.delete(channelId);
+      this.audioPlayers.delete(channelId);
+    });
+
+    connection.on(VoiceConnectionStatus.Destroyed, () => {
+      this.targetConnections.delete(channelId);
+      this.audioPlayers.delete(channelId);
     });
   }
 
-  /**
-   * Set up listeners for users speaking in source channel
-   */
   setupSpeakingListeners() {
     this.audioReceiver.speaking.on('start', (userId) => {
       console.log(`🎤 User started speaking: ${userId}`);
@@ -141,46 +140,35 @@ class AudioManager {
     });
   }
 
-  /**
-   * Handle a user starting to speak
-   */
   async handleUserSpeaking(userId) {
-    // Create a set to track streams for this user
     if (!this.activeStreams.has(userId)) {
       this.activeStreams.set(userId, new Set());
     }
 
     const userStreams = this.activeStreams.get(userId);
 
-    // Broadcast to all target channels
     for (const [channelId, player] of this.audioPlayers) {
       try {
-        // Subscribe to user's audio stream (Opus format from Discord)
         const opusStream = this.audioReceiver.subscribe(userId, {
           end: {
             behavior: EndBehaviorType.AfterSilence,
-            duration: 100 // Stop after 100ms of silence
+            duration: 100
           }
         });
 
-        // Store stream for cleanup
         userStreams.add(opusStream);
 
-        // Create audio resource with volume transformer
         const resource = createAudioResource(opusStream, {
           inputType: StreamType.Opus,
           inlineVolume: true
         });
 
-        // Set volume
         if (resource.volume) {
           resource.volume.setVolume(this.volumeLevel / 100);
         }
 
-        // Play in target channel
         player.play(resource);
 
-        // Clean up when stream ends
         opusStream.on('end', () => {
           userStreams.delete(opusStream);
           if (userStreams.size === 0) {
@@ -199,17 +187,11 @@ class AudioManager {
     }
   }
 
-  /**
-   * Set volume level for all broadcasts
-   */
   setVolume(level) {
     this.volumeLevel = Math.max(0, Math.min(100, level));
     console.log(`🔊 Volume set to ${this.volumeLevel}%`);
   }
 
-  /**
-   * Add a new target channel to active broadcast
-   */
   async addTargetChannel(guild, channelId, settings) {
     if (this.targetConnections.has(channelId)) {
       throw new Error('Channel is already a broadcast target');
@@ -219,51 +201,46 @@ class AudioManager {
     console.log(`➕ Added target channel: ${channelId}`);
   }
 
-  /**
-   * Remove a target channel from active broadcast
-   */
   async removeTargetChannel(channelId) {
     const connection = this.targetConnections.get(channelId);
     if (connection) {
-      connection.destroy();
+      try {
+        connection.destroy();
+      } catch (err) {
+        // Ignore if already destroyed
+      }
       this.targetConnections.delete(channelId);
       this.audioPlayers.delete(channelId);
       console.log(`➖ Removed target channel: ${channelId}`);
     }
   }
 
-  /**
-   * Stop broadcasting and clean up all connections
-   */
   async cleanup() {
-    // Destroy all active streams
     for (const streamSet of this.activeStreams.values()) {
       for (const stream of streamSet) {
         try {
           stream.destroy();
         } catch (err) {
-          // Ignore errors during cleanup
+          // Ignore
         }
       }
     }
     this.activeStreams.clear();
 
-    // Destroy source connection
     if (this.sourceConnection) {
       try {
         this.sourceConnection.destroy();
       } catch (err) {
-        // Ignore errors during cleanup
+        // Ignore
       }
       this.sourceConnection = null;
     }
 
-    // Destroy all target connections
     for (const connection of this.targetConnections.values()) {
       try {
         connection.destroy();
       } catch (err) {
-        // Ignore errors during cleanup
+        // Ignore
       }
     }
     this.targetConnections.clear();
@@ -275,9 +252,6 @@ class AudioManager {
     console.log('🛑 Broadcast stopped and cleaned up');
   }
 
-  /**
-   * Get current broadcast status
-   */
   getStatus() {
     return {
       active: this.sourceConnection !== null,
@@ -291,16 +265,12 @@ class AudioManager {
     };
   }
 
-  /**
-   * Check if broadcast is active
-   */
   isActive() {
     return this.sourceConnection !== null;
   }
 }
 
-// Singleton instance per guild (you could make this a Map for multi-guild support)
-const audioManagers = new Map(); // guildId -> AudioManager
+const audioManagers = new Map();
 
 function getAudioManager(guildId) {
   if (!audioManagers.has(guildId)) {
