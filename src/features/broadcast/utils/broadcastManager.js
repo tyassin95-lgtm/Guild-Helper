@@ -2,10 +2,11 @@ const { VoiceReceiver } = require('../handlers/voiceReceiver');
 const { AudioMixer } = require('../handlers/audioMixer');
 const { streamServer } = require('../server/streamServer');
 const prism = require('prism-media');
+const { PassThrough } = require('stream');
 
 class BroadcastManager {
   constructor() {
-    this.activeSessions = new Map(); // guildId -> { receiver, mixer, opusEncoder }
+    this.activeSessions = new Map(); // guildId -> { receiver, mixer, opusEncoder, ... }
   }
 
   isActive(guildId) {
@@ -29,10 +30,10 @@ class BroadcastManager {
     const receiver = new VoiceReceiver(client, collections);
     const mixer = new AudioMixer();
 
-    // Create HTTP stream (pass mixer for PCM endpoint)
-    const httpStream = streamServer.createStream(guildId, mixer);
+    // Create HTTP streams (both Opus and PCM)
+    const { opusStream, pcmBroadcast } = streamServer.createStream(guildId);
 
-    // Encode PCM to Opus for the main stream
+    // Encode PCM to Opus
     const opusEncoder = new prism.opus.Encoder({
       frameSize: 960,
       channels: 2,
@@ -42,8 +43,18 @@ class BroadcastManager {
     // Start receiving from source channel
     await receiver.startReceiving(guildId, sourceChannelId, broadcastUserIds, mixer);
 
-    // Pipe: Mixer (PCM) -> Opus Encoder -> HTTP Stream
-    mixer.pipe(opusEncoder).pipe(httpStream);
+    // CRITICAL: We need to split the mixer's PCM output to TWO destinations:
+    // 1. Opus encoder → Opus HTTP stream (for Discord bots)
+    // 2. Direct → PCM HTTP stream (for VLC/FFplay)
+
+    // Pipe mixer to encoder for Opus stream
+    mixer.pipe(opusEncoder);
+    opusEncoder.pipe(opusStream);
+
+    // ALSO pipe mixer to PCM broadcast (using a separate passthrough to avoid conflicts)
+    const pcmSplitter = new PassThrough();
+    mixer.pipe(pcmSplitter);
+    pcmSplitter.pipe(pcmBroadcast);
 
     // Add error handlers
     opusEncoder.on('error', (err) => {
@@ -54,8 +65,16 @@ class BroadcastManager {
       console.error(`[BroadcastManager] Mixer error for guild ${guildId}:`, err);
     });
 
-    httpStream.on('error', (err) => {
-      console.error(`[BroadcastManager] HTTP stream error for guild ${guildId}:`, err);
+    opusStream.on('error', (err) => {
+      console.error(`[BroadcastManager] Opus stream error for guild ${guildId}:`, err);
+    });
+
+    pcmBroadcast.on('error', (err) => {
+      console.error(`[BroadcastManager] PCM broadcast error for guild ${guildId}:`, err);
+    });
+
+    pcmSplitter.on('error', (err) => {
+      console.error(`[BroadcastManager] PCM splitter error for guild ${guildId}:`, err);
     });
 
     // Store session
@@ -63,7 +82,9 @@ class BroadcastManager {
       receiver,
       mixer,
       opusEncoder,
-      httpStream,
+      pcmSplitter,
+      opusStream,
+      pcmBroadcast,
       sourceChannelId,
       broadcastUserIds
     });
@@ -71,10 +92,10 @@ class BroadcastManager {
     const opusUrl = streamServer.getStreamUrl(guildId, 'opus');
     const pcmUrl = streamServer.getStreamUrl(guildId, 'pcm');
 
-    console.log(`[BroadcastManager] Broadcast started successfully`);
-    console.log(`[BroadcastManager] Opus Stream URL: ${opusUrl}`);
-    console.log(`[BroadcastManager] PCM Stream URL: ${pcmUrl}`);
-    console.log(`[BroadcastManager] For VLC, use: ffplay -f s16le -ar 48000 -ac 2 ${pcmUrl}`);
+    console.log(`[BroadcastManager] ✅ Broadcast started successfully`);
+    console.log(`[BroadcastManager] 🎵 Opus Stream: ${opusUrl}`);
+    console.log(`[BroadcastManager] 🎧 PCM Stream: ${pcmUrl}`);
+    console.log(`[BroadcastManager] 📝 FFplay command: ffplay -f s16le -ar 48000 -ac 2 ${pcmUrl}`);
 
     return opusUrl;
   }
@@ -95,6 +116,10 @@ class BroadcastManager {
       }
 
       // Destroy streams in reverse order
+      if (session.pcmSplitter) {
+        session.pcmSplitter.destroy();
+      }
+
       if (session.opusEncoder) {
         session.opusEncoder.destroy();
       }
@@ -103,11 +128,11 @@ class BroadcastManager {
         session.mixer.destroy();
       }
 
-      // Remove HTTP stream
+      // Remove HTTP streams
       streamServer.removeStream(guildId);
 
       this.activeSessions.delete(guildId);
-      console.log(`[BroadcastManager] Broadcast stopped successfully for guild ${guildId}`);
+      console.log(`[BroadcastManager] ✅ Broadcast stopped successfully for guild ${guildId}`);
     } catch (err) {
       console.error(`[BroadcastManager] Error stopping broadcast:`, err);
       // Force cleanup
