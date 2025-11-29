@@ -48,15 +48,16 @@ class StreamServer {
         'Pragma': 'no-cache',
         'Expires': '0',
         'Access-Control-Allow-Origin': '*',
-        'Connection': 'keep-alive'
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no' // Disable nginx buffering if behind proxy
       });
 
       // Force flush headers
       res.flushHeaders();
 
-      // Create a new passthrough for this listener
+      // Create a new passthrough with MINIMAL buffering for low latency
       const listenerStream = new PassThrough({
-        highWaterMark: 1024 * 512 // 512KB buffer
+        highWaterMark: 16384 // 16KB buffer (reduced from 512KB)
       });
 
       // Track listener
@@ -116,15 +117,16 @@ class StreamServer {
         'X-Audio-Channels': '2',
         'X-Audio-Sample-Rate': '48000',
         'X-Audio-Format': 's16le',
-        'Connection': 'keep-alive'
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no' // Disable nginx buffering if behind proxy
       });
 
       // Force flush headers immediately
       res.flushHeaders();
 
-      // Create a new listener stream with larger buffer
+      // Create a new listener stream with MINIMAL buffering for low latency
       const pcmListener = new PassThrough({
-        highWaterMark: 1024 * 512 // 512KB buffer
+        highWaterMark: 16384 // 16KB buffer (reduced from 512KB)
       });
 
       const listenerId = Date.now() + Math.random();
@@ -197,14 +199,14 @@ class StreamServer {
       throw new Error('Stream already exists for this guild');
     }
 
-    // Create the Opus stream (for Discord bots)
+    // Create the Opus stream with MINIMAL buffering
     const opusStream = new PassThrough({
-      highWaterMark: 1024 * 512 // 512KB buffer
+      highWaterMark: 16384 // 16KB buffer (reduced from 512KB)
     });
 
-    // Create PCM broadcast stream (for VLC/FFplay)
+    // Create PCM broadcast stream with MINIMAL buffering
     const pcmBroadcast = new PassThrough({
-      highWaterMark: 1024 * 512 // 512KB buffer
+      highWaterMark: 16384 // 16KB buffer (reduced from 512KB)
     });
 
     const streamData = {
@@ -216,7 +218,7 @@ class StreamServer {
 
     this.streams.set(guildId, streamData);
 
-    console.log(`[StreamServer] 📡 Created streams for guild ${guildId}`);
+    console.log(`[StreamServer] 📡 Created LOW-LATENCY streams for guild ${guildId}`);
 
     // Log when data flows through the Opus stream
     let opusDataCount = 0;
