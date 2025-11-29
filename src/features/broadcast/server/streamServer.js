@@ -1,8 +1,3 @@
-/**
- * HTTP Audio Stream Server
- * Provides audio stream that music bots can connect to
- */
-
 const express = require('express');
 const { PassThrough } = require('stream');
 
@@ -29,7 +24,7 @@ class StreamServer {
       });
     });
 
-    // Stream endpoint - /stream/:guildId
+    // Stream endpoint - /stream/:guildId (DCA format for Discord bots)
     this.app.get('/stream/:guildId', (req, res) => {
       const { guildId } = req.params;
 
@@ -41,16 +36,14 @@ class StreamServer {
 
       console.log(`[StreamServer] 🎧 New listener connected for guild ${guildId}`);
 
-      // Set headers for audio streaming (Ogg/Opus format)
+      // Set headers for DCA/Opus streaming (compatible with Discord music bots)
       res.writeHead(200, {
-        'Content-Type': 'audio/ogg',  // Changed from audio/opus
+        'Content-Type': 'audio/opus',
         'Transfer-Encoding': 'chunked',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0',
-        'Access-Control-Allow-Origin': '*',
-        'icy-name': `Guild ${guildId} Broadcast`,
-        'icy-description': 'Discord Voice Broadcast'
+        'Access-Control-Allow-Origin': '*'
       });
 
       // Create a new passthrough for this listener
@@ -79,10 +72,59 @@ class StreamServer {
       });
     });
 
+    // Alternative endpoint - /stream/:guildId/pcm (Raw PCM for FFmpeg/VLC)
+    this.app.get('/stream/:guildId/pcm', (req, res) => {
+      const { guildId } = req.params;
+
+      const streamData = this.streams.get(guildId);
+      if (!streamData) {
+        console.log(`[StreamServer] ❌ No active stream for guild ${guildId}`);
+        return res.status(404).json({ error: 'No active stream for this guild' });
+      }
+
+      console.log(`[StreamServer] 🎧 New PCM listener connected for guild ${guildId}`);
+
+      // Set headers for raw PCM audio
+      res.writeHead(200, {
+        'Content-Type': 'audio/pcm',
+        'Transfer-Encoding': 'chunked',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Access-Control-Allow-Origin': '*'
+      });
+
+      // Get the PCM stream directly from mixer (before encoding)
+      const mixer = streamData.pcmMixer;
+      if (!mixer) {
+        return res.status(500).json({ error: 'PCM stream not available' });
+      }
+
+      const pcmListener = new PassThrough();
+      mixer.pipe(pcmListener);
+      pcmListener.pipe(res);
+
+      const listenerId = Date.now() + Math.random();
+      streamData.pcmListeners = streamData.pcmListeners || new Map();
+      streamData.pcmListeners.set(listenerId, pcmListener);
+
+      req.on('close', () => {
+        console.log(`[StreamServer] 👋 PCM listener disconnected from guild ${guildId}`);
+        pcmListener.destroy();
+        streamData.pcmListeners.delete(listenerId);
+      });
+
+      pcmListener.on('error', (err) => {
+        console.error(`[StreamServer] ❌ PCM listener error:`, err);
+        streamData.pcmListeners.delete(listenerId);
+      });
+    });
+
     // Start server
     this.server = this.app.listen(this.port, () => {
       console.log(`[StreamServer] 🚀 HTTP audio server listening on port ${this.port}`);
-      console.log(`[StreamServer] 🌐 Stream URL format: http://your-server:${this.port}/stream/{guildId}`);
+      console.log(`[StreamServer] 🌐 Opus stream: http://your-server:${this.port}/stream/{guildId}`);
+      console.log(`[StreamServer] 🌐 PCM stream: http://your-server:${this.port}/stream/{guildId}/pcm`);
     });
 
     this.server.on('error', (err) => {
@@ -107,7 +149,7 @@ class StreamServer {
     this.server = null;
   }
 
-  createStream(guildId) {
+  createStream(guildId, pcmMixer = null) {
     if (this.streams.has(guildId)) {
       throw new Error('Stream already exists for this guild');
     }
@@ -115,7 +157,12 @@ class StreamServer {
     const stream = new PassThrough();
     const listeners = new Map();
 
-    this.streams.set(guildId, { stream, listeners });
+    this.streams.set(guildId, { 
+      stream, 
+      listeners,
+      pcmMixer,  // Store reference to PCM mixer for direct access
+      pcmListeners: new Map()
+    });
 
     console.log(`[StreamServer] 📡 Created stream for guild ${guildId}`);
 
@@ -146,12 +193,23 @@ class StreamServer {
 
     console.log(`[StreamServer] 🗑️ Removing stream for guild ${guildId}`);
 
-    // Close all listeners
+    // Close all opus listeners
     for (const [id, listener] of streamData.listeners) {
       try {
         listener.destroy();
       } catch (err) {
         // Ignore
+      }
+    }
+
+    // Close all PCM listeners
+    if (streamData.pcmListeners) {
+      for (const [id, listener] of streamData.pcmListeners) {
+        try {
+          listener.destroy();
+        } catch (err) {
+          // Ignore
+        }
       }
     }
 
@@ -166,9 +224,12 @@ class StreamServer {
     console.log(`[StreamServer] ✅ Stream removed for guild ${guildId}`);
   }
 
-  getStreamUrl(guildId) {
+  getStreamUrl(guildId, format = 'opus') {
     // Use environment variable or default
     const baseUrl = process.env.STREAM_BASE_URL || `http://localhost:${this.port}`;
+    if (format === 'pcm') {
+      return `${baseUrl}/stream/${guildId}/pcm`;
+    }
     return `${baseUrl}/stream/${guildId}`;
   }
 

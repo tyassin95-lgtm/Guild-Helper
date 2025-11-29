@@ -11,7 +11,8 @@ async function handleBroadcastStatus({ interaction, collections, client }) {
     const session = await getSession(collections, guildId);
     const users = await getBroadcastUsers(collections, guildId);
     const isActive = broadcastManager.isActive(guildId);
-    const streamUrl = broadcastManager.getStreamUrl(guildId);
+    const opusUrl = broadcastManager.getStreamUrl(guildId);
+    const pcmUrl = broadcastManager.getPcmStreamUrl(guildId);
 
     const embed = new EmbedBuilder()
       .setColor(isActive ? 0x00FF00 : 0x808080)
@@ -40,15 +41,33 @@ async function handleBroadcastStatus({ interaction, collections, client }) {
       inline: false
     });
 
-    if (isActive && streamUrl) {
+    if (isActive && opusUrl) {
       embed.addFields({
-        name: '🌐 Stream URL',
-        value: `\`\`\`${streamUrl}\`\`\``,
+        name: '🎵 Opus Stream URL (for Discord bots)',
+        value: `\`\`\`${opusUrl}\`\`\``,
         inline: false
       });
+
       embed.addFields({
-        name: '🎵 Music Bot Instructions',
-        value: 'Use a music bot (Hydra, Fredboat, etc.) with the `/play` command and paste the stream URL above.',
+        name: '🎧 PCM Stream URL (for VLC/FFplay)',
+        value: `\`\`\`${pcmUrl}\`\`\``,
+        inline: false
+      });
+
+      embed.addFields({
+        name: '📝 Usage Instructions',
+        value: [
+          '**For Music Bots (Hydra, Fredboat, etc.):**',
+          '`/play ' + opusUrl + '`',
+          '',
+          '**For VLC:**',
+          'Open VLC → Media → Open Network Stream',
+          'Paste PCM URL and add options:',
+          '`:demux=rawaud :rawaud-channels=2 :rawaud-samplerate=48000`',
+          '',
+          '**For FFplay (command line):**',
+          '`ffplay -f s16le -ar 48000 -ac 2 ' + pcmUrl + '`'
+        ].join('\n'),
         inline: false
       });
     }

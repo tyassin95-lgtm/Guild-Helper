@@ -1,7 +1,3 @@
-/**
- * Central broadcast manager - coordinates voice receiving and streaming
- */
-
 const { VoiceReceiver } = require('../handlers/voiceReceiver');
 const { AudioMixer } = require('../handlers/audioMixer');
 const { streamServer } = require('../server/streamServer');
@@ -9,7 +5,7 @@ const prism = require('prism-media');
 
 class BroadcastManager {
   constructor() {
-    this.activeSessions = new Map(); // guildId -> { receiver, mixer, opusEncoder, oggMuxer }
+    this.activeSessions = new Map(); // guildId -> { receiver, mixer, opusEncoder }
   }
 
   isActive(guildId) {
@@ -29,44 +25,29 @@ class BroadcastManager {
     console.log(`[BroadcastManager] Source channel: ${sourceChannelId}`);
     console.log(`[BroadcastManager] Broadcasting users: ${broadcastUserIds.join(', ')}`);
 
-    // Create HTTP stream
-    const httpStream = streamServer.createStream(guildId);
-
     // Create components
     const receiver = new VoiceReceiver(client, collections);
     const mixer = new AudioMixer();
 
-    // Encode PCM to Opus
+    // Create HTTP stream (pass mixer for PCM endpoint)
+    const httpStream = streamServer.createStream(guildId, mixer);
+
+    // Encode PCM to Opus for the main stream
     const opusEncoder = new prism.opus.Encoder({
       frameSize: 960,
       channels: 2,
       rate: 48000
     });
 
-    // Wrap Opus in Ogg container for streaming compatibility
-    const oggMuxer = new prism.opus.OggLogicalBitstream({
-      opusHead: new prism.opus.OpusHead({
-        channelCount: 2,
-        sampleRate: 48000
-      }),
-      pageSizeControl: {
-        maxPackets: 10
-      }
-    });
-
     // Start receiving from source channel
     await receiver.startReceiving(guildId, sourceChannelId, broadcastUserIds, mixer);
 
-    // Pipe: Mixer (PCM) -> Opus Encoder -> Ogg Muxer -> HTTP Stream
-    mixer.pipe(opusEncoder).pipe(oggMuxer).pipe(httpStream);
+    // Pipe: Mixer (PCM) -> Opus Encoder -> HTTP Stream
+    mixer.pipe(opusEncoder).pipe(httpStream);
 
     // Add error handlers
     opusEncoder.on('error', (err) => {
       console.error(`[BroadcastManager] Encoder error for guild ${guildId}:`, err);
-    });
-
-    oggMuxer.on('error', (err) => {
-      console.error(`[BroadcastManager] OggMuxer error for guild ${guildId}:`, err);
     });
 
     mixer.on('error', (err) => {
@@ -82,17 +63,20 @@ class BroadcastManager {
       receiver,
       mixer,
       opusEncoder,
-      oggMuxer,
       httpStream,
       sourceChannelId,
       broadcastUserIds
     });
 
-    const streamUrl = streamServer.getStreamUrl(guildId);
-    console.log(`[BroadcastManager] Broadcast started successfully`);
-    console.log(`[BroadcastManager] Stream URL: ${streamUrl}`);
+    const opusUrl = streamServer.getStreamUrl(guildId, 'opus');
+    const pcmUrl = streamServer.getStreamUrl(guildId, 'pcm');
 
-    return streamUrl;
+    console.log(`[BroadcastManager] Broadcast started successfully`);
+    console.log(`[BroadcastManager] Opus Stream URL: ${opusUrl}`);
+    console.log(`[BroadcastManager] PCM Stream URL: ${pcmUrl}`);
+    console.log(`[BroadcastManager] For VLC, use: ffplay -f s16le -ar 48000 -ac 2 ${pcmUrl}`);
+
+    return opusUrl;
   }
 
   async stopBroadcast(guildId) {
@@ -111,10 +95,6 @@ class BroadcastManager {
       }
 
       // Destroy streams in reverse order
-      if (session.oggMuxer) {
-        session.oggMuxer.destroy();
-      }
-
       if (session.opusEncoder) {
         session.opusEncoder.destroy();
       }
@@ -141,6 +121,13 @@ class BroadcastManager {
       return null;
     }
     return streamServer.getStreamUrl(guildId);
+  }
+
+  getPcmStreamUrl(guildId) {
+    if (!this.isActive(guildId)) {
+      return null;
+    }
+    return streamServer.getStreamUrl(guildId, 'pcm');
   }
 
   stopAll() {
