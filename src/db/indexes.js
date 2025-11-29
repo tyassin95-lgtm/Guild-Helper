@@ -29,7 +29,9 @@ async function ensureIndexes({
   triviaSessions,
   robCooldowns,
   robStats,
-  transferHistory
+  transferHistory,
+  broadcastSessions,
+  broadcastConfigs
 }) {
   // Wishlists index
   await wishlists.createIndex({ userId: 1, guildId: 1 }, { unique: true });
@@ -197,6 +199,15 @@ async function ensureIndexes({
   await transferHistory.createIndex({ guildId: 1, timestamp: -1 });
   await transferHistory.createIndex({ fromUserId: 1, guildId: 1 });
   await transferHistory.createIndex({ toUserId: 1, guildId: 1 });
+
+  // Broadcast System Indexes
+  await broadcastSessions.createIndex({ guildId: 1 });
+  await broadcastSessions.createIndex({ guildId: 1, active: 1 });
+  await broadcastSessions.createIndex({ startedAt: -1 });
+
+  await broadcastConfigs.createIndex({ guildId: 1 });
+  await broadcastConfigs.createIndex({ guildId: 1, configName: 1 }, { unique: true });
+  await broadcastConfigs.createIndex({ createdAt: -1 });
 
   console.log('All indexes created successfully');
 }

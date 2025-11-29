@@ -83,6 +83,17 @@ const { handleLeaderboard } = require('../../features/gambling/commands/leaderbo
 const { handleBlackjackButtons } = require('../../features/gambling/handlers/blackjackButtons');
 const { handleTriviaButtons } = require('../../features/gambling/handlers/triviaButtons');
 
+// Broadcast system imports
+const { handleBroadcastSetup } = require('../../features/broadcast/commands/setup');
+const { handleBroadcastStart } = require('../../features/broadcast/commands/start');
+const { handleBroadcastStop } = require('../../features/broadcast/commands/stop');
+const { handleBroadcastAddChannel } = require('../../features/broadcast/commands/addchannel');
+const { handleBroadcastRemoveChannel } = require('../../features/broadcast/commands/removechannel');
+const { handleBroadcastStatus } = require('../../features/broadcast/commands/status');
+const { handleBroadcastVolume } = require('../../features/broadcast/commands/volume');
+const { handleBroadcastButtons } = require('../../features/broadcast/handlers/buttons');
+const { handleBroadcastSelects } = require('../../features/broadcast/handlers/selects');
+
 // Safe execution wrapper
 const { safeExecute } = require('../../utils/safeExecute');
 
@@ -147,6 +158,18 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'rob')                 return handleRob({ interaction, collections });
       if (name === 'send')                return handleSend({ interaction, collections });
       if (name === 'leaderboard')         return handleLeaderboard({ interaction, collections });
+
+      // Broadcast commands
+      if (name === 'broadcast') {
+        const subcommand = interaction.options.getSubcommand();
+        if (subcommand === 'setup')         return handleBroadcastSetup({ interaction, collections });
+        if (subcommand === 'start')         return handleBroadcastStart({ interaction, collections });
+        if (subcommand === 'stop')          return handleBroadcastStop({ interaction, collections });
+        if (subcommand === 'addchannel')    return handleBroadcastAddChannel({ interaction, collections });
+        if (subcommand === 'removechannel') return handleBroadcastRemoveChannel({ interaction, collections });
+        if (subcommand === 'status')        return handleBroadcastStatus({ interaction, collections });
+        if (subcommand === 'volume')        return handleBroadcastVolume({ interaction, collections });
+      }
     }
 
     // Button Interactions
@@ -185,6 +208,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Send confirmation buttons
       if (interaction.customId.startsWith('send_confirm:')) {
         return handleSendConfirmation({ interaction, collections });
+      }
+
+      // Broadcast buttons
+      if (interaction.customId.startsWith('broadcast_')) {
+        return handleBroadcastButtons({ interaction, collections });
       }
 
       // PvP system buttons
@@ -267,6 +295,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Freeze boss selection
       if (interaction.customId.startsWith('freeze_select_')) {
         return handleFreezeBossSelection({ interaction, collections });
+      }
+
+      // Broadcast selects
+      if (interaction.customId.startsWith('broadcast_select_')) {
+        return handleBroadcastSelects({ interaction, collections });
       }
 
       // Raid signup selects
