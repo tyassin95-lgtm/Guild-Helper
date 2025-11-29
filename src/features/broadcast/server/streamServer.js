@@ -22,7 +22,11 @@ class StreamServer {
 
     // Health check endpoint
     this.app.get('/health', (req, res) => {
-      res.json({ status: 'ok', activeStreams: this.streams.size });
+      res.json({ 
+        status: 'ok', 
+        activeStreams: this.streams.size,
+        streams: Array.from(this.streams.keys())
+      });
     });
 
     // Stream endpoint - /stream/:guildId
@@ -31,19 +35,22 @@ class StreamServer {
 
       const streamData = this.streams.get(guildId);
       if (!streamData) {
+        console.log(`[StreamServer] ❌ No active stream for guild ${guildId}`);
         return res.status(404).json({ error: 'No active stream for this guild' });
       }
 
-      console.log(`[StreamServer] New listener for guild ${guildId}`);
+      console.log(`[StreamServer] 🎧 New listener connected for guild ${guildId}`);
 
-      // Set headers for audio streaming
+      // Set headers for audio streaming (Ogg/Opus format)
       res.writeHead(200, {
-        'Content-Type': 'audio/opus',
+        'Content-Type': 'audio/ogg',  // Changed from audio/opus
         'Transfer-Encoding': 'chunked',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0',
-        'Access-Control-Allow-Origin': '*'
+        'Access-Control-Allow-Origin': '*',
+        'icy-name': `Guild ${guildId} Broadcast`,
+        'icy-description': 'Discord Voice Broadcast'
       });
 
       // Create a new passthrough for this listener
@@ -55,30 +62,38 @@ class StreamServer {
       const listenerId = Date.now() + Math.random();
       streamData.listeners.set(listenerId, listenerStream);
 
+      console.log(`[StreamServer] 📊 Active listeners for guild ${guildId}: ${streamData.listeners.size}`);
+
       // Handle client disconnect
       req.on('close', () => {
-        console.log(`[StreamServer] Listener disconnected for guild ${guildId}`);
+        console.log(`[StreamServer] 👋 Listener disconnected from guild ${guildId}`);
         listenerStream.destroy();
         streamData.listeners.delete(listenerId);
+        console.log(`[StreamServer] 📊 Remaining listeners for guild ${guildId}: ${streamData.listeners.size}`);
       });
 
       // Handle errors
       listenerStream.on('error', (err) => {
-        console.error(`[StreamServer] Listener stream error:`, err);
+        console.error(`[StreamServer] ❌ Listener stream error:`, err);
         streamData.listeners.delete(listenerId);
       });
     });
 
     // Start server
     this.server = this.app.listen(this.port, () => {
-      console.log(`[StreamServer] HTTP audio server listening on port ${this.port}`);
+      console.log(`[StreamServer] 🚀 HTTP audio server listening on port ${this.port}`);
+      console.log(`[StreamServer] 🌐 Stream URL format: http://your-server:${this.port}/stream/{guildId}`);
+    });
+
+    this.server.on('error', (err) => {
+      console.error('[StreamServer] ❌ Server error:', err);
     });
   }
 
   stop() {
     if (!this.server) return;
 
-    console.log('[StreamServer] Stopping server...');
+    console.log('[StreamServer] 🛑 Stopping server...');
 
     // Close all streams
     for (const [guildId, streamData] of this.streams) {
@@ -86,7 +101,7 @@ class StreamServer {
     }
 
     this.server.close(() => {
-      console.log('[StreamServer] Server stopped');
+      console.log('[StreamServer] ✅ Server stopped');
     });
 
     this.server = null;
@@ -102,7 +117,21 @@ class StreamServer {
 
     this.streams.set(guildId, { stream, listeners });
 
-    console.log(`[StreamServer] Created stream for guild ${guildId}`);
+    console.log(`[StreamServer] 📡 Created stream for guild ${guildId}`);
+
+    // Log when data flows through the stream
+    let dataCount = 0;
+    stream.on('data', (chunk) => {
+      dataCount++;
+      if (dataCount % 100 === 0) {
+        console.log(`[StreamServer] 📤 Streaming data to guild ${guildId} (${dataCount} chunks sent, ${listeners.size} listeners)`);
+      }
+    });
+
+    stream.on('error', (err) => {
+      console.error(`[StreamServer] ❌ Stream error for guild ${guildId}:`, err);
+    });
+
     return stream;
   }
 
@@ -115,17 +144,26 @@ class StreamServer {
     const streamData = this.streams.get(guildId);
     if (!streamData) return;
 
-    console.log(`[StreamServer] Removing stream for guild ${guildId}`);
+    console.log(`[StreamServer] 🗑️ Removing stream for guild ${guildId}`);
 
     // Close all listeners
     for (const [id, listener] of streamData.listeners) {
-      listener.destroy();
+      try {
+        listener.destroy();
+      } catch (err) {
+        // Ignore
+      }
     }
 
     // Destroy main stream
-    streamData.stream.destroy();
+    try {
+      streamData.stream.destroy();
+    } catch (err) {
+      // Ignore
+    }
 
     this.streams.delete(guildId);
+    console.log(`[StreamServer] ✅ Stream removed for guild ${guildId}`);
   }
 
   getStreamUrl(guildId) {

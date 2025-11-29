@@ -23,7 +23,8 @@ class VoiceReceiver {
       throw new Error('Invalid voice channel');
     }
 
-    console.log(`[VoiceReceiver] Joining channel ${channelId}`);
+    console.log(`[VoiceReceiver] Joining channel ${channelId} in guild ${guildId}`);
+    console.log(`[VoiceReceiver] Will broadcast users: ${broadcastUserIds.join(', ')}`);
 
     this.connection = joinVoiceChannel({
       channelId: channelId,
@@ -34,11 +35,11 @@ class VoiceReceiver {
     });
 
     this.connection.on(VoiceConnectionStatus.Ready, () => {
-      console.log(`[VoiceReceiver] Connected to voice channel ${channelId}`);
+      console.log(`[VoiceReceiver] ✅ Connected to voice channel ${channelId}`);
     });
 
     this.connection.on(VoiceConnectionStatus.Disconnected, async () => {
-      console.log(`[VoiceReceiver] Disconnected from channel ${channelId}`);
+      console.log(`[VoiceReceiver] ⚠️ Disconnected from channel ${channelId}`);
       try {
         await this.connection.destroy();
       } catch (err) {
@@ -55,15 +56,24 @@ class VoiceReceiver {
 
     receiver.speaking.on('start', (userId) => {
       if (!broadcastUserIds.includes(userId)) {
+        console.log(`[VoiceReceiver] ⏭️ Ignoring non-broadcast user ${userId}`);
         return;
       }
 
-      console.log(`[VoiceReceiver] User ${userId} started speaking`);
+      console.log(`[VoiceReceiver] 🎙️ User ${userId} started speaking (BROADCASTING)`);
 
       const opusStream = receiver.subscribe(userId, {
         end: {
           behavior: EndBehaviorType.AfterSilence,
-          duration: 100
+          duration: 500  // Increased from 100ms to 500ms to prevent premature cutoff
+        }
+      });
+
+      let packetCount = 0;
+      opusStream.on('data', (chunk) => {
+        packetCount++;
+        if (packetCount % 50 === 0) {
+          console.log(`[VoiceReceiver] 📦 Received ${packetCount} packets from user ${userId}`);
         }
       });
 
@@ -73,25 +83,29 @@ class VoiceReceiver {
         rate: 48000
       });
 
+      decoder.on('error', (err) => {
+        console.error(`[VoiceReceiver] Decoder error for user ${userId}:`, err);
+      });
+
       const pcmStream = opusStream.pipe(decoder);
 
       mixer.addSource(userId, pcmStream);
       this.userStreams.set(userId, pcmStream);
 
       pcmStream.on('end', () => {
-        console.log(`[VoiceReceiver] User ${userId} stopped speaking`);
+        console.log(`[VoiceReceiver] 🔇 User ${userId} stopped speaking (${packetCount} packets total)`);
         mixer.removeSource(userId);
         this.userStreams.delete(userId);
       });
 
       pcmStream.on('error', (err) => {
-        console.error(`[VoiceReceiver] Stream error for user ${userId}:`, err);
+        console.error(`[VoiceReceiver] ❌ Stream error for user ${userId}:`, err);
         mixer.removeSource(userId);
         this.userStreams.delete(userId);
       });
     });
 
-    console.log(`[VoiceReceiver] Now listening for ${broadcastUserIds.length} users`);
+    console.log(`[VoiceReceiver] 👂 Now listening for ${broadcastUserIds.length} broadcast users`);
   }
 
   async stopReceiving(guildId) {
@@ -109,11 +123,12 @@ class VoiceReceiver {
   }
 
   cleanup() {
+    console.log(`[VoiceReceiver] Cleaning up ${this.userStreams.size} user streams`);
     for (const stream of this.userStreams.values()) {
       try {
         stream.destroy();
       } catch (err) {
-        // Ignore
+        // Ignore cleanup errors
       }
     }
     this.userStreams.clear();

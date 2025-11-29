@@ -9,7 +9,7 @@ const prism = require('prism-media');
 
 class BroadcastManager {
   constructor() {
-    this.activeSessions = new Map(); // guildId -> { receiver, mixer, encoder }
+    this.activeSessions = new Map(); // guildId -> { receiver, mixer, opusEncoder, oggMuxer }
   }
 
   isActive(guildId) {
@@ -36,24 +36,53 @@ class BroadcastManager {
     const receiver = new VoiceReceiver(client, collections);
     const mixer = new AudioMixer();
 
-    // Encode PCM to Opus for HTTP streaming
-    const encoder = new prism.opus.Encoder({
+    // Encode PCM to Opus
+    const opusEncoder = new prism.opus.Encoder({
       frameSize: 960,
       channels: 2,
       rate: 48000
     });
 
+    // Wrap Opus in Ogg container for streaming compatibility
+    const oggMuxer = new prism.opus.OggLogicalBitstream({
+      opusHead: new prism.opus.OpusHead({
+        channelCount: 2,
+        sampleRate: 48000
+      }),
+      pageSizeControl: {
+        maxPackets: 10
+      }
+    });
+
     // Start receiving from source channel
     await receiver.startReceiving(guildId, sourceChannelId, broadcastUserIds, mixer);
 
-    // Pipe: Mixer (PCM) -> Encoder (Opus) -> HTTP Stream
-    mixer.pipe(encoder).pipe(httpStream);
+    // Pipe: Mixer (PCM) -> Opus Encoder -> Ogg Muxer -> HTTP Stream
+    mixer.pipe(opusEncoder).pipe(oggMuxer).pipe(httpStream);
+
+    // Add error handlers
+    opusEncoder.on('error', (err) => {
+      console.error(`[BroadcastManager] Encoder error for guild ${guildId}:`, err);
+    });
+
+    oggMuxer.on('error', (err) => {
+      console.error(`[BroadcastManager] OggMuxer error for guild ${guildId}:`, err);
+    });
+
+    mixer.on('error', (err) => {
+      console.error(`[BroadcastManager] Mixer error for guild ${guildId}:`, err);
+    });
+
+    httpStream.on('error', (err) => {
+      console.error(`[BroadcastManager] HTTP stream error for guild ${guildId}:`, err);
+    });
 
     // Store session
     this.activeSessions.set(guildId, {
       receiver,
       mixer,
-      encoder,
+      opusEncoder,
+      oggMuxer,
       httpStream,
       sourceChannelId,
       broadcastUserIds
@@ -81,9 +110,13 @@ class BroadcastManager {
         await session.receiver.stopReceiving(guildId);
       }
 
-      // Destroy streams
-      if (session.encoder) {
-        session.encoder.destroy();
+      // Destroy streams in reverse order
+      if (session.oggMuxer) {
+        session.oggMuxer.destroy();
+      }
+
+      if (session.opusEncoder) {
+        session.opusEncoder.destroy();
       }
 
       if (session.mixer) {

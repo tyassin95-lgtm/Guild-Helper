@@ -8,18 +8,21 @@ class AudioMixer extends Transform {
   constructor(options = {}) {
     super(options);
     this.sources = new Map();
-    this.frameSize = 960 * 2 * 2;
+    this.frameSize = 960 * 2 * 2; // 960 samples * 2 bytes per sample * 2 channels
     this.silenceBuffer = Buffer.alloc(this.frameSize);
 
+    // Send silence frames when no audio is being mixed
     this.silenceInterval = setInterval(() => {
       if (this.sources.size === 0) {
         this.push(this.silenceBuffer);
       }
     }, 20);
+
+    this.mixCount = 0;
   }
 
   addSource(userId, stream) {
-    console.log(`[AudioMixer] Adding source for user ${userId}`);
+    console.log(`[AudioMixer] ➕ Adding source for user ${userId}`);
 
     const sourceData = {
       buffer: null,
@@ -35,18 +38,18 @@ class AudioMixer extends Transform {
     });
 
     stream.on('end', () => {
-      console.log(`[AudioMixer] Source ended for user ${userId}`);
+      console.log(`[AudioMixer] 🔚 Source ended for user ${userId}`);
       this.removeSource(userId);
     });
 
     stream.on('error', (err) => {
-      console.error(`[AudioMixer] Source error for user ${userId}:`, err);
+      console.error(`[AudioMixer] ❌ Source error for user ${userId}:`, err);
       this.removeSource(userId);
     });
   }
 
   removeSource(userId) {
-    console.log(`[AudioMixer] Removing source for user ${userId}`);
+    console.log(`[AudioMixer] ➖ Removing source for user ${userId}`);
     this.sources.delete(userId);
   }
 
@@ -55,19 +58,28 @@ class AudioMixer extends Transform {
 
     const now = Date.now();
     for (const [userId, data] of this.sources.entries()) {
+      // Only use buffers that are recent (within 100ms)
       if (data.buffer && (now - data.lastUpdate) < 100) {
         activeBuffers.push(data.buffer);
       }
     }
 
     if (activeBuffers.length === 0) {
+      // Push silence when no active audio
       this.push(this.silenceBuffer);
       return;
+    }
+
+    // Log mixing activity periodically
+    this.mixCount++;
+    if (this.mixCount % 100 === 0) {
+      console.log(`[AudioMixer] 🎵 Mixing ${activeBuffers.length} active sources (${this.mixCount} frames mixed)`);
     }
 
     const bufferLength = activeBuffers[0].length;
     const mixed = Buffer.alloc(bufferLength);
 
+    // Mix by averaging samples
     for (let i = 0; i < bufferLength; i += 2) {
       let sum = 0;
       let count = 0;
@@ -91,6 +103,7 @@ class AudioMixer extends Transform {
   }
 
   _transform(chunk, encoding, callback) {
+    // Just pass through - mixing happens on data events
     callback();
   }
 
@@ -98,6 +111,7 @@ class AudioMixer extends Transform {
     if (this.silenceInterval) {
       clearInterval(this.silenceInterval);
     }
+    console.log(`[AudioMixer] 🧹 Destroying mixer, had ${this.sources.size} sources`);
     this.sources.clear();
     callback(err);
   }
