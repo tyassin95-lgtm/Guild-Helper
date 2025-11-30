@@ -49,42 +49,58 @@ class StreamServer {
         'Expires': '0',
         'Access-Control-Allow-Origin': '*',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no'
+        'X-Accel-Buffering': 'no' // Disable nginx buffering if behind proxy
       });
 
       // Force flush headers
       res.flushHeaders();
 
+      // Create a new passthrough with MINIMAL buffering for low latency
+      const listenerStream = new PassThrough({
+        highWaterMark: 16384 // 16KB buffer
+      });
+
       // Track listener
       const listenerId = Date.now() + Math.random();
       streamData.opusListeners = streamData.opusListeners || new Map();
+      streamData.opusListeners.set(listenerId, listenerStream);
 
       console.log(`[StreamServer] 📊 Active Opus listeners for guild ${guildId}: ${streamData.opusListeners.size}`);
 
-      // Don't pipe old data, only new data from this point forward
+      // CRITICAL FIX: Don't pipe old data, only new data from this point forward
+      // We track when this listener connected and only send data after that
       let shouldStream = false;
 
       const dataHandler = (chunk) => {
         if (!shouldStream) {
-          shouldStream = true;
+          shouldStream = true; // Start streaming from first new chunk
         }
-        res.write(chunk);
+        listenerStream.write(chunk);
       };
 
       streamData.opusStream.on('data', dataHandler);
+      listenerStream.pipe(res);
 
       // Handle client disconnect
       req.on('close', () => {
         console.log(`[StreamServer] 👋 Opus listener disconnected from guild ${guildId}`);
         streamData.opusStream.removeListener('data', dataHandler);
+        listenerStream.destroy();
         streamData.opusListeners.delete(listenerId);
         console.log(`[StreamServer] 📊 Remaining Opus listeners for guild ${guildId}: ${streamData.opusListeners.size}`);
       });
 
       // Handle errors
+      listenerStream.on('error', (err) => {
+        console.error(`[StreamServer] ❌ Opus listener error:`, err);
+        streamData.opusStream.removeListener('data', dataHandler);
+        streamData.opusListeners.delete(listenerId);
+      });
+
       res.on('error', (err) => {
         console.error(`[StreamServer] ❌ Response error:`, err);
         streamData.opusStream.removeListener('data', dataHandler);
+        listenerStream.destroy();
         streamData.opusListeners.delete(listenerId);
       });
     });
@@ -113,40 +129,54 @@ class StreamServer {
         'X-Audio-Sample-Rate': '48000',
         'X-Audio-Format': 's16le',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no'
+        'X-Accel-Buffering': 'no' // Disable nginx buffering if behind proxy
       });
 
       // Force flush headers immediately
       res.flushHeaders();
 
+      // Create a new listener stream with MINIMAL buffering for low latency
+      const pcmListener = new PassThrough({
+        highWaterMark: 16384 // 16KB buffer
+      });
+
       const listenerId = Date.now() + Math.random();
       streamData.pcmListeners = streamData.pcmListeners || new Map();
-      streamData.pcmListeners.set(listenerId, true);
+      streamData.pcmListeners.set(listenerId, pcmListener);
 
       console.log(`[StreamServer] 📊 Active PCM listeners for guild ${guildId}: ${streamData.pcmListeners.size}`);
 
-      // Don't pipe old data, only new data from this point forward
+      // CRITICAL FIX: Don't pipe old data, only new data from this point forward
       let shouldStream = false;
 
       const dataHandler = (chunk) => {
         if (!shouldStream) {
-          shouldStream = true;
+          shouldStream = true; // Start streaming from first new chunk
         }
-        res.write(chunk);
+        pcmListener.write(chunk);
       };
 
       streamData.pcmBroadcast.on('data', dataHandler);
+      pcmListener.pipe(res);
 
       req.on('close', () => {
         console.log(`[StreamServer] 👋 PCM listener disconnected from guild ${guildId}`);
         streamData.pcmBroadcast.removeListener('data', dataHandler);
+        pcmListener.destroy();
         streamData.pcmListeners.delete(listenerId);
         console.log(`[StreamServer] 📊 Remaining PCM listeners for guild ${guildId}: ${streamData.pcmListeners.size}`);
+      });
+
+      pcmListener.on('error', (err) => {
+        console.error(`[StreamServer] ❌ PCM listener error:`, err);
+        streamData.pcmBroadcast.removeListener('data', dataHandler);
+        streamData.pcmListeners.delete(listenerId);
       });
 
       res.on('error', (err) => {
         console.error(`[StreamServer] ❌ Response error:`, err);
         streamData.pcmBroadcast.removeListener('data', dataHandler);
+        pcmListener.destroy();
         streamData.pcmListeners.delete(listenerId);
       });
     });
@@ -260,9 +290,7 @@ class StreamServer {
     if (streamData.opusListeners) {
       for (const [id, listener] of streamData.opusListeners) {
         try {
-          if (listener && listener.destroy) {
-            listener.destroy();
-          }
+          listener.destroy();
         } catch (err) {
           // Ignore
         }
@@ -273,9 +301,7 @@ class StreamServer {
     if (streamData.pcmListeners) {
       for (const [id, listener] of streamData.pcmListeners) {
         try {
-          if (listener && listener.destroy) {
-            listener.destroy();
-          }
+          listener.destroy();
         } catch (err) {
           // Ignore
         }
