@@ -7,6 +7,13 @@ class AudioMixer extends Transform {
     this.frameSize = 960 * 2 * 2; // 960 samples * 2 bytes per sample * 2 channels
     this.silenceBuffer = Buffer.alloc(this.frameSize);
 
+    // Send initial silence frames IMMEDIATELY to establish the stream
+    // This ensures all listeners connecting early get synchronized
+    console.log('[AudioMixer] 🔇 Sending initial silence frames for stream synchronization');
+    for (let i = 0; i < 10; i++) {
+      this.push(this.silenceBuffer);
+    }
+
     // ALWAYS send frames at 20ms intervals to maintain continuous stream
     // This ensures constant bitrate even when no one is speaking
     this.silenceInterval = setInterval(() => {
@@ -14,6 +21,7 @@ class AudioMixer extends Transform {
     }, 20);
 
     this.mixCount = 0;
+    console.log('[AudioMixer] ✅ Mixer initialized with continuous silence stream');
   }
 
   addSource(userId, stream) {
@@ -60,7 +68,7 @@ class AudioMixer extends Transform {
     }
 
     if (activeBuffers.length === 0) {
-      // Push silence when no active audio
+      // Push silence when no active audio - keeps stream alive and synchronized
       this.push(this.silenceBuffer);
       return;
     }

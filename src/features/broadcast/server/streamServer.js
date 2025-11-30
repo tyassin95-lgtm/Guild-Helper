@@ -28,6 +28,18 @@ class StreamServer {
       });
     });
 
+    // Stream readiness check endpoint
+    this.app.get('/ready/:guildId', (req, res) => {
+      const { guildId } = req.params;
+      const streamData = this.streams.get(guildId);
+
+      res.json({
+        ready: !!streamData,
+        hasOpusListeners: streamData ? streamData.opusListeners.size : 0,
+        hasPcmListeners: streamData ? streamData.pcmListeners.size : 0
+      });
+    });
+
     // Stream endpoint - /stream/:guildId (Opus format for Discord bots)
     this.app.get('/stream/:guildId', (req, res) => {
       const { guildId } = req.params;
@@ -67,15 +79,12 @@ class StreamServer {
 
       console.log(`[StreamServer] 📊 Active Opus listeners for guild ${guildId}: ${streamData.opusListeners.size}`);
 
-      // CRITICAL FIX: Don't pipe old data, only new data from this point forward
-      // We track when this listener connected and only send data after that
-      let shouldStream = false;
-
+      // FIXED: Forward ALL data from this point on (no shouldStream gating)
+      // This ensures all listeners get synchronized data
       const dataHandler = (chunk) => {
-        if (!shouldStream) {
-          shouldStream = true; // Start streaming from first new chunk
+        if (!listenerStream.destroyed) {
+          listenerStream.write(chunk);
         }
-        listenerStream.write(chunk);
       };
 
       streamData.opusStream.on('data', dataHandler);
@@ -146,14 +155,11 @@ class StreamServer {
 
       console.log(`[StreamServer] 📊 Active PCM listeners for guild ${guildId}: ${streamData.pcmListeners.size}`);
 
-      // CRITICAL FIX: Don't pipe old data, only new data from this point forward
-      let shouldStream = false;
-
+      // FIXED: Forward ALL data from this point on (no shouldStream gating)
       const dataHandler = (chunk) => {
-        if (!shouldStream) {
-          shouldStream = true; // Start streaming from first new chunk
+        if (!pcmListener.destroyed) {
+          pcmListener.write(chunk);
         }
-        pcmListener.write(chunk);
       };
 
       streamData.pcmBroadcast.on('data', dataHandler);
@@ -186,6 +192,8 @@ class StreamServer {
       console.log(`[StreamServer] 🚀 HTTP audio server listening on port ${this.port}`);
       console.log(`[StreamServer] 🌐 Opus stream: http://your-server:${this.port}/stream/{guildId}`);
       console.log(`[StreamServer] 🌐 PCM stream: http://your-server:${this.port}/stream/{guildId}/pcm`);
+      console.log(`[StreamServer] 🔍 Health check: http://your-server:${this.port}/health`);
+      console.log(`[StreamServer] ✅ Ready check: http://your-server:${this.port}/ready/{guildId}`);
     });
 
     this.server.on('error', (err) => {
@@ -234,7 +242,8 @@ class StreamServer {
       opusStream,
       pcmBroadcast,
       opusListeners: new Map(),
-      pcmListeners: new Map()
+      pcmListeners: new Map(),
+      createdAt: Date.now()
     };
 
     this.streams.set(guildId, streamData);
