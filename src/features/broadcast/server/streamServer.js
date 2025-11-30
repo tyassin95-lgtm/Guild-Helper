@@ -190,10 +190,10 @@ class StreamServer {
     // Start server
     this.server = this.app.listen(this.port, () => {
       console.log(`[StreamServer] 🚀 HTTP audio server listening on port ${this.port}`);
-      console.log(`[StreamServer] 🌐 Opus stream: http://your-server:${this.port}/stream/{guildId}`);
-      console.log(`[StreamServer] 🌐 PCM stream: http://your-server:${this.port}/stream/{guildId}/pcm`);
-      console.log(`[StreamServer] 🔍 Health check: http://your-server:${this.port}/health`);
-      console.log(`[StreamServer] ✅ Ready check: http://your-server:${this.port}/ready/{guildId}`);
+      console.log(`[StreamServer] 🌐 Opus stream: http://34.170.220.22:${this.port}/stream/{guildId}`);
+      console.log(`[StreamServer] 🌐 PCM stream: http://34.170.220.22:${this.port}/stream/{guildId}/pcm`);
+      console.log(`[StreamServer] 🔍 Health check: http://34.170.220.22:${this.port}/health`);
+      console.log(`[StreamServer] ✅ Ready check: http://34.170.220.22:${this.port}/ready/{guildId}`);
     });
 
     this.server.on('error', (err) => {

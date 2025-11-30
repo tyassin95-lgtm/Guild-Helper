@@ -4,24 +4,22 @@ class AudioMixer extends Transform {
   constructor(options = {}) {
     super(options);
     this.sources = new Map();
-    this.frameSize = 960 * 2 * 2; // 960 samples * 2 bytes per sample * 2 channels
+    this.frameSize = 960 * 2 * 2; // 960 samples * 2 bytes per sample * 2 channels (PCM)
     this.silenceBuffer = Buffer.alloc(this.frameSize);
 
-    // Send initial silence frames IMMEDIATELY to establish the stream
-    // This ensures all listeners connecting early get synchronized
-    console.log('[AudioMixer] 🔇 Sending initial silence frames for stream synchronization');
-    for (let i = 0; i < 10; i++) {
-      this.push(this.silenceBuffer);
-    }
+    // Track if we've sent any data yet
+    this.hasStarted = false;
+    this.frameCount = 0;
 
-    // ALWAYS send frames at 20ms intervals to maintain continuous stream
-    // This ensures constant bitrate even when no one is speaking
+    console.log('[AudioMixer] ✅ Mixer initialized - will send continuous frames');
+
+    // CRITICAL: Send frames at EXACTLY 20ms intervals
+    // Discord expects a constant stream of Opus packets
     this.silenceInterval = setInterval(() => {
       this.mixAndPush();
-    }, 20);
+    }, 20); // 20ms = 50 frames per second
 
     this.mixCount = 0;
-    console.log('[AudioMixer] ✅ Mixer initialized with continuous silence stream');
   }
 
   addSource(userId, stream) {
@@ -29,7 +27,8 @@ class AudioMixer extends Transform {
 
     const sourceData = {
       buffer: null,
-      lastUpdate: Date.now()
+      lastUpdate: Date.now(),
+      packetsReceived: 0
     };
 
     this.sources.set(userId, sourceData);
@@ -37,11 +36,16 @@ class AudioMixer extends Transform {
     stream.on('data', (chunk) => {
       sourceData.buffer = chunk;
       sourceData.lastUpdate = Date.now();
-      // Don't call mixAndPush here - let the interval handle it
+      sourceData.packetsReceived++;
+
+      // Log every 100 packets to confirm audio is flowing
+      if (sourceData.packetsReceived % 100 === 0) {
+        console.log(`[AudioMixer] 📦 User ${userId}: ${sourceData.packetsReceived} packets received`);
+      }
     });
 
     stream.on('end', () => {
-      console.log(`[AudioMixer] 🔚 Source ended for user ${userId}`);
+      console.log(`[AudioMixer] 🔚 Source ended for user ${userId} (${sourceData.packetsReceived} packets total)`);
       this.removeSource(userId);
     });
 
@@ -58,51 +62,65 @@ class AudioMixer extends Transform {
 
   mixAndPush() {
     const activeBuffers = [];
-
     const now = Date.now();
+
+    // Check for active sources with recent data
     for (const [userId, data] of this.sources.entries()) {
-      // Only use buffers that are recent (within 100ms)
+      // Use buffers that are recent (within 100ms)
       if (data.buffer && (now - data.lastUpdate) < 100) {
         activeBuffers.push(data.buffer);
       }
     }
 
+    let outputBuffer;
+
     if (activeBuffers.length === 0) {
-      // Push silence when no active audio - keeps stream alive and synchronized
-      this.push(this.silenceBuffer);
-      return;
-    }
+      // No active audio - send silence
+      outputBuffer = this.silenceBuffer;
+    } else {
+      // Mix active audio sources
+      this.mixCount++;
+      if (this.mixCount % 100 === 0) {
+        console.log(`[AudioMixer] 🎵 Mixing ${activeBuffers.length} active sources (${this.mixCount} frames mixed)`);
+      }
 
-    // Log mixing activity periodically
-    this.mixCount++;
-    if (this.mixCount % 100 === 0) {
-      console.log(`[AudioMixer] 🎵 Mixing ${activeBuffers.length} active sources (${this.mixCount} frames mixed)`);
-    }
+      const bufferLength = activeBuffers[0].length;
+      const mixed = Buffer.alloc(bufferLength);
 
-    const bufferLength = activeBuffers[0].length;
-    const mixed = Buffer.alloc(bufferLength);
+      // Mix by averaging samples
+      for (let i = 0; i < bufferLength; i += 2) {
+        let sum = 0;
+        let count = 0;
 
-    // Mix by averaging samples
-    for (let i = 0; i < bufferLength; i += 2) {
-      let sum = 0;
-      let count = 0;
+        for (const buffer of activeBuffers) {
+          if (i + 1 < buffer.length) {
+            const sample = buffer.readInt16LE(i);
+            sum += sample;
+            count++;
+          }
+        }
 
-      for (const buffer of activeBuffers) {
-        if (i + 1 < buffer.length) {
-          const sample = buffer.readInt16LE(i);
-          sum += sample;
-          count++;
+        if (count > 0) {
+          const averaged = Math.floor(sum / count);
+          const clamped = Math.max(-32768, Math.min(32767, averaged));
+          mixed.writeInt16LE(clamped, i);
         }
       }
 
-      if (count > 0) {
-        const averaged = Math.floor(sum / count);
-        const clamped = Math.max(-32768, Math.min(32767, averaged));
-        mixed.writeInt16LE(clamped, i);
-      }
+      outputBuffer = mixed;
     }
 
-    this.push(mixed);
+    // CRITICAL: Always push exactly one frame every 20ms
+    // This maintains the stream continuity
+    this.frameCount++;
+
+    // Log every 500 frames (10 seconds) to show stream is alive
+    if (this.frameCount % 500 === 0) {
+      console.log(`[AudioMixer] 📊 Stream alive: ${this.frameCount} frames sent (${activeBuffers.length} active sources)`);
+    }
+
+    // Push the frame
+    this.push(outputBuffer);
   }
 
   _transform(chunk, encoding, callback) {
@@ -114,7 +132,7 @@ class AudioMixer extends Transform {
     if (this.silenceInterval) {
       clearInterval(this.silenceInterval);
     }
-    console.log(`[AudioMixer] 🧹 Destroying mixer, had ${this.sources.size} sources`);
+    console.log(`[AudioMixer] 🧹 Destroying mixer, sent ${this.frameCount} total frames, had ${this.sources.size} sources`);
     this.sources.clear();
     callback(err);
   }
