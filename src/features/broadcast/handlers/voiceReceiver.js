@@ -65,7 +65,7 @@ class VoiceReceiver {
       const opusStream = receiver.subscribe(userId, {
         end: {
           behavior: EndBehaviorType.AfterSilence,
-          duration: 500  // Increased from 100ms to 500ms to prevent premature cutoff
+          duration: 100
         }
       });
 
