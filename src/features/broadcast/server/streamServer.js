@@ -57,8 +57,7 @@ class StreamServer {
 
       // Create a new passthrough with MINIMAL buffering for low latency
       const listenerStream = new PassThrough({
-        highWaterMark: 512 // 16KB buffer
-      });
+        highWaterMark: 4096
 
       // Track listener
       const listenerId = Date.now() + Math.random();
@@ -137,7 +136,7 @@ class StreamServer {
 
       // Create a new listener stream with MINIMAL buffering for low latency
       const pcmListener = new PassThrough({
-        highWaterMark: 512 // 16KB buffer
+        highWaterMark: 4096
       });
 
       const listenerId = Date.now() + Math.random();
@@ -222,12 +221,12 @@ class StreamServer {
 
     // Create the Opus stream with MINIMAL buffering
     const opusStream = new PassThrough({
-      highWaterMark: 512 // 16KB buffer
+      highWaterMark: 4096
     });
 
     // Create PCM broadcast stream with MINIMAL buffering
     const pcmBroadcast = new PassThrough({
-      highWaterMark: 512 // 16KB buffer
+      highWaterMark: 4096
     });
 
     const streamData = {

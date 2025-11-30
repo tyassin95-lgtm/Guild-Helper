@@ -7,11 +7,11 @@ class AudioMixer extends Transform {
     this.frameSize = 960 * 2 * 2; // 960 samples * 2 bytes per sample * 2 channels
     this.silenceBuffer = Buffer.alloc(this.frameSize);
 
-    // ALWAYS send frames at 20ms intervals to maintain continuous stream
+    // ALWAYS send frames at 10ms intervals to maintain continuous stream
     // This ensures constant bitrate even when no one is speaking
     this.silenceInterval = setInterval(() => {
       this.mixAndPush();
-    }, 20);
+    }, 10);
 
     this.mixCount = 0;
   }
