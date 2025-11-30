@@ -49,15 +49,16 @@ class StreamServer {
         'Expires': '0',
         'Access-Control-Allow-Origin': '*',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no' // Disable nginx buffering if behind proxy
+        'X-Accel-Buffering': 'no'
       });
 
       // Force flush headers
       res.flushHeaders();
 
-      // Create a new passthrough with MINIMAL buffering for low latency
+      // Create a new passthrough with buffering for low latency
       const listenerStream = new PassThrough({
         highWaterMark: 4096
+      });
 
       // Track listener
       const listenerId = Date.now() + Math.random();
@@ -66,13 +67,12 @@ class StreamServer {
 
       console.log(`[StreamServer] 📊 Active Opus listeners for guild ${guildId}: ${streamData.opusListeners.size}`);
 
-      // CRITICAL FIX: Don't pipe old data, only new data from this point forward
-      // We track when this listener connected and only send data after that
+      // Don't pipe old data, only new data from this point forward
       let shouldStream = false;
 
       const dataHandler = (chunk) => {
         if (!shouldStream) {
-          shouldStream = true; // Start streaming from first new chunk
+          shouldStream = true;
         }
         listenerStream.write(chunk);
       };
@@ -128,13 +128,13 @@ class StreamServer {
         'X-Audio-Sample-Rate': '48000',
         'X-Audio-Format': 's16le',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no' // Disable nginx buffering if behind proxy
+        'X-Accel-Buffering': 'no'
       });
 
       // Force flush headers immediately
       res.flushHeaders();
 
-      // Create a new listener stream with MINIMAL buffering for low latency
+      // Create a new listener stream with buffering for low latency
       const pcmListener = new PassThrough({
         highWaterMark: 4096
       });
@@ -145,12 +145,12 @@ class StreamServer {
 
       console.log(`[StreamServer] 📊 Active PCM listeners for guild ${guildId}: ${streamData.pcmListeners.size}`);
 
-      // CRITICAL FIX: Don't pipe old data, only new data from this point forward
+      // Don't pipe old data, only new data from this point forward
       let shouldStream = false;
 
       const dataHandler = (chunk) => {
         if (!shouldStream) {
-          shouldStream = true; // Start streaming from first new chunk
+          shouldStream = true;
         }
         pcmListener.write(chunk);
       };
@@ -219,12 +219,12 @@ class StreamServer {
       throw new Error('Stream already exists for this guild');
     }
 
-    // Create the Opus stream with MINIMAL buffering
+    // Create the Opus stream with buffering
     const opusStream = new PassThrough({
       highWaterMark: 4096
     });
 
-    // Create PCM broadcast stream with MINIMAL buffering
+    // Create PCM broadcast stream with buffering
     const pcmBroadcast = new PassThrough({
       highWaterMark: 4096
     });
@@ -238,7 +238,7 @@ class StreamServer {
 
     this.streams.set(guildId, streamData);
 
-    console.log(`[StreamServer] 📡 Created LOW-LATENCY streams for guild ${guildId}`);
+    console.log(`[StreamServer] 📡 Created streams for guild ${guildId}`);
 
     // Log when data flows through the Opus stream
     let opusDataCount = 0;
