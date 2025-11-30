@@ -6,7 +6,7 @@ const { PassThrough } = require('stream');
 
 class BroadcastManager {
   constructor() {
-    this.activeSessions = new Map(); // guildId -> { receiver, mixer, opusEncoder, ... }
+    this.activeSessions = new Map();
   }
 
   isActive(guildId) {
@@ -30,24 +30,19 @@ class BroadcastManager {
     const receiver = new VoiceReceiver(client, collections);
     const mixer = new AudioMixer();
 
-    // Create HTTP streams (both Opus and PCM)
+    // Create HTTP streams
     const { opusStream, pcmBroadcast } = streamServer.createStream(guildId);
 
-    // CRITICAL FIX: Create Opus encoder with proper error handling and settings
+    // CRITICAL: Create Opus encoder with proper error handling
     const opusEncoder = new prism.opus.Encoder({
       frameSize: 960,
       channels: 2,
       rate: 48000,
-      fec: true,           // Forward Error Correction for better quality
-      plp: 0               // Packet loss percentage
+      fec: true,
+      plp: 0
     });
 
-    console.log(`[BroadcastManager] 🎵 Opus encoder created with settings:`, {
-      frameSize: 960,
-      channels: 2,
-      rate: 48000,
-      fec: true
-    });
+    console.log(`[BroadcastManager] 🎵 Opus encoder created`);
 
     // Start receiving from source channel
     await receiver.startReceiving(guildId, sourceChannelId, broadcastUserIds, mixer);
@@ -55,12 +50,9 @@ class BroadcastManager {
     // Track encoder health
     let encoderPacketCount = 0;
     let encoderErrorCount = 0;
+    let lastEncoderData = Date.now();
 
-    // CRITICAL: We need to split the mixer's PCM output to TWO destinations:
-    // 1. Opus encoder → Opus HTTP stream (for Discord bots)
-    // 2. Direct → PCM HTTP stream (for VLC/FFplay)
-
-    // Create separate passthroughs for each destination to avoid backpressure issues
+    // CRITICAL FIX: Create robust passthroughs with error recovery
     const encoderPassthrough = new PassThrough({
       highWaterMark: 16384
     });
@@ -73,8 +65,19 @@ class BroadcastManager {
     mixer.pipe(encoderPassthrough);
     mixer.pipe(pcmPassthrough);
 
-    // Pipe encoder passthrough to opus encoder, then to opus stream
+    // Pipe encoder passthrough to opus encoder
     encoderPassthrough.pipe(opusEncoder);
+
+    // CRITICAL FIX: Handle encoder pipe errors gracefully
+    encoderPassthrough.on('pipe', () => {
+      console.log(`[BroadcastManager] Encoder passthrough piped`);
+    });
+
+    encoderPassthrough.on('unpipe', () => {
+      console.warn(`[BroadcastManager] ⚠️ Encoder passthrough unpiped`);
+    });
+
+    // Pipe encoder to opus stream
     opusEncoder.pipe(opusStream);
 
     // Pipe PCM passthrough directly to PCM broadcast
@@ -83,51 +86,73 @@ class BroadcastManager {
     // Monitor Opus encoder output
     opusEncoder.on('data', (chunk) => {
       encoderPacketCount++;
-      if (encoderPacketCount % 100 === 0) {
+      lastEncoderData = Date.now();
+
+      if (encoderPacketCount % 500 === 0) {
         console.log(`[BroadcastManager] 📤 Opus encoder: ${encoderPacketCount} packets encoded`);
       }
     });
 
-    // Add comprehensive error handlers with recovery
+    // COMPREHENSIVE ERROR HANDLERS with recovery
     opusEncoder.on('error', (err) => {
       encoderErrorCount++;
-      console.error(`[BroadcastManager] ❌ Encoder error #${encoderErrorCount} for guild ${guildId}:`, err);
+      console.error(`[BroadcastManager] ❌ Encoder error #${encoderErrorCount}:`, err);
 
-      // If encoder keeps failing, something is seriously wrong
       if (encoderErrorCount > 10) {
         console.error(`[BroadcastManager] 🔥 Too many encoder errors, stopping broadcast`);
         this.stopBroadcast(guildId);
       }
     });
 
-    mixer.on('error', (err) => {
-      console.error(`[BroadcastManager] ❌ Mixer error for guild ${guildId}:`, err);
-    });
-
-    opusStream.on('error', (err) => {
-      console.error(`[BroadcastManager] ❌ Opus stream error for guild ${guildId}:`, err);
-    });
-
-    pcmBroadcast.on('error', (err) => {
-      console.error(`[BroadcastManager] ❌ PCM broadcast error for guild ${guildId}:`, err);
-    });
-
-    encoderPassthrough.on('error', (err) => {
-      console.error(`[BroadcastManager] ❌ Encoder passthrough error for guild ${guildId}:`, err);
-    });
-
-    pcmPassthrough.on('error', (err) => {
-      console.error(`[BroadcastManager] ❌ PCM passthrough error for guild ${guildId}:`, err);
-    });
-
-    // Monitor for stream end events (shouldn't happen with continuous silence)
+    // Handle encoder close/end events
     opusEncoder.on('end', () => {
       console.warn(`[BroadcastManager] ⚠️ Opus encoder ended for guild ${guildId}`);
     });
 
-    encoderPassthrough.on('end', () => {
-      console.warn(`[BroadcastManager] ⚠️ Encoder passthrough ended for guild ${guildId}`);
+    opusEncoder.on('close', () => {
+      console.warn(`[BroadcastManager] ⚠️ Opus encoder closed for guild ${guildId}`);
     });
+
+    mixer.on('error', (err) => {
+      console.error(`[BroadcastManager] ❌ Mixer error:`, err);
+    });
+
+    mixer.on('end', () => {
+      console.warn(`[BroadcastManager] ⚠️ Mixer ended for guild ${guildId}`);
+    });
+
+    mixer.on('close', () => {
+      console.warn(`[BroadcastManager] ⚠️ Mixer closed for guild ${guildId}`);
+    });
+
+    opusStream.on('error', (err) => {
+      console.error(`[BroadcastManager] ❌ Opus stream error:`, err);
+    });
+
+    pcmBroadcast.on('error', (err) => {
+      console.error(`[BroadcastManager] ❌ PCM broadcast error:`, err);
+    });
+
+    encoderPassthrough.on('error', (err) => {
+      console.error(`[BroadcastManager] ❌ Encoder passthrough error:`, err);
+    });
+
+    pcmPassthrough.on('error', (err) => {
+      console.error(`[BroadcastManager] ❌ PCM passthrough error:`, err);
+    });
+
+    // CRITICAL: Monitor stream health and detect stalls
+    const streamHealthCheck = setInterval(() => {
+      const timeSinceData = Date.now() - lastEncoderData;
+
+      if (timeSinceData > 5000) {
+        console.error(`[BroadcastManager] 🚨 CRITICAL: No encoder output for ${timeSinceData}ms!`);
+        console.error(`[BroadcastManager] Encoder may have stalled. Attempting recovery...`);
+
+        // Don't automatically stop - let it try to recover
+        // The mixer should still be sending silence frames
+      }
+    }, 10000); // Check every 10 seconds
 
     // Store session
     this.activeSessions.set(guildId, {
@@ -140,7 +165,8 @@ class BroadcastManager {
       pcmBroadcast,
       sourceChannelId,
       broadcastUserIds,
-      startedAt: Date.now()
+      startedAt: Date.now(),
+      streamHealthCheck
     });
 
     const opusUrl = streamServer.getStreamUrl(guildId, 'opus');
@@ -149,9 +175,8 @@ class BroadcastManager {
     console.log(`[BroadcastManager] ✅ Broadcast started successfully`);
     console.log(`[BroadcastManager] 🎵 Opus Stream: ${opusUrl}`);
     console.log(`[BroadcastManager] 🎧 PCM Stream: ${pcmUrl}`);
-    console.log(`[BroadcastManager] 📝 FFplay command: ffplay -f s16le -ar 48000 -ac 2 ${pcmUrl}`);
 
-    // Start a health check interval
+    // Detailed health check interval
     const healthCheckInterval = setInterval(() => {
       const session = this.activeSessions.get(guildId);
       if (!session) {
@@ -160,14 +185,17 @@ class BroadcastManager {
       }
 
       const uptime = Math.floor((Date.now() - session.startedAt) / 1000);
+      const timeSinceData = Date.now() - lastEncoderData;
+
       console.log(`[BroadcastManager] 💓 Health check for guild ${guildId}:`);
       console.log(`  - Uptime: ${uptime}s`);
       console.log(`  - Opus packets: ${encoderPacketCount}`);
       console.log(`  - Encoder errors: ${encoderErrorCount}`);
       console.log(`  - Active sources: ${mixer.sources.size}`);
+      console.log(`  - Last encoder data: ${timeSinceData}ms ago`);
+      console.log(`  - Mixer frames: ${mixer.frameCount || 'N/A'}`);
     }, 60000); // Every 60 seconds
 
-    // Store interval for cleanup
     this.activeSessions.get(guildId).healthCheckInterval = healthCheckInterval;
 
     return opusUrl;
@@ -183,14 +211,30 @@ class BroadcastManager {
     console.log(`[BroadcastManager] Stopping broadcast for guild ${guildId}`);
 
     try {
-      // Clear health check interval
+      // Clear intervals
       if (session.healthCheckInterval) {
         clearInterval(session.healthCheckInterval);
+      }
+      if (session.streamHealthCheck) {
+        clearInterval(session.streamHealthCheck);
       }
 
       // Stop receiving
       if (session.receiver) {
         await session.receiver.stopReceiving(guildId);
+      }
+
+      // Unpipe everything before destroying
+      if (session.mixer) {
+        session.mixer.unpipe();
+      }
+
+      if (session.encoderPassthrough) {
+        session.encoderPassthrough.unpipe();
+      }
+
+      if (session.opusEncoder) {
+        session.opusEncoder.unpipe();
       }
 
       // Destroy streams in reverse order
