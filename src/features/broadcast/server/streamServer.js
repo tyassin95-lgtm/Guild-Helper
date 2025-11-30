@@ -15,6 +15,7 @@ class StreamServer {
       return;
     }
 
+    // Disable express's default buffering
     this.app.disable('etag');
     this.app.disable('x-powered-by');
 
@@ -39,201 +40,168 @@ class StreamServer {
       });
     });
 
-    // CRITICAL FIX: Properly handle multiple concurrent listeners
+    // Stream endpoint - /stream/:guildId (Opus format for Discord bots)
     this.app.get('/stream/:guildId', (req, res) => {
       const { guildId } = req.params;
 
       const streamData = this.streams.get(guildId);
       if (!streamData) {
-        console.log(`[StreamServer] ❌ No stream for guild ${guildId}`);
-        return res.status(404).json({ error: 'No active stream' });
+        console.log(`[StreamServer] ❌ No active stream for guild ${guildId}`);
+        return res.status(404).json({ error: 'No active stream for this guild' });
       }
 
-      console.log(`[StreamServer] 🎧 New Opus listener connecting for guild ${guildId}`);
+      console.log(`[StreamServer] 🎧 New Opus listener connected for guild ${guildId}`);
 
-      // Write headers immediately
+      // Write headers immediately and flush
       res.writeHead(200, {
         'Content-Type': 'audio/opus',
         'Transfer-Encoding': 'chunked',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0',
+        'Access-Control-Allow-Origin': '*',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no'
+        'X-Accel-Buffering': 'no' // Disable nginx buffering if behind proxy
       });
 
+      // Force flush headers
       res.flushHeaders();
 
-      // CRITICAL: Create independent passthrough for THIS listener
-      // Each listener gets their own stream copy
+      // Create a new passthrough with MINIMAL buffering for low latency
       const listenerStream = new PassThrough({
-        highWaterMark: 16384
+        highWaterMark: 16384 // 16KB buffer
       });
 
-      const listenerId = Date.now() + '-' + Math.random();
+      // Track listener
+      const listenerId = Date.now() + Math.random();
       streamData.opusListeners = streamData.opusListeners || new Map();
       streamData.opusListeners.set(listenerId, listenerStream);
 
       console.log(`[StreamServer] 📊 Active Opus listeners for guild ${guildId}: ${streamData.opusListeners.size}`);
 
-      // CRITICAL FIX: Don't pipe the main stream directly!
-      // Instead, listen to data events and write to each listener independently
-      // This prevents one listener's issues from affecting others
-
-      let isActive = true;
-
+      // FIXED: Forward ALL data from this point on (no shouldStream gating)
+      // This ensures all listeners get synchronized data
       const dataHandler = (chunk) => {
-        if (!isActive || listenerStream.destroyed || res.destroyed) {
-          return;
-        }
-
-        // Write to this specific listener's stream
-        try {
-          if (!listenerStream.write(chunk)) {
-            // Backpressure - pause briefly
-            // But DON'T stop the main stream
-          }
-        } catch (err) {
-          console.error(`[StreamServer] ❌ Write error for listener ${listenerId}:`, err.message);
-          cleanup();
+        if (!listenerStream.destroyed) {
+          listenerStream.write(chunk);
         }
       };
 
-      // Listen to the main opus stream
       streamData.opusStream.on('data', dataHandler);
-
-      // Pipe listener stream to response
       listenerStream.pipe(res);
 
-      const cleanup = () => {
-        if (!isActive) return;
-        isActive = false;
-
-        console.log(`[StreamServer] 👋 Opus listener ${listenerId} disconnecting from guild ${guildId}`);
-
-        // Remove data handler from main stream
-        streamData.opusStream.removeListener('data', dataHandler);
-
-        // Destroy listener stream
-        if (!listenerStream.destroyed) {
-          listenerStream.destroy();
-        }
-
-        // Remove from active listeners
-        streamData.opusListeners.delete(listenerId);
-
-        console.log(`[StreamServer] 📊 Remaining Opus listeners for guild ${guildId}: ${streamData.opusListeners.size}`);
-      };
-
       // Handle client disconnect
-      req.on('close', cleanup);
-      req.on('error', (err) => {
-        console.error(`[StreamServer] ❌ Request error:`, err.message);
-        cleanup();
+      req.on('close', () => {
+        console.log(`[StreamServer] 👋 Opus listener disconnected from guild ${guildId}`);
+        streamData.opusStream.removeListener('data', dataHandler);
+        listenerStream.destroy();
+        streamData.opusListeners.delete(listenerId);
+        console.log(`[StreamServer] 📊 Remaining Opus listeners for guild ${guildId}: ${streamData.opusListeners.size}`);
       });
 
+      // Handle errors
       listenerStream.on('error', (err) => {
-        console.error(`[StreamServer] ❌ Listener stream error:`, err.message);
-        cleanup();
+        console.error(`[StreamServer] ❌ Opus listener error:`, err);
+        streamData.opusStream.removeListener('data', dataHandler);
+        streamData.opusListeners.delete(listenerId);
       });
 
       res.on('error', (err) => {
-        console.error(`[StreamServer] ❌ Response error:`, err.message);
-        cleanup();
+        console.error(`[StreamServer] ❌ Response error:`, err);
+        streamData.opusStream.removeListener('data', dataHandler);
+        listenerStream.destroy();
+        streamData.opusListeners.delete(listenerId);
       });
-
-      res.on('close', cleanup);
     });
 
-    // PCM endpoint (same fix)
+    // PCM endpoint - /stream/:guildId/pcm (Raw PCM for VLC/FFmpeg)
     this.app.get('/stream/:guildId/pcm', (req, res) => {
       const { guildId } = req.params;
 
       const streamData = this.streams.get(guildId);
       if (!streamData || !streamData.pcmBroadcast) {
-        return res.status(404).json({ error: 'No active PCM stream' });
+        console.log(`[StreamServer] ❌ No active PCM stream for guild ${guildId}`);
+        return res.status(404).json({ error: 'No active stream for this guild' });
       }
 
-      console.log(`[StreamServer] 🎧 New PCM listener for guild ${guildId}`);
+      console.log(`[StreamServer] 🎧 New PCM listener connected for guild ${guildId}`);
 
+      // Write headers immediately and flush
       res.writeHead(200, {
         'Content-Type': 'audio/pcm',
         'Transfer-Encoding': 'chunked',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0',
+        'Access-Control-Allow-Origin': '*',
         'X-Audio-Channels': '2',
         'X-Audio-Sample-Rate': '48000',
         'X-Audio-Format': 's16le',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no'
+        'X-Accel-Buffering': 'no' // Disable nginx buffering if behind proxy
       });
 
+      // Force flush headers immediately
       res.flushHeaders();
 
+      // Create a new listener stream with MINIMAL buffering for low latency
       const pcmListener = new PassThrough({
-        highWaterMark: 16384
+        highWaterMark: 16384 // 16KB buffer
       });
 
-      const listenerId = Date.now() + '-' + Math.random();
+      const listenerId = Date.now() + Math.random();
       streamData.pcmListeners = streamData.pcmListeners || new Map();
       streamData.pcmListeners.set(listenerId, pcmListener);
 
       console.log(`[StreamServer] 📊 Active PCM listeners for guild ${guildId}: ${streamData.pcmListeners.size}`);
 
-      let isActive = true;
-
+      // FIXED: Forward ALL data from this point on (no shouldStream gating)
       const dataHandler = (chunk) => {
-        if (!isActive || pcmListener.destroyed || res.destroyed) {
-          return;
-        }
-
-        try {
+        if (!pcmListener.destroyed) {
           pcmListener.write(chunk);
-        } catch (err) {
-          console.error(`[StreamServer] ❌ PCM write error:`, err.message);
-          cleanup();
         }
       };
 
       streamData.pcmBroadcast.on('data', dataHandler);
       pcmListener.pipe(res);
 
-      const cleanup = () => {
-        if (!isActive) return;
-        isActive = false;
-
+      req.on('close', () => {
         console.log(`[StreamServer] 👋 PCM listener disconnected from guild ${guildId}`);
         streamData.pcmBroadcast.removeListener('data', dataHandler);
-
-        if (!pcmListener.destroyed) {
-          pcmListener.destroy();
-        }
-
+        pcmListener.destroy();
         streamData.pcmListeners.delete(listenerId);
         console.log(`[StreamServer] 📊 Remaining PCM listeners for guild ${guildId}: ${streamData.pcmListeners.size}`);
-      };
+      });
 
-      req.on('close', cleanup);
-      req.on('error', cleanup);
-      pcmListener.on('error', cleanup);
-      res.on('error', cleanup);
-      res.on('close', cleanup);
+      pcmListener.on('error', (err) => {
+        console.error(`[StreamServer] ❌ PCM listener error:`, err);
+        streamData.pcmBroadcast.removeListener('data', dataHandler);
+        streamData.pcmListeners.delete(listenerId);
+      });
+
+      res.on('error', (err) => {
+        console.error(`[StreamServer] ❌ Response error:`, err);
+        streamData.pcmBroadcast.removeListener('data', dataHandler);
+        pcmListener.destroy();
+        streamData.pcmListeners.delete(listenerId);
+      });
     });
 
     // Start server
     this.server = this.app.listen(this.port, () => {
-      console.log(`[StreamServer] 🚀 Server listening on port ${this.port}`);
-      console.log(`[StreamServer] 🌐 Opus: http://your-server:${this.port}/stream/{guildId}`);
-      console.log(`[StreamServer] 🌐 PCM: http://your-server:${this.port}/stream/{guildId}/pcm`);
+      console.log(`[StreamServer] 🚀 HTTP audio server listening on port ${this.port}`);
+      console.log(`[StreamServer] 🌐 Opus stream: http://34.170.220.22:${this.port}/stream/{guildId}`);
+      console.log(`[StreamServer] 🌐 PCM stream: http://34.170.220.22:${this.port}/stream/{guildId}/pcm`);
+      console.log(`[StreamServer] 🔍 Health check: http://34.170.220.22:${this.port}/health`);
+      console.log(`[StreamServer] ✅ Ready check: http://34.170.220.22:${this.port}/ready/{guildId}`);
     });
 
     this.server.on('error', (err) => {
       console.error('[StreamServer] ❌ Server error:', err);
     });
 
-    // Disable timeouts for streaming
-    this.server.timeout = 0;
+    // Set timeouts
+    this.server.timeout = 0; // Disable timeout for streaming
     this.server.keepAliveTimeout = 0;
     this.server.headersTimeout = 0;
   }
@@ -241,14 +209,15 @@ class StreamServer {
   stop() {
     if (!this.server) return;
 
-    console.log('[StreamServer] 🛑 Stopping...');
+    console.log('[StreamServer] 🛑 Stopping server...');
 
+    // Close all streams
     for (const [guildId, streamData] of this.streams) {
       this.removeStream(guildId);
     }
 
     this.server.close(() => {
-      console.log('[StreamServer] ✅ Stopped');
+      console.log('[StreamServer] ✅ Server stopped');
     });
 
     this.server = null;
@@ -259,14 +228,14 @@ class StreamServer {
       throw new Error('Stream already exists for this guild');
     }
 
-    // Create main opus stream
+    // Create the Opus stream with MINIMAL buffering
     const opusStream = new PassThrough({
-      highWaterMark: 16384
+      highWaterMark: 16384 // 16KB buffer
     });
 
-    // Create main PCM stream
+    // Create PCM broadcast stream with MINIMAL buffering
     const pcmBroadcast = new PassThrough({
-      highWaterMark: 16384
+      highWaterMark: 16384 // 16KB buffer
     });
 
     const streamData = {
@@ -279,9 +248,9 @@ class StreamServer {
 
     this.streams.set(guildId, streamData);
 
-    console.log(`[StreamServer] 📡 Created streams for guild ${guildId}`);
+    console.log(`[StreamServer] 📡 Created LOW-LATENCY streams for guild ${guildId}`);
 
-    // Log data flow
+    // Log when data flows through the Opus stream
     let opusDataCount = 0;
     opusStream.on('data', (chunk) => {
       opusDataCount++;
@@ -290,6 +259,7 @@ class StreamServer {
       }
     });
 
+    // Log when data flows through the PCM stream
     let pcmDataCount = 0;
     pcmBroadcast.on('data', (chunk) => {
       pcmDataCount++;
@@ -365,6 +335,7 @@ class StreamServer {
   }
 
   getStreamUrl(guildId, format = 'opus') {
+    // Use environment variable or default
     const baseUrl = process.env.STREAM_BASE_URL || `http://localhost:${this.port}`;
     if (format === 'pcm') {
       return `${baseUrl}/stream/${guildId}/pcm`;
