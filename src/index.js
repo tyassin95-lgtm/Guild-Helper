@@ -1,10 +1,11 @@
 require('dotenv').config();
+
 const { Client, GatewayIntentBits } = require('discord.js');
 const { connectMongo, getCollections } = require('./db/mongo');
 const { ensureIndexes } = require('./db/indexes');
 const { registerSlashCommands } = require('./bot/commands');
 const { onInteractionCreate } = require('./bot/handlers/interaction');
-const { startTokenRegenerationChecker } = require('./features/wishlist/utils/tokenRegeneration');
+const { startTokenRegenerationChecker } = require('./bot/tokenRegeneration');
 const { startPartyPanelUpdater } = require('./features/parties/panelUpdater');
 const { startPeriodicRebalancer } = require('./features/parties/rebalancing');
 const { resumeActiveRaidCountdowns, clearAllCountdownIntervals } = require('./features/raids/raidSession');
@@ -17,7 +18,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates
+    GatewayIntentBits.GuildVoiceStates  // ADDED: Required for voice receiving
   ]
 });
 
@@ -25,26 +26,26 @@ const client = new Client({
   try {
     const db = await connectMongo(process.env.MONGODB_URI);
     const collections = getCollections(db);
-
     await ensureIndexes(collections);
 
     client.once('clientReady', async () => {
-      console.log(`Logged in as ${client.user.tag}!`); // FIXED: Added opening parenthesis
-
+      console.log(`Logged in as ${client.user.tag}!`);
       await registerSlashCommands(client);
       console.log('Slash commands registered.');
 
-      // Start HTTP audio server
+      // Start the HTTP stream server
       streamServer.start();
 
-      // Start token regeneration checker - FIXED: Correct parameter order
-      startTokenRegenerationChecker(collections, client);
+      // Start the token regeneration checker
+      startTokenRegenerationChecker(client, collections);
 
-      // Start party systems - FIXED: Correct parameter order
-      startPartyPanelUpdater(collections, client);
-      startPeriodicRebalancer(collections, client);
+      // Start the party panel auto-updater
+      startPartyPanelUpdater(client, collections);
 
-      // Resume active raid countdowns
+      // Start the periodic party rebalancer (runs every 72 hours)
+      startPeriodicRebalancer(client, collections);
+
+      // Resume active raid countdowns after bot restart
       await resumeActiveRaidCountdowns(client, collections);
     });
 
@@ -61,29 +62,43 @@ const client = new Client({
       }
     });
 
+    // Handle graceful shutdown
     process.on('SIGINT', async () => {
       console.log('\n🛑 Shutting down gracefully...');
+
+      // Stop all broadcasts
       broadcastManager.stopAll();
       streamServer.stop();
+
+      // Clear all raid countdown intervals
       clearAllCountdownIntervals();
+
+      // Destroy Discord client
       client.destroy();
+
       console.log('✅ Shutdown complete');
       process.exit(0);
     });
 
     process.on('SIGTERM', async () => {
       console.log('\n🛑 SIGTERM received, shutting down...');
+
+      // Stop all broadcasts
       broadcastManager.stopAll();
       streamServer.stop();
+
+      // Clear all raid countdown intervals
       clearAllCountdownIntervals();
+
+      // Destroy Discord client
       client.destroy();
+
       console.log('✅ Shutdown complete');
       process.exit(0);
     });
 
     console.log('Loaded token:', process.env.DISCORD_TOKEN ? '✅ Found' : '❌ Missing');
     await client.login(process.env.DISCORD_TOKEN);
-
   } catch (err) {
     console.error('Fatal boot error:', err);
     process.exit(1);

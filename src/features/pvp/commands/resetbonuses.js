@@ -1,5 +1,5 @@
 const { PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { scheduleLiveSummaryUpdate } = require('../../wishlist/liveSummary'); // UPDATED PATH
+const { scheduleLiveSummaryUpdate } = require('../../../bot/liveSummary');
 
 async function handleResetBonuses({ interaction, collections }) {
   const { pvpBonuses } = collections;

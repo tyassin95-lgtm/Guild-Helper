@@ -1,5 +1,5 @@
 const { PermissionFlagsBits } = require('discord.js');
-const { createOrUpdateLiveSummaryPanel, clearLiveSummaryPanel } = require('../liveSummary');
+const { createOrUpdateLiveSummaryPanel, clearLiveSummaryPanel } = require('../../liveSummary');
 
 async function handleSummaryLive({ interaction, collections }) {
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -11,6 +11,7 @@ async function handleSummaryLive({ interaction, collections }) {
   if (action === 'set') {
     try {
       await interaction.deferReply({ flags: [64] });
+      // Force the panel to be created/rehomed in the CURRENT channel
       const res = await createOrUpdateLiveSummaryPanel(interaction, collections, interaction.channel.id);
       return interaction.editReply(`📌 Live summary panel is set for **#${interaction.channel.name}**.\n➡️ [Open panel message](${res.url})`);
     } catch (err) {

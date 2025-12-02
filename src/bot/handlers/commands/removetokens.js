@@ -1,6 +1,7 @@
 const { PermissionFlagsBits } = require('discord.js');
+const { getUserWishlist } = require('./mywishlist');
 
-async function handleGrantTokens({ interaction, collections }) {
+async function handleRemoveTokens({ interaction, collections }) {
   const { wishlists } = collections;
 
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -11,13 +12,17 @@ async function handleGrantTokens({ interaction, collections }) {
   const tokenType = interaction.options.getString('type');
   const amount = interaction.options.getInteger('amount');
 
+  const wl = await getUserWishlist(wishlists, targetUser.id, interaction.guildId);
+  const current = wl.tokenGrants?.[tokenType] || 0;
+  const newGrant = Math.max(0, current - amount);
+
   await wishlists.updateOne(
     { userId: targetUser.id, guildId: interaction.guildId },
-    { $inc: { [`tokenGrants.${tokenType}`]: amount } },
+    { $set: { [`tokenGrants.${tokenType}`]: newGrant } },
     { upsert: true }
   );
 
-  return interaction.reply({ content: `✅ Granted ${amount} ${tokenType} token(s) to ${targetUser.tag}!`, flags: [64] });
+  return interaction.reply({ content: `✅ Removed ${amount} ${tokenType} token(s) from ${targetUser.tag}. New ${tokenType} grants: ${newGrant}.`, flags: [64] });
 }
 
-module.exports = { handleGrantTokens };
+module.exports = { handleRemoveTokens };

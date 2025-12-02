@@ -11,6 +11,7 @@ async function handleFreeze({ interaction, collections }) {
   const action = interaction.options.getString('action');
 
   if (action === 'freeze') {
+    // Check if already frozen
     const settings = await guildSettings.findOne({ guildId: interaction.guildId });
     if (settings?.finalizeFrozen) {
       return interaction.reply({
@@ -19,6 +20,7 @@ async function handleFreeze({ interaction, collections }) {
       });
     }
 
+    // Show modal to get raid details
     const modal = new ModalBuilder()
       .setCustomId('freeze_raid_setup')
       .setTitle('Setup Guild Raid');
@@ -39,6 +41,7 @@ async function handleFreeze({ interaction, collections }) {
   }
 
   if (action === 'unfreeze') {
+    // Check if frozen
     const settings = await guildSettings.findOne({ guildId: interaction.guildId });
     if (!settings?.finalizeFrozen) {
       return interaction.reply({
@@ -49,8 +52,10 @@ async function handleFreeze({ interaction, collections }) {
 
     await interaction.deferReply();
 
+    // Get active raid session
     const raidSession = await getActiveRaidSession(interaction.guildId, collections);
 
+    // Unfreeze wishlists
     await guildSettings.updateOne(
       { guildId: interaction.guildId },
       { $set: { finalizeFrozen: false, unfrozenAt: new Date() } },
@@ -58,8 +63,10 @@ async function handleFreeze({ interaction, collections }) {
     );
 
     if (raidSession) {
+      // End raid session and get summary
       const summary = await endRaidSession(interaction.guildId, collections);
 
+      // Create and post raid summary
       const summaryMessage = await createRaidSummaryMessage(summary, interaction.client, collections);
 
       await interaction.channel.send({
@@ -71,6 +78,7 @@ async function handleFreeze({ interaction, collections }) {
         content: '✅ Raid session ended! Summary posted above.'
       });
     } else {
+      // No active raid session, just unfreeze
       return interaction.editReply({
         content: '✅ **Wishlist finalization has been UNFROZEN!**\n\n' +
                  '• Users can now finalize their wishlists\n' +
@@ -99,8 +107,10 @@ async function handleFreezeModal({ interaction, collections }) {
     });
   }
 
+  // Show boss selection menu
   const bosses = getAllBosses();
 
+  // Split into multiple select menus if needed (max 25 options per menu)
   const tier3Bosses = bosses.filter(b => b.tier === 'tier3');
   const tier2Bosses = bosses.filter(b => b.tier === 'tier2');
 
@@ -138,12 +148,14 @@ async function handleFreezeModal({ interaction, collections }) {
     components.push(tier2Row);
   }
 
+  // Store the minutes in a temporary collection for retrieval
   await collections.guildSettings.updateOne(
     { guildId: interaction.guildId },
     { $set: { tempRaidMinutes: minutes, tempRaidBosses: [] } },
     { upsert: true }
   );
 
+  // Add a "Finish Selection" button
   const finishButton = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('freeze_finish_selection')
@@ -173,9 +185,11 @@ async function handleFreezeBossSelection({ interaction, collections }) {
     return interaction.update({ content: '❌ You need administrator permissions.', components: [] });
   }
 
+  // Get stored minutes
   const settings = await guildSettings.findOne({ guildId: interaction.guildId });
   const minutes = settings?.tempRaidMinutes || 15;
 
+  // Parse selections
   const selectedBosses = [];
   let order = 1;
 
@@ -184,18 +198,23 @@ async function handleFreezeBossSelection({ interaction, collections }) {
     selectedBosses.push({ tier, name: bossName, order: order++ });
   }
 
+  // Get existing selections
   const existingSelections = settings?.tempRaidBosses || [];
 
+  // Merge selections (keeping order)
   const allSelections = [...existingSelections, ...selectedBosses];
 
+  // Update with new selections
   await guildSettings.updateOne(
     { guildId: interaction.guildId },
     { $set: { tempRaidBosses: allSelections } },
     { upsert: true }
   );
 
+  // Check if this is tier3 or tier2
   const isTier3 = interaction.customId.includes('tier3');
 
+  // Just update the status message, don't finalize yet
   const tierName = isTier3 ? 'Tier 3' : 'Tier 2';
   return interaction.update({
     content: `✅ Selected ${selectedBosses.length} ${tierName} boss(es). Total: ${allSelections.length} boss(es)\n\n` +
@@ -211,10 +230,12 @@ async function handleFreezeFinishButton({ interaction, collections }) {
     return interaction.update({ content: '❌ You need administrator permissions.', components: [] });
   }
 
+  // Get stored data
   const settings = await guildSettings.findOne({ guildId: interaction.guildId });
   const minutes = settings?.tempRaidMinutes || 15;
   const selectedBosses = settings?.tempRaidBosses || [];
 
+  // Finalize the freeze
   await finalizeFreeze(interaction, minutes, selectedBosses, collections);
 }
 
@@ -223,6 +244,7 @@ async function finalizeFreeze(interaction, minutes, selectedBosses, collections)
 
   await interaction.deferUpdate();
 
+  // Freeze wishlists
   await guildSettings.updateOne(
     { guildId: interaction.guildId },
     { 
@@ -238,11 +260,13 @@ async function finalizeFreeze(interaction, minutes, selectedBosses, collections)
     { upsert: true }
   );
 
+  // Renumber bosses to ensure sequential order
   const orderedBosses = selectedBosses.map((boss, index) => ({
     ...boss,
     order: index + 1
   }));
 
+  // Create raid session
   const raidStartTime = new Date(Date.now() + (minutes * 60 * 1000));
   const session = await createRaidSession(
     interaction.guildId,
@@ -252,6 +276,7 @@ async function finalizeFreeze(interaction, minutes, selectedBosses, collections)
     collections
   );
 
+  // Create and post announcement
   const announcementMessage = createRaidAnnouncementMessage(
     minutes,
     orderedBosses,
@@ -263,6 +288,7 @@ async function finalizeFreeze(interaction, minutes, selectedBosses, collections)
     allowedMentions: { parse: ['everyone'] }
   });
 
+  // Start countdown updater - FIXED: Now passing guildId as required parameter
   startCountdownUpdater(
     announcementMsg.id,
     interaction.channelId,
@@ -271,6 +297,7 @@ async function finalizeFreeze(interaction, minutes, selectedBosses, collections)
     interaction.guildId
   );
 
+  // Store message ID for updates
   await collections.raidSessions.updateOne(
     { _id: session._id },
     { $set: { announcementMessageId: announcementMsg.id } }
@@ -300,6 +327,7 @@ async function handleFreezeStatus({ interaction, collections }) {
   if (isFrozen) {
     const frozenAt = settings.frozenAt ? new Date(settings.frozenAt).toLocaleString() : 'Unknown';
 
+    // Check for active raid session
     const raidSession = await getActiveRaidSession(interaction.guildId, collections);
 
     let content = `❄️ **Status: FROZEN**\n\nWishlists have been frozen since: ${frozenAt}\n\nUsers cannot make changes until unfrozen.`;

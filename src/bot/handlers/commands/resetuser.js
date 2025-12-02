@@ -1,5 +1,5 @@
 const { PermissionFlagsBits } = require('discord.js');
-const { scheduleLiveSummaryUpdate } = require('../liveSummary');
+const { scheduleLiveSummaryUpdate } = require('../../liveSummary');
 
 async function handleResetUser({ interaction, collections }) {
   const { wishlists, tokenRegenerations } = collections;
@@ -10,12 +10,14 @@ async function handleResetUser({ interaction, collections }) {
 
   const targetUser = interaction.options.getUser('user');
 
+  // Check for pending token regenerations
   const pendingRegens = await tokenRegenerations.find({
     userId: targetUser.id,
     guildId: interaction.guildId,
     notified: false
   }).toArray();
 
+  // Count regenerating tokens by type
   const regenCounts = {
     weapon: 0,
     armor: 0,
@@ -28,12 +30,14 @@ async function handleResetUser({ interaction, collections }) {
     }
   }
 
+  // Calculate starting tokens (default minus regenerating tokens)
   const startingTokens = {
     weapon: Math.max(0, 1 - regenCounts.weapon),
     armor: Math.max(0, 4 - regenCounts.armor),
     accessory: Math.max(0, 1 - regenCounts.accessory)
   };
 
+  // Reset the wishlist with adjusted token counts
   const result = await wishlists.updateOne(
     { userId: targetUser.id, guildId: interaction.guildId },
     { 
@@ -43,12 +47,13 @@ async function handleResetUser({ interaction, collections }) {
         armor: [],
         accessories: [],
         tokensUsed: {
-          weapon: 1 - startingTokens.weapon,
+          weapon: 1 - startingTokens.weapon,    // Used = Total - Available
           armor: 4 - startingTokens.armor,
           accessory: 1 - startingTokens.accessory
         },
         tokenGrants: { weapon: 0, armor: 0, accessory: 0 },
         timestamps: {}
+        // NOTE: itemsReceived is intentionally NOT cleared
       } 
     }
   );
@@ -57,12 +62,14 @@ async function handleResetUser({ interaction, collections }) {
     return interaction.reply({ content: '❌ User has no wishlist.', flags: [64] });
   }
 
+  // Update live summary after reset
   await scheduleLiveSummaryUpdate(interaction, collections);
 
   let message = `✅ ${targetUser.tag} has been reset:\n`;
   message += `• Wishlist cleared and unlocked for editing\n`;
   message += `• Moved back to "Not Submitted" status\n`;
 
+  // Show token breakdown
   if (pendingRegens.length > 0) {
     message += `• Tokens adjusted for ${pendingRegens.length} pending regeneration(s):\n`;
     message += `  - ${startingTokens.weapon} weapon token(s) (${regenCounts.weapon} regenerating)\n`;

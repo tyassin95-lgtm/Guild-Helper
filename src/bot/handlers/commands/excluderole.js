@@ -14,6 +14,7 @@ async function handleExcludeRole({ interaction, collections }) {
   const excludedRoles = settings?.excludedRoles || [];
 
   if (action === 'add') {
+    // Check if role is already excluded
     if (excludedRoles.includes(role.id)) {
       return interaction.reply({
         content: `❌ The role **${role.name}** is already excluded from wishlist tracking.`,
@@ -21,6 +22,7 @@ async function handleExcludeRole({ interaction, collections }) {
       });
     }
 
+    // Add role to exclusion list
     await guildSettings.updateOne(
       { guildId: interaction.guildId },
       { $addToSet: { excludedRoles: role.id } },
@@ -35,6 +37,7 @@ async function handleExcludeRole({ interaction, collections }) {
   }
 
   if (action === 'remove') {
+    // Check if role is in exclusion list
     if (!excludedRoles.includes(role.id)) {
       return interaction.reply({
         content: `❌ The role **${role.name}** is not currently excluded.`,
@@ -42,6 +45,7 @@ async function handleExcludeRole({ interaction, collections }) {
       });
     }
 
+    // Remove role from exclusion list
     await guildSettings.updateOne(
       { guildId: interaction.guildId },
       { $pull: { excludedRoles: role.id } }
@@ -68,6 +72,7 @@ async function handleExcludeRole({ interaction, collections }) {
       .setDescription('Members with these roles will not appear in wishlist tracking.')
       .setTimestamp();
 
+    // Fetch role names
     const roleNames = [];
     for (const roleId of excludedRoles) {
       const guildRole = await interaction.guild.roles.fetch(roleId).catch(() => null);
