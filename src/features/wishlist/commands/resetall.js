@@ -1,7 +1,7 @@
 const { PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { cancelUserTokenRegenerations } = require('../../tokenRegeneration');
+const { cancelUserTokenRegenerations } = require('../utils/tokenRegeneration');
 const { getClient } = require('../../../db/mongo');
-const { scheduleLiveSummaryUpdate } = require('../../liveSummary');
+const { scheduleLiveSummaryUpdate } = require('../liveSummary');
 
 async function handleResetAll({ interaction, collections }) {
   const { wishlists, handedOut } = collections;
@@ -12,7 +12,6 @@ async function handleResetAll({ interaction, collections }) {
 
   const role = interaction.options.getRole('role');
 
-  // Get confirmation first
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`confirm_reset_all_yes:${role.id}`)
@@ -25,7 +24,6 @@ async function handleResetAll({ interaction, collections }) {
       .setStyle(ButtonStyle.Secondary)
   );
 
-  // Count affected users
   await interaction.guild.members.fetch();
   const membersWithRole = interaction.guild.members.cache.filter(m => m.roles.cache.has(role.id) && !m.user.bot);
 
@@ -55,12 +53,10 @@ async function handleResetAllConfirmation({ interaction, collections }) {
     return interaction.update({ content: '❎ Bulk reset cancelled. No changes made.', components: [] });
   }
 
-  // Extract role ID from customId
   const roleId = interaction.customId.split(':')[1];
 
   await interaction.deferUpdate();
 
-  // Get all members with the role
   await interaction.guild.members.fetch();
   const membersWithRole = interaction.guild.members.cache.filter(m => m.roles.cache.has(roleId) && !m.user.bot);
 
@@ -73,7 +69,6 @@ async function handleResetAllConfirmation({ interaction, collections }) {
 
   const userIds = membersWithRole.map(m => m.id);
 
-  // Use transactions for atomicity
   const client = getClient();
   const session = client.startSession();
 
@@ -83,7 +78,6 @@ async function handleResetAllConfirmation({ interaction, collections }) {
 
   try {
     await session.withTransaction(async () => {
-      // Cancel all pending token regenerations for these users
       for (const userId of userIds) {
         const cancelled = await cancelUserTokenRegenerations(
           userId, 
@@ -93,14 +87,12 @@ async function handleResetAllConfirmation({ interaction, collections }) {
         cancelledRegens += cancelled;
       }
 
-      // Remove all handed-out records for these users
       const handedOutResult = await handedOut.deleteMany({
         guildId: interaction.guildId,
         userId: { $in: userIds }
       }, { session });
       handedOutCleared = handedOutResult.deletedCount;
 
-      // Reset all wishlists (including itemsReceived)
       const resetResult = await wishlists.updateMany(
         { 
           userId: { $in: userIds }, 
@@ -115,7 +107,7 @@ async function handleResetAllConfirmation({ interaction, collections }) {
             tokensUsed: { weapon: 0, armor: 0, accessory: 0 },
             tokenGrants: { weapon: 0, armor: 0, accessory: 0 },
             timestamps: {},
-            itemsReceived: [] // NEW: Clear received items
+            itemsReceived: []
           } 
         },
         { session }
@@ -133,7 +125,6 @@ async function handleResetAllConfirmation({ interaction, collections }) {
     await session.endSession();
   }
 
-  // Update live summary after reset
   await scheduleLiveSummaryUpdate(interaction, collections);
 
   let message = `✅ **Bulk reset complete!**\n\n`;

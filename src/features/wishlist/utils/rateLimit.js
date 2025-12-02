@@ -1,4 +1,4 @@
-const { USER_ACTION_COOLDOWN_MS } = require('../config');
+const { USER_ACTION_COOLDOWN_MS } = require('../../../config');
 
 /**
  * Check if a user is on cooldown for a specific interaction type
@@ -14,10 +14,9 @@ async function checkUserCooldown(userId, interactionType, collections) {
   });
 
   if (existing) {
-    return false; // User is on cooldown
+    return false;
   }
 
-  // Set new cooldown
   const expiresAt = new Date(Date.now() + USER_ACTION_COOLDOWN_MS);
   await userCooldowns.insertOne({
     userId,
@@ -26,7 +25,7 @@ async function checkUserCooldown(userId, interactionType, collections) {
     expiresAt
   });
 
-  return true; // User is allowed
+  return true;
 }
 
 /**

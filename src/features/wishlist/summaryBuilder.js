@@ -1,8 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
-const { createPvPBonusEmbed } = require('../features/pvp/bonusDisplay');
-const { createPvPActivityRankingEmbed } = require('../features/pvp/activityRanking');
+const { createPvPBonusEmbed } = require('../pvp/bonusDisplay');
+const { createPvPActivityRankingEmbed } = require('../pvp/activityRanking');
 
-// Category icons - you can replace these URLs with your own
 const CATEGORY_ICONS = {
   weapon: 'https://i.imgur.com/1m9Zhz5.png',
   armor: 'https://i.imgur.com/e29fB3S.png',
@@ -12,24 +11,20 @@ const CATEGORY_ICONS = {
 async function buildSummaryEmbedsAndControls(interaction, collections) {
   const { wishlists, handedOut, guildSettings } = collections;
 
-  // Get excluded roles
   const settings = await guildSettings.findOne({ guildId: interaction.guildId });
   const excludedRoles = settings?.excludedRoles || [];
 
   const allWishlists = await wishlists.find({ guildId: interaction.guildId, finalized: true }).toArray();
 
-  // handedOut now distinguished by boss too: key = `${userId}:${boss}:${name}`
   const handed = await handedOut.find({ guildId: interaction.guildId }).toArray();
   const handedOutSet = new Set(handed.map(h => `${h.userId}:${h.boss || ''}:${h.item}`));
 
-  // Organize by category -> item name -> array of users
   const categorySummary = {
     weapons: {},
     armor: {},
     accessories: {}
   };
 
-  // Aggregate items
   for (const wl of allWishlists) {
     const member = await interaction.guild.members.fetch(wl.userId).catch(() => null);
     const displayName = member ? member.displayName : 'Unknown User';
@@ -61,8 +56,7 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
     }
   }
 
-  // Build embeds by category - return as separate messages
-  const messages = []; // Array of { embeds: [], components: [] }
+  const messages = [];
   let anyData = false;
 
   const categoryInfo = [
@@ -72,7 +66,7 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
   ];
 
   const MAX_EMBEDS_PER_MESSAGE = 10;
-  const MAX_TOTAL_SIZE = 5800; // Safe threshold below 6000
+  const MAX_TOTAL_SIZE = 5800;
 
   for (const { key, title, color, icon } of categoryInfo) {
     const items = categorySummary[key];
@@ -82,7 +76,6 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
 
     anyData = true;
 
-    // Sort items alphabetically
     itemNames.sort((a, b) => a.localeCompare(b));
 
     let currentMessageEmbeds = [];
@@ -100,7 +93,6 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
     for (const itemName of itemNames) {
       const users = items[itemName];
 
-      // Sort users by timestamp (oldest first)
       users.sort((a, b) => {
         const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
         const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
@@ -115,12 +107,10 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
       const fieldName = `${itemName} (${users.length})`;
       const fieldSize = fieldName.length + fieldValue.length;
 
-      // Check if we need to start a new embed
       if (currentFieldCount >= 25 || currentEmbedSize + fieldSize > 5500) {
         currentMessageEmbeds.push(currentEmbed);
         currentMessageSize += currentEmbedSize;
 
-        // Check if we need to start a new message
         if (currentMessageEmbeds.length >= MAX_EMBEDS_PER_MESSAGE || currentMessageSize > MAX_TOTAL_SIZE) {
           messages.push({ embeds: currentMessageEmbeds, components: [] });
           currentMessageEmbeds = [];
@@ -146,13 +136,11 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
       currentFieldCount++;
     }
 
-    // Push the last embed for this category
     if (currentFieldCount > 0) {
       currentMessageEmbeds.push(currentEmbed);
       currentMessageSize += currentEmbedSize;
     }
 
-    // Push remaining embeds as a message
     if (currentMessageEmbeds.length > 0) {
       messages.push({ embeds: currentMessageEmbeds, components: [] });
     }
@@ -170,7 +158,6 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
     });
   }
 
-  // Items Handed Out History
   if (handed.length > 0) {
     const handedOutEmbeds = [];
     let currentEmbed = new EmbedBuilder()
@@ -182,7 +169,6 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
     let currentEmbedSize = 100;
     let fieldCount = 0;
 
-    // Group by user
     const userGroups = {};
     for (const h of handed) {
       if (!userGroups[h.userId]) {
@@ -242,21 +228,17 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
       handedOutEmbeds.push(currentEmbed);
     }
 
-    // Add handed out embeds to messages
     if (handedOutEmbeds.length > 0) {
       messages.push({ embeds: handedOutEmbeds, components: [] });
     }
   }
 
-  // NEW: Add PvP Bonus embed
   const pvpBonusEmbed = await createPvPBonusEmbed(interaction.guildId, interaction.guild, collections);
   messages.push({ embeds: [pvpBonusEmbed], components: [] });
 
-  // NEW: Add PvP Activity Ranking embed
   const pvpActivityEmbed = await createPvPActivityRankingEmbed(interaction.guildId, interaction.guild, collections);
   messages.push({ embeds: [pvpActivityEmbed], components: [] });
 
-  // Submission footer
   await interaction.guild.members.fetch();
 
   const humans = interaction.guild.members.cache.filter(m => {
@@ -341,7 +323,6 @@ async function buildSummaryEmbedsAndControls(interaction, collections) {
     });
   }
 
-  // Admin controls go on the LAST message
   const isAdmin = interaction.member?.permissions?.has(PermissionFlagsBits.Administrator);
   const adminControls = [];
 

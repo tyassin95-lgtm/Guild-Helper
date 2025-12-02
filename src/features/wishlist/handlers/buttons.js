@@ -1,15 +1,15 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, PermissionFlagsBits } = require('discord.js');
-const { createWishlistEmbed } = require('../../features/wishlist/embed');
-const { buildWishlistControls } = require('../../features/wishlist/controls');
-const { BOSS_DATA } = require('../../data/bossData');
+const { createWishlistEmbed } = require('../utils/embed');
+const { buildWishlistControls } = require('../utils/controls');
+const { BOSS_DATA } = require('../../../data/bossData');
 const { scheduleLiveSummaryUpdate } = require('../liveSummary');
 const { getUserWishlist } = require('./selects');
-const { getUserPendingRegenerations } = require('../tokenRegeneration');
-const { checkUserCooldown } = require('../rateLimit');
-const { validateAndFixTokenCounts } = require('../tokenRegeneration');
-const { isWishlistFrozen } = require('../freezeCheck');
+const { getUserPendingRegenerations } = require('../utils/tokenRegeneration');
+const { checkUserCooldown } = require('../utils/rateLimit');
+const { validateAndFixTokenCounts } = require('../utils/tokenRegeneration');
+const { isWishlistFrozen } = require('../utils/freezeCheck');
 
-async function handleButtons({ interaction, collections }) {
+async function handleWishlistButtons({ interaction, collections }) {
   const { wishlists, handedOut } = collections;
 
   // Rate limiting for non-admin actions
@@ -27,7 +27,6 @@ async function handleButtons({ interaction, collections }) {
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     const frozen = await isWishlistFrozen(interaction.guildId, collections);
 
-    // Block these actions when frozen
     const blockedActions = [
       'open_wishlist', 'add_weapon', 'add_armor', 'add_accessory',
       'remove_item', 'remove_regen_item', 'clear_all', 'finalize_wishlist',
@@ -46,7 +45,6 @@ async function handleButtons({ interaction, collections }) {
   if (interaction.customId === 'open_wishlist') {
     const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
 
-    // Validate token counts
     await validateAndFixTokenCounts(interaction.user.id, interaction.guildId, collections);
 
     const pendingRegens = await getUserPendingRegenerations(
@@ -56,19 +54,16 @@ async function handleButtons({ interaction, collections }) {
     );
     const embed = createWishlistEmbed(wl, interaction.member, pendingRegens);
 
-    // Check if user has available tokens
     const hasTokens = (
       (1 + (wl.tokenGrants?.weapon || 0)) - (wl.tokensUsed?.weapon || 0) > 0 ||
       (4 + (wl.tokenGrants?.armor || 0)) - (wl.tokensUsed?.armor || 0) > 0 ||
       (1 + (wl.tokenGrants?.accessory || 0)) - (wl.tokensUsed?.accessory || 0) > 0
     );
 
-    // If not finalized, show full controls
     if (!wl.finalized) {
       return interaction.reply({ embeds: [embed], components: buildWishlistControls(wl), flags: [64] });
     }
 
-    // If finalized but has available tokens, show LIMITED controls (only add buttons)
     if (hasTokens) {
       const weaponTokens = (1 + (wl.tokenGrants?.weapon || 0)) - (wl.tokensUsed?.weapon || 0);
       const armorTokens = (4 + (wl.tokenGrants?.armor || 0)) - (wl.tokensUsed?.armor || 0);
@@ -102,7 +97,6 @@ async function handleButtons({ interaction, collections }) {
       });
     }
 
-    // Fully finalized with no tokens - no controls
     return interaction.reply({ embeds: [embed], flags: [64] });
   }
 
@@ -125,14 +119,13 @@ async function handleButtons({ interaction, collections }) {
     });
   }
 
-  // remove single item (now we include boss for disambiguation)
+  // remove single item
   if (interaction.customId === 'remove_item') {
     const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
     if (wl.finalized) return interaction.reply({ content: '❌ Your wishlist is finalized. Contact an admin to make changes.', flags: [64] });
 
     const mkOption = (type, entry, emoji) => {
       if (typeof entry === 'string') {
-        // legacy string: no boss info
         return { value: `${type}::${entry}`, label: entry, emoji };
       }
       return { value: `${type}:${entry.boss}:${entry.name}`, label: `${entry.name} — ${entry.boss}`, emoji };
@@ -156,7 +149,7 @@ async function handleButtons({ interaction, collections }) {
     return interaction.reply({ content: 'Select an item to remove:', components: [row], flags: [64] });
   }
 
-  // remove regenerated token items only (for finalized wishlists)
+  // remove regenerated token items only
   if (interaction.customId === 'remove_regen_item') {
     const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
 
@@ -164,7 +157,6 @@ async function handleButtons({ interaction, collections }) {
       return { value: `${type}:${entry.boss}:${entry.name}`, label: `${entry.name} — ${entry.boss}`, emoji };
     };
 
-    // Only show items marked as regenerated tokens
     const regenItems = [
       ...(wl.weapons || []).filter(i => typeof i === 'object' && i.isRegeneratedToken).map(i => mkOption('weapon', i, '⚔️')),
       ...(wl.armor || []).filter(i => typeof i === 'object' && i.isRegeneratedToken).map(i => mkOption('armor', i, '🛡️')),
@@ -187,7 +179,6 @@ async function handleButtons({ interaction, collections }) {
   if (interaction.customId === 'finalize_regen_items') {
     const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
 
-    // Mark all regenerated items as no longer regenerated (they're now part of the finalized list)
     await wishlists.updateOne(
       { userId: interaction.user.id, guildId: interaction.guildId },
       { 
@@ -272,7 +263,6 @@ async function handleButtons({ interaction, collections }) {
     const all = await collections.wishlists.find({ guildId: interaction.guildId, finalized: true }).toArray();
     if (all.length === 0) return interaction.reply({ content: '❌ No wishlists found.', flags: [64] });
 
-    // Count items by type
     let weaponCount = 0, armorCount = 0, accessoryCount = 0;
     for (const wl of all) {
       weaponCount += (wl.weapons || []).length;
@@ -342,4 +332,4 @@ async function handleButtons({ interaction, collections }) {
   }
 }
 
-module.exports = { handleButtons };
+module.exports = { handleWishlistButtons };

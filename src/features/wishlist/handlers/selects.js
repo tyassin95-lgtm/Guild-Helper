@@ -1,15 +1,14 @@
 const { StringSelectMenuBuilder, ActionRowBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const { BOSS_DATA } = require('../../data/bossData');
-const { createWishlistEmbed } = require('../../features/wishlist/embed');
-const { buildWishlistControls } = require('../../features/wishlist/controls');
+const { BOSS_DATA } = require('../../../data/bossData');
+const { createWishlistEmbed } = require('../utils/embed');
+const { buildWishlistControls } = require('../utils/controls');
 const { scheduleLiveSummaryUpdate } = require('../liveSummary');
-const { scheduleTokenRegeneration, validateAndFixTokenCounts } = require('../tokenRegeneration');
-const { TOKEN_REGENERATION_DAYS } = require('../../config');
-const { getClient } = require('../../db/mongo');
-const { checkUserCooldown } = require('../rateLimit');
-const { isWishlistFrozen } = require('../freezeCheck');
+const { scheduleTokenRegeneration, validateAndFixTokenCounts } = require('../utils/tokenRegeneration');
+const { TOKEN_REGENERATION_DAYS } = require('../../../config');
+const { getClient } = require('../../../db/mongo');
+const { checkUserCooldown } = require('../utils/rateLimit');
+const { isWishlistFrozen } = require('../utils/freezeCheck');
 
-// shared util used by multiple handlers
 async function getUserWishlist(wishlists, userId, guildId) {
   let wl = await wishlists.findOne({ userId, guildId });
   if (!wl) {
@@ -18,8 +17,8 @@ async function getUserWishlist(wishlists, userId, guildId) {
       weapons: [], armor: [], accessories: [],
       tokensUsed: { weapon: 0, armor: 0, accessory: 0 },
       tokenGrants: { weapon: 0, armor: 0, accessory: 0 },
-      timestamps: {}, // legacy support
-      itemsReceived: [], // NEW
+      timestamps: {},
+      itemsReceived: [],
       finalized: false
     };
     await wishlists.insertOne(wl);
@@ -27,7 +26,7 @@ async function getUserWishlist(wishlists, userId, guildId) {
   return wl;
 }
 
-async function handleSelects({ interaction, collections }) {
+async function handleWishlistSelects({ interaction, collections }) {
   const { wishlists, handedOut } = collections;
 
   // Rate limiting for non-admin select actions
@@ -52,7 +51,6 @@ async function handleSelects({ interaction, collections }) {
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     const frozen = await isWishlistFrozen(interaction.guildId, collections);
 
-    // Block these actions when frozen
     const blockedActions = [
       'select_tier_', 'select_boss_', 'select_item_',
       'confirm_remove_item', 'confirm_remove_regen_item'
@@ -75,7 +73,6 @@ async function handleSelects({ interaction, collections }) {
     const all = await collections.wishlists.find({ guildId: interaction.guildId, finalized: true }).toArray();
     if (all.length === 0) return interaction.update({ content: '❌ No wishlists found.', components: [] });
 
-    // Collect unique item names for this type
     const itemNamesSet = new Set();
     const itemTypeKey = filterType === 'weapon' ? 'weapons' : filterType === 'armor' ? 'armor' : 'accessories';
 
@@ -92,7 +89,6 @@ async function handleSelects({ interaction, collections }) {
       return interaction.update({ content: `❌ No ${typeLabel} to mark.`, components: [] });
     }
 
-    // Sort alphabetically
     const itemNames = Array.from(itemNamesSet).sort((a, b) => a.localeCompare(b));
     const emoji = filterType === 'weapon' ? '⚔️' : filterType === 'armor' ? '🛡️' : '💍';
 
@@ -128,7 +124,6 @@ async function handleSelects({ interaction, collections }) {
     const itemTypeKey = filterType === 'weapon' ? 'weapons' : filterType === 'armor' ? 'armor' : 'accessories';
     const emoji = filterType === 'weapon' ? '⚔️' : filterType === 'armor' ? '🛡️' : '💍';
 
-    // Find all users who have this specific item
     const userOptions = [];
     for (const wl of all) {
       const items = wl[itemTypeKey] || [];
@@ -155,7 +150,6 @@ async function handleSelects({ interaction, collections }) {
       return interaction.update({ content: `❌ No users found with **${itemName}**.`, components: [] });
     }
 
-    // Sort by display name
     userOptions.sort((a, b) => a.label.localeCompare(b.label));
 
     const limited = userOptions.slice(0, 25);
@@ -218,7 +212,7 @@ async function handleSelects({ interaction, collections }) {
     return interaction.update({ content: '', embeds: [embed], components: [row] });
   }
 
-  // choose items -> add (now store boss + tier with each item)
+  // choose items -> add
   if (interaction.customId.startsWith('select_item_')) {
     const parts = interaction.customId.split('_');
     const itemType = parts[2];
@@ -229,10 +223,9 @@ async function handleSelects({ interaction, collections }) {
 
     const wl = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
 
-    // Validate token counts before proceeding
     await validateAndFixTokenCounts(interaction.user.id, interaction.guildId, collections);
 
-    // FIXED: Check if user already received any of these items (by NAME only, regardless of boss)
+    // Check if user already received any of these items
     const alreadyReceived = [];
     for (const itemName of selectedItems) {
       const received = (wl.itemsReceived || []).find(item => item.name === itemName);
@@ -244,7 +237,6 @@ async function handleSelects({ interaction, collections }) {
     if (alreadyReceived.length > 0) {
       const embed = createWishlistEmbed(wl, interaction.member);
 
-      // Show appropriate controls based on finalized state
       let components = [];
       if (!wl.finalized) {
         components = buildWishlistControls(wl);
@@ -310,7 +302,6 @@ async function handleSelects({ interaction, collections }) {
     if (tokensNeeded > tokensAvailable) {
       const embed = createWishlistEmbed(wl, interaction.member);
 
-      // Show appropriate controls based on finalized state and available tokens
       let components = [];
       if (!wl.finalized) {
         components = buildWishlistControls(wl);
@@ -368,7 +359,6 @@ async function handleSelects({ interaction, collections }) {
     const embed = createWishlistEmbed(updated, interaction.member);
     const itemsList = selectedItems.map(i => `• ${i} — from **${boss}**`).join('\n');
 
-    // Determine appropriate controls
     let components = [];
     if (!updated.finalized) {
       components = buildWishlistControls(updated);
@@ -456,12 +446,10 @@ async function handleSelects({ interaction, collections }) {
       const itemArray = wl[itemKey] || [];
 
       if (isLegacy) {
-        // For legacy items, find by name only - prefer string matches first
         const stringMatch = itemArray.find(item => typeof item === 'string' && item === itemName);
         const objectMatch = itemArray.find(item => typeof item === 'object' && item.name === itemName);
         itemToRemove = stringMatch || objectMatch;
       } else {
-        // For new items, must match both name AND boss
         itemToRemove = itemArray.find(item => 
           typeof item === 'object' && item.name === itemName && item.boss === boss
         );
@@ -477,12 +465,10 @@ async function handleSelects({ interaction, collections }) {
         });
       }
 
-      // Build pull query
       let pullQuery;
       if (typeof itemToRemove === 'string') {
         pullQuery = { [itemKey]: itemName };
       } else {
-        // Match exact object to prevent removing wrong duplicate
         pullQuery = { 
           [itemKey]: { 
             name: itemName, 
@@ -500,7 +486,6 @@ async function handleSelects({ interaction, collections }) {
         $inc: { [`tokensUsed.${tokenKey}`]: -1 }
       };
 
-      // Only unset timestamps for legacy string items
       if (typeof itemToRemove === 'string') {
         updateDoc.$unset = { [`timestamps.${itemName}`]: '' };
       }
@@ -510,7 +495,6 @@ async function handleSelects({ interaction, collections }) {
         updateDoc
       );
 
-      // Validate token counts after removal
       await validateAndFixTokenCounts(interaction.user.id, interaction.guildId, collections);
 
       const updated = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
@@ -575,7 +559,6 @@ async function handleSelects({ interaction, collections }) {
         }
       );
 
-      // Validate token counts
       await validateAndFixTokenCounts(interaction.user.id, interaction.guildId, collections);
 
       const updated = await getUserWishlist(wishlists, interaction.user.id, interaction.guildId);
@@ -608,7 +591,6 @@ async function handleSelects({ interaction, collections }) {
     let itemInstance = null;
     let itemTier = null;
 
-    // Find the specific item instance
     if (wl.weapons?.some(w => {
       const name = typeof w === 'string' ? w : w.name;
       const itemBoss = typeof w === 'string' ? null : w.boss;
@@ -648,23 +630,19 @@ async function handleSelects({ interaction, collections }) {
       return interaction.update({ content: '❌ Item not found in user\'s wishlist.', components: [] });
     }
 
-    // Use MongoDB transactions for atomicity
     const client = getClient();
     const session = client.startSession();
 
     try {
       await session.withTransaction(async () => {
-        // Mark as handed out
         await handedOut.updateOne(
           { guildId: interaction.guildId, userId, item, boss },
           { $set: { guildId: interaction.guildId, userId, item, boss, timestamp: new Date() } },
           { upsert: true, session }
         );
 
-        // NEW: Move item to itemsReceived array and remove from wishlist
         const itemKey = itemType === 'weapon' ? 'weapons' : itemType === 'armor' ? 'armor' : 'accessories';
 
-        // Build the received item object
         const receivedItem = {
           name: item,
           boss: boss === '(unknown boss)' ? null : boss,
@@ -673,7 +651,6 @@ async function handleSelects({ interaction, collections }) {
           receivedAt: new Date()
         };
 
-        // Remove from wishlist and add to itemsReceived
         let pullQuery;
         if (typeof itemInstance === 'string') {
           pullQuery = { [itemKey]: item };
@@ -699,7 +676,6 @@ async function handleSelects({ interaction, collections }) {
           { session }
         );
 
-        // Schedule token regeneration
         await scheduleTokenRegeneration(interaction.client, {
           userId,
           guildId: interaction.guildId,
@@ -715,7 +691,6 @@ async function handleSelects({ interaction, collections }) {
       await session.endSession();
     }
 
-    // Send DM to user
     try {
       const user = await interaction.client.users.fetch(userId);
       const dmEmbed = new EmbedBuilder()
@@ -760,17 +735,14 @@ async function handleSelects({ interaction, collections }) {
           if (res.deletedCount > 0) {
             removed++;
 
-            // NEW: Move item back from itemsReceived to wishlist (find by NAME only)
             const wl = await wishlists.findOne({ userId, guildId: interaction.guildId }, { session });
             if (wl) {
               const receivedItem = (wl.itemsReceived || []).find(i => i.name === item);
 
               if (receivedItem) {
-                // Determine which array to add back to
                 const itemKey = receivedItem.type === 'weapon' ? 'weapons' : 
                                receivedItem.type === 'armor' ? 'armor' : 'accessories';
 
-                // Add back to wishlist
                 await wishlists.updateOne(
                   { userId, guildId: interaction.guildId },
                   {
@@ -795,7 +767,6 @@ async function handleSelects({ interaction, collections }) {
               }
             }
 
-            // Cancel the associated token regeneration if it hasn't been notified yet
             const { tokenRegenerations } = collections;
             await tokenRegenerations.deleteMany({
               userId,
@@ -825,4 +796,4 @@ async function handleSelects({ interaction, collections }) {
   }
 }
 
-module.exports = { handleSelects, getUserWishlist };
+module.exports = { handleWishlistSelects, getUserWishlist };

@@ -5,7 +5,7 @@ const { connectMongo, getCollections } = require('./db/mongo');
 const { ensureIndexes } = require('./db/indexes');
 const { registerSlashCommands } = require('./bot/commands');
 const { onInteractionCreate } = require('./bot/handlers/interaction');
-const { startTokenRegenerationChecker } = require('./bot/tokenRegeneration');
+const { startTokenRegenerationChecker } = require('./features/wishlist/utils/tokenRegeneration');
 const { startPartyPanelUpdater } = require('./features/parties/panelUpdater');
 const { startPeriodicRebalancer } = require('./features/parties/rebalancing');
 const { resumeActiveRaidCountdowns, clearAllCountdownIntervals } = require('./features/raids/raidSession');
@@ -18,7 +18,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates  // ADDED: Required for voice receiving
+    GatewayIntentBits.GuildVoiceStates
   ]
 });
 
@@ -33,19 +33,14 @@ const client = new Client({
       await registerSlashCommands(client);
       console.log('Slash commands registered.');
 
-      // Start the HTTP stream server
       streamServer.start();
 
-      // Start the token regeneration checker
       startTokenRegenerationChecker(client, collections);
 
-      // Start the party panel auto-updater
       startPartyPanelUpdater(client, collections);
 
-      // Start the periodic party rebalancer (runs every 72 hours)
       startPeriodicRebalancer(client, collections);
 
-      // Resume active raid countdowns after bot restart
       await resumeActiveRaidCountdowns(client, collections);
     });
 
@@ -62,18 +57,14 @@ const client = new Client({
       }
     });
 
-    // Handle graceful shutdown
     process.on('SIGINT', async () => {
       console.log('\n🛑 Shutting down gracefully...');
 
-      // Stop all broadcasts
       broadcastManager.stopAll();
       streamServer.stop();
 
-      // Clear all raid countdown intervals
       clearAllCountdownIntervals();
 
-      // Destroy Discord client
       client.destroy();
 
       console.log('✅ Shutdown complete');
@@ -83,14 +74,11 @@ const client = new Client({
     process.on('SIGTERM', async () => {
       console.log('\n🛑 SIGTERM received, shutting down...');
 
-      // Stop all broadcasts
       broadcastManager.stopAll();
       streamServer.stop();
 
-      // Clear all raid countdown intervals
       clearAllCountdownIntervals();
 
-      // Destroy Discord client
       client.destroy();
 
       console.log('✅ Shutdown complete');
