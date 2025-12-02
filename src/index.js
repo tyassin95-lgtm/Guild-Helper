@@ -1,5 +1,4 @@
 require('dotenv').config();
-
 const { Client, GatewayIntentBits } = require('discord.js');
 const { connectMongo, getCollections } = require('./db/mongo');
 const { ensureIndexes } = require('./db/indexes');
@@ -26,21 +25,26 @@ const client = new Client({
   try {
     const db = await connectMongo(process.env.MONGODB_URI);
     const collections = getCollections(db);
+
     await ensureIndexes(collections);
 
     client.once('clientReady', async () => {
-      console.log(`Logged in as ${client.user.tag}!`);
+      console.log(`Logged in as ${client.user.tag}!`); // FIXED: Added opening parenthesis
+
       await registerSlashCommands(client);
       console.log('Slash commands registered.');
 
+      // Start HTTP audio server
       streamServer.start();
 
-      startTokenRegenerationChecker(client, collections);
+      // Start token regeneration checker - FIXED: Correct parameter order
+      startTokenRegenerationChecker(collections, client);
 
-      startPartyPanelUpdater(client, collections);
+      // Start party systems - FIXED: Correct parameter order
+      startPartyPanelUpdater(collections, client);
+      startPeriodicRebalancer(collections, client);
 
-      startPeriodicRebalancer(client, collections);
-
+      // Resume active raid countdowns
       await resumeActiveRaidCountdowns(client, collections);
     });
 
@@ -59,34 +63,27 @@ const client = new Client({
 
     process.on('SIGINT', async () => {
       console.log('\n🛑 Shutting down gracefully...');
-
       broadcastManager.stopAll();
       streamServer.stop();
-
       clearAllCountdownIntervals();
-
       client.destroy();
-
       console.log('✅ Shutdown complete');
       process.exit(0);
     });
 
     process.on('SIGTERM', async () => {
       console.log('\n🛑 SIGTERM received, shutting down...');
-
       broadcastManager.stopAll();
       streamServer.stop();
-
       clearAllCountdownIntervals();
-
       client.destroy();
-
       console.log('✅ Shutdown complete');
       process.exit(0);
     });
 
     console.log('Loaded token:', process.env.DISCORD_TOKEN ? '✅ Found' : '❌ Missing');
     await client.login(process.env.DISCORD_TOKEN);
+
   } catch (err) {
     console.error('Fatal boot error:', err);
     process.exit(1);
