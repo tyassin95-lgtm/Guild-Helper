@@ -1,7 +1,7 @@
 const { ObjectId } = require('mongodb');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { updateEventEmbed } = require('../embed');
-const { scheduleLiveSummaryUpdate } = require('../../../bot/liveSummary');
+const { scheduleLiveSummaryUpdate } = require('../../wishlist/liveSummary'); // UPDATED PATH
 
 async function handlePvPModals({ interaction, collections }) {
   const { pvpEvents, pvpBonuses, pvpActivityRanking } = collections;
