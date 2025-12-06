@@ -125,34 +125,6 @@ async function registerSlashCommands(client) {
       default_member_permissions: ADMIN
     },
     {
-      name: 'autoassign',
-      description: 'Admins: Manage automatic party assignment system.',
-      default_member_permissions: ADMIN,
-      options: [
-        {
-          type: 3, // STRING
-          name: 'action',
-          description: 'What to do',
-          required: true,
-          choices: [
-            { name: 'enable', value: 'enable' },
-            { name: 'disable', value: 'disable' },
-            { name: 'rebalance', value: 'rebalance' },
-            { name: 'status', value: 'status' },
-            { name: 'max-parties', value: 'max-parties' }
-          ]
-        },
-        {
-          type: 4, // INTEGER
-          name: 'value',
-          description: 'Value for max-parties (1-10)',
-          required: false,
-          min_value: 1,
-          max_value: 10
-        }
-      ]
-    },
-    {
       name: 'resetparties',
       description: 'Admins: Reset party system data (DANGEROUS!).',
       default_member_permissions: ADMIN,
@@ -202,11 +174,6 @@ async function registerSlashCommands(client) {
     {
       name: 'remindparty',
       description: 'Admins: Send a DM to users who haven\'t set up their party info.',
-      default_member_permissions: ADMIN
-    },
-    {
-      name: 'viewreserve',
-      description: 'Admins: View players in the reserve pool.',
       default_member_permissions: ADMIN
     },
     // PvP Commands

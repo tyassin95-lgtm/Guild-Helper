@@ -18,34 +18,34 @@ async function handlePartyManageButtons({ interaction, collections }) {
       return interaction.update({ content: `❌ Party ${partyNumber} is full (${PARTY_SIZE}/${PARTY_SIZE})!`, components: [] });
     }
 
-    // Get all players with info who are not in this party
+    // Get all players with info who are NOT in ANY party
     const allPlayers = await partyPlayers.find({ 
       guildId: interaction.guildId,
       weapon1: { $exists: true },
-      weapon2: { $exists: true }
+      weapon2: { $exists: true },
+      partyNumber: { $exists: false } // Only players not in a party
     }).toArray();
 
-    const currentMemberIds = new Set((party.members || []).map(m => m.userId));
-    const availablePlayers = allPlayers.filter(p => !currentMemberIds.has(p.userId));
-
-    if (availablePlayers.length === 0) {
-      return interaction.update({ content: '❌ No available players to add! All players with party info are already in this party.', components: [] });
+    if (allPlayers.length === 0) {
+      return interaction.update({ content: '❌ No available players to add! All players with party info are already assigned to parties.', components: [] });
     }
 
     // Sort by CP descending
-    availablePlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
+    allPlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
-    const options = await Promise.all(availablePlayers.slice(0, 25).map(async p => {
+    // Limit to 25 options (Discord limit)
+    const playersToShow = allPlayers.slice(0, 25);
+
+    const options = await Promise.all(playersToShow.map(async p => {
       const member = await interaction.guild.members.fetch(p.userId).catch(() => null);
       const displayName = member ? member.displayName : 'Unknown';
       const role = `${p.weapon1}/${p.weapon2}`;
       const cp = (p.cp || 0).toLocaleString();
-      const partyStatus = p.partyNumber ? ` [P${p.partyNumber}]` : '';
 
       return {
         label: `${displayName} - ${role}`,
         value: p.userId,
-        description: `${cp} CP${partyStatus}`
+        description: `${cp} CP`
       };
     }));
 
@@ -56,7 +56,12 @@ async function handlePartyManageButtons({ interaction, collections }) {
         .addOptions(options)
     );
 
-    return interaction.update({ content: `Adding member to Party ${partyNumber}:`, components: [row] });
+    let message = `Adding member to Party ${partyNumber}:`;
+    if (allPlayers.length > 25) {
+      message += `\n\n⚠️ Showing top 25 by CP (${allPlayers.length - 25} more available)`;
+    }
+
+    return interaction.update({ content: message, components: [row] });
   }
 
   // Remove member from party

@@ -6,8 +6,6 @@ const { ensureIndexes } = require('./db/indexes');
 const { registerSlashCommands } = require('./bot/commands');
 const { onInteractionCreate } = require('./bot/handlers/interaction');
 const { startTokenRegenerationChecker } = require('./bot/tokenRegeneration');
-const { startPartyPanelUpdater } = require('./features/parties/panelUpdater');
-const { startPeriodicRebalancer } = require('./features/parties/rebalancing');
 const { resumeActiveRaidCountdowns, clearAllCountdownIntervals } = require('./features/raids/raidSession');
 const { streamServer } = require('./features/broadcast/server/streamServer');
 const { broadcastManager } = require('./features/broadcast/utils/broadcastManager');
@@ -38,12 +36,6 @@ const client = new Client({
 
       // Start the token regeneration checker
       startTokenRegenerationChecker(client, collections);
-
-      // Start the party panel auto-updater
-      startPartyPanelUpdater(client, collections);
-
-      // Start the periodic party rebalancer (runs every 72 hours)
-      startPeriodicRebalancer(client, collections);
 
       // Resume active raid countdowns after bot restart
       await resumeActiveRaidCountdowns(client, collections);
