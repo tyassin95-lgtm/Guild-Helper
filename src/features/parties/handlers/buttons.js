@@ -1,146 +1,61 @@
 const { ActionRowBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionFlagsBits } = require('discord.js');
 const { WEAPONS, MAX_PARTIES } = require('../constants');
 const { createPlayerInfoEmbed, createPartiesOverviewEmbed } = require('../embed');
-const { schedulePartyPanelUpdate } = require('../panelUpdater');
-
-/**
- * Get guild context for DM interactions
- */
-async function getGuildContext(interaction, collections) {
-  // If in guild, return guild context directly
-  if (interaction.guildId) {
-    return {
-      guildId: interaction.guildId,
-      guild: interaction.guild
-    };
-  }
-
-  // If in DM, look up the context
-  const { dmContexts } = collections;
-  const context = await dmContexts.findOne({ 
-    userId: interaction.user.id,
-    expiresAt: { $gt: new Date() } // Not expired
-  });
-
-  if (!context) {
-    throw new Error('DM_CONTEXT_EXPIRED');
-  }
-
-  // Fetch the guild
-  const guild = await interaction.client.guilds.fetch(context.guildId).catch(() => null);
-
-  if (!guild) {
-    throw new Error('GUILD_NOT_FOUND');
-  }
-
-  return {
-    guildId: context.guildId,
-    guild: guild
-  };
-}
 
 async function handlePartyButtons({ interaction, collections }) {
   const { partyPlayers, parties } = collections;
 
   // Set weapon 1
   if (interaction.customId === 'party_set_weapon1') {
-    try {
-      const row = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('party_select_weapon1')
-          .setPlaceholder('Choose your primary weapon')
-          .addOptions(WEAPONS.map(w => ({
-            label: w.name,
-            value: w.name,
-            emoji: w.emoji
-          })))
-      );
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('party_select_weapon1')
+        .setPlaceholder('Choose your primary weapon')
+        .addOptions(WEAPONS.map(w => ({
+          label: w.name,
+          value: w.name,
+          emoji: w.emoji
+        })))
+    );
 
-      return interaction.reply({ content: 'Select your primary weapon:', components: [row], flags: [64] });
-    } catch (err) {
-      console.error('Error in party_set_weapon1:', err);
-
-      if (err.message === 'DM_CONTEXT_EXPIRED') {
-        return interaction.reply({ 
-          content: '❌ This DM link has expired (24 hours). Please use `/myinfo` in the server to set up your party info.', 
-          flags: [64] 
-        });
-      }
-
-      return interaction.reply({ 
-        content: '❌ An error occurred. Please use `/myinfo` in the server instead.', 
-        flags: [64] 
-      });
-    }
+    return interaction.reply({ content: 'Select your primary weapon:', components: [row], flags: [64] });
   }
 
   // Set weapon 2
   if (interaction.customId === 'party_set_weapon2') {
-    try {
-      const row = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('party_select_weapon2')
-          .setPlaceholder('Choose your secondary weapon')
-          .addOptions(WEAPONS.map(w => ({
-            label: w.name,
-            value: w.name,
-            emoji: w.emoji
-          })))
-      );
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('party_select_weapon2')
+        .setPlaceholder('Choose your secondary weapon')
+        .addOptions(WEAPONS.map(w => ({
+          label: w.name,
+          value: w.name,
+          emoji: w.emoji
+        })))
+    );
 
-      return interaction.reply({ content: 'Select your secondary weapon:', components: [row], flags: [64] });
-    } catch (err) {
-      console.error('Error in party_set_weapon2:', err);
-
-      if (err.message === 'DM_CONTEXT_EXPIRED') {
-        return interaction.reply({ 
-          content: '❌ This DM link has expired (24 hours). Please use `/myinfo` in the server to set up your party info.', 
-          flags: [64] 
-        });
-      }
-
-      return interaction.reply({ 
-        content: '❌ An error occurred. Please use `/myinfo` in the server instead.', 
-        flags: [64] 
-      });
-    }
+    return interaction.reply({ content: 'Select your secondary weapon:', components: [row], flags: [64] });
   }
 
   // Set CP modal
   if (interaction.customId === 'party_set_cp') {
-    try {
-      const modal = new ModalBuilder()
-        .setCustomId('party_cp_modal')
-        .setTitle('Set Combat Power');
+    const modal = new ModalBuilder()
+      .setCustomId('party_cp_modal')
+      .setTitle('Set Combat Power');
 
-      const cpInput = new TextInputBuilder()
-        .setCustomId('cp_value')
-        .setLabel('Enter your Combat Power (CP)')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('e.g., 3500')
-        .setRequired(true)
-        .setMinLength(1)
-        .setMaxLength(10);
+    const cpInput = new TextInputBuilder()
+      .setCustomId('cp_value')
+      .setLabel('Enter your Combat Power (CP)')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('e.g., 3500')
+      .setRequired(true)
+      .setMinLength(1)
+      .setMaxLength(10);
 
-      const row = new ActionRowBuilder().addComponents(cpInput);
-      modal.addComponents(row);
+    const row = new ActionRowBuilder().addComponents(cpInput);
+    modal.addComponents(row);
 
-      return interaction.showModal(modal);
-    } catch (err) {
-      console.error('Error in party_set_cp:', err);
-
-      if (err.message === 'DM_CONTEXT_EXPIRED') {
-        return interaction.reply({ 
-          content: '❌ This DM link has expired (24 hours). Please use `/myinfo` in the server to set up your party info.', 
-          flags: [64] 
-        });
-      }
-
-      return interaction.reply({ 
-        content: '❌ An error occurred. Please use `/myinfo` in the server instead.', 
-        flags: [64] 
-      });
-    }
+    return interaction.showModal(modal);
   }
 
   // Create party (admin only - guild context required)
@@ -172,12 +87,8 @@ async function handlePartyButtons({ interaction, collections }) {
       members: [],
       totalCP: 0,
       roleComposition: { tank: 0, healer: 0, dps: 0 },
-      createdAt: new Date(),
-      lastRebalanced: new Date()
+      createdAt: new Date()
     });
-
-    // Schedule panel update
-    schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
 
     const allParties = await parties.find({ guildId: interaction.guildId })
       .sort({ partyNumber: 1 })
@@ -252,4 +163,4 @@ async function handlePartyButtons({ interaction, collections }) {
   }
 }
 
-module.exports = { handlePartyButtons, getGuildContext };
+module.exports = { handlePartyButtons };
