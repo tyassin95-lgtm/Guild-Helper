@@ -1,16 +1,12 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { createPlayerInfoEmbed } = require('../embed');
-const { autoAssignPlayer } = require('../autoAssignment');
-const { schedulePartyPanelUpdate } = require('../panelUpdater');
-const { getGuildContext } = require('./buttons');
-const { attemptReserveAssignment } = require('../reserve');
+const { updatePlayerRole } = require('../roleDetection');
 
 async function handlePartyModals({ interaction, collections }) {
   const { partyPlayers, parties } = collections;
 
   // CP modal submission
   if (interaction.customId === 'party_cp_modal') {
-    // Defer the reply once
     await interaction.deferReply({ flags: [64] }).catch(() => {});
 
     const cpValue = interaction.fields.getTextInputValue('cp_value');
@@ -25,37 +21,30 @@ async function handlePartyModals({ interaction, collections }) {
       return interaction.editReply({ content: '❌ Combat Power value too high! Maximum is 10,000,000.' });
     }
 
-    // Get guild context
-    let guildId, guild;
-    try {
-      const context = await getGuildContext(interaction, collections);
-      guildId = context.guildId;
-      guild = context.guild;
-    } catch (err) {
-      if (err.message === 'DM_CONTEXT_EXPIRED') {
+    // Get guild context - for DM support
+    let guildId = interaction.guildId;
+    let guild = interaction.guild;
+
+    if (!guildId) {
+      // Try to get from DM context
+      const { dmContexts } = collections;
+      const context = await dmContexts.findOne({ 
+        userId: interaction.user.id,
+        expiresAt: { $gt: new Date() }
+      });
+
+      if (!context) {
         return interaction.editReply({
-          content:
-            '❌ **This DM link has expired (24 hours)**\n\n' +
-            'Please return to the server and use `/myinfo` to update your Combat Power.\n\n' +
-            '**Your CP value was not saved.**'
+          content: '❌ **This DM link has expired (24 hours)**\n\nPlease return to the server and use `/myinfo` to update your Combat Power.'
         });
       }
 
-      console.error('Error getting guild context:', err);
-      return interaction.editReply({
-        content: '❌ Could not determine your server. Please use `/myinfo` in the server to update your CP.'
-      });
+      guildId = context.guildId;
+      guild = await interaction.client.guilds.fetch(guildId).catch(() => null);
     }
 
     // Update player CP
     try {
-      const oldPlayer = await partyPlayers.findOne({
-        userId: interaction.user.id,
-        guildId: guildId
-      });
-
-      const oldCP = oldPlayer?.cp || 0;
-
       await partyPlayers.updateOne(
         { userId: interaction.user.id, guildId: guildId },
         { $set: { cp, updatedAt: new Date() } },
@@ -89,52 +78,6 @@ async function handlePartyModals({ interaction, collections }) {
             { _id: party._id },
             { $set: { totalCP } }
           );
-        }
-
-        schedulePartyPanelUpdate(guildId, interaction.client, collections);
-
-      } else if (playerInfo.inReserve) {
-        // Player is in reserve - check if CP increase makes them competitive
-        const cpIncrease = cp - oldCP;
-
-        if (cpIncrease > 0) {
-          console.log(`[CP Update] Reserve player ${interaction.user.id} increased CP by ${cpIncrease} (${oldCP} → ${cp})`);
-
-          const result = await attemptReserveAssignment(playerInfo, guildId, interaction.client, collections);
-
-          if (result.success) {
-            console.log(`[CP Update] Reserve player ${interaction.user.id} promoted to Party ${result.partyNumber}`);
-
-            const { sendReservePromotionDM } = require('../notifications');
-            try {
-              await sendReservePromotionDM(
-                interaction.user.id,
-                result.partyNumber,
-                playerInfo.role,
-                guildId,
-                interaction.client,
-                collections
-              );
-            } catch (err) {
-              console.error('Failed to send promotion DM:', err.message);
-            }
-
-            schedulePartyPanelUpdate(guildId, interaction.client, collections);
-          }
-        }
-      } else {
-        // Try auto-assignment if player has complete info
-        if (playerInfo.weapon1 && playerInfo.weapon2) {
-          const result = await autoAssignPlayer(
-            interaction.user.id,
-            guildId,
-            interaction.client,
-            collections
-          );
-
-          if (result.success) {
-            schedulePartyPanelUpdate(guildId, interaction.client, collections);
-          }
         }
       }
 

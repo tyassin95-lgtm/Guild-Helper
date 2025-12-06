@@ -1,5 +1,4 @@
 const { PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { schedulePartyPanelUpdate } = require('../panelUpdater');
 
 async function handleResetParties({ interaction, collections }) {
   const { partyPlayers, parties } = collections;
@@ -51,15 +50,27 @@ async function handleResetParties({ interaction, collections }) {
     await partyPlayers.deleteOne({ guildId: interaction.guildId, userId: user.id });
 
     // Remove the user from all parties
-    await parties.updateMany(
-      { guildId: interaction.guildId },
-      { $pull: { members: { userId: user.id } } }
-    );
+    const party = await parties.findOne({ 
+      guildId: interaction.guildId, 
+      'members.userId': user.id 
+    });
 
-    // Correct argument order: guildId, client, collections
-    await schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
+    if (party) {
+      const member = party.members.find(m => m.userId === user.id);
 
-    return interaction.reply({ content: `✅ **${user.tag}’s party info has been reset.**`, flags: [64] });
+      await parties.updateOne(
+        { _id: party._id },
+        { 
+          $pull: { members: { userId: user.id } },
+          $inc: {
+            totalCP: -(member.cp || 0),
+            [`roleComposition.${member.role}`]: -1
+          }
+        }
+      );
+    }
+
+    return interaction.reply({ content: `✅ **${user.tag}'s party info has been reset.**`, flags: [64] });
   }
 
   return interaction.reply({ content: 'Unknown action.', flags: [64] });
@@ -97,9 +108,6 @@ async function handleResetPartiesConfirmation({ interaction, collections }) {
 
         await partyPanels.deleteOne({ guildId: interaction.guildId });
       }
-
-      // Schedule panel update with correct argument order
-      await schedulePartyPanelUpdate(interaction.guildId, interaction.client, collections);
 
       return interaction.editReply({
         content: `✅ **Party system reset complete!**\n\n` +
