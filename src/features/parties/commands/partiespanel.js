@@ -1,31 +1,22 @@
 const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { getRoleEmoji } = require('../roleDetection');
-const { getReservePlayers } = require('../reserve');
 
 async function handlePartiesPanel({ interaction, collections }) {
-  const { partyPanels, parties, guildSettings } = collections;
+  const { partyPanels, parties } = collections;
 
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
   }
 
-  // CRITICAL: Defer immediately before any async operations
   await interaction.deferReply({ flags: [64] });
 
   try {
-    const settings = await guildSettings.findOne({ guildId: interaction.guildId });
-    const maxParties = settings?.maxParties || 10;
-
-    // Get all parties (only up to maxParties)
+    // Get all parties
     const allParties = await parties.find({ 
-      guildId: interaction.guildId,
-      partyNumber: { $lte: maxParties }
+      guildId: interaction.guildId
     }).sort({ partyNumber: 1 }).toArray();
 
-    // Get reserve players
-    const reservePlayers = await getReservePlayers(interaction.guildId, collections);
-
-    if (allParties.length === 0 && reservePlayers.length === 0) {
+    if (allParties.length === 0) {
       const embed = new EmbedBuilder()
         .setColor('#e67e22')
         .setTitle('⚔️ Static Parties')
@@ -48,7 +39,7 @@ async function handlePartiesPanel({ interaction, collections }) {
       );
 
       return interaction.editReply({
-        content: '✅ Parties panel created! It will auto-update every 60 seconds.'
+        content: '✅ Parties panel created!'
       });
     }
 
@@ -119,119 +110,6 @@ async function handlePartiesPanel({ interaction, collections }) {
       embeds.push(embed);
     }
 
-    // Always add reserve pool embed (even if empty) to prevent flickering
-    const reserveEmbed = new EmbedBuilder()
-      .setColor(reservePlayers.length > 0 ? '#e67e22' : '#95a5a6')
-      .setTitle('📋 Reserve Pool')
-      .setTimestamp();
-
-    if (reservePlayers.length === 0) {
-      // Empty reserve pool
-      reserveEmbed.setDescription('```\n✅ Reserve pool is empty - all players assigned!\n```');
-      reserveEmbed.addFields({
-        name: 'ℹ️ About Reserve',
-        value: 
-          '• When max parties is reached, new players go to reserve\n' +
-          '• Reserve players are promoted during rebalancing (every 72 hours)\n' +
-          '• Update CP with `/myinfo` to improve reserve position',
-        inline: false
-      });
-    } else {
-      // Group by role
-      const tanks = reservePlayers.filter(p => p.role === 'tank');
-      const healers = reservePlayers.filter(p => p.role === 'healer');
-      const dpsPlayers = reservePlayers.filter(p => p.role === 'dps');
-
-      // Build description with all reserve players
-      const reserveList = [];
-
-      // Add tanks
-      if (tanks.length > 0) {
-        reserveList.push('**🛡️ TANKS**');
-        for (let i = 0; i < tanks.length; i++) {
-          const p = tanks[i];
-          const position = ['⓵', '⓶', '⓷', '⓸', '⓹', '⓺', '⓻', '⓼', '⓽', '⓾'][i] || `${i + 1}.`;
-          const roleIcon = getRoleEmoji(p.role);
-          const cp = (p.cp || 0).toLocaleString();
-          reserveList.push(`${position} <@${p.userId}>\n   ${roleIcon} ${p.weapon1} / ${p.weapon2} • \`${cp} CP\``);
-        }
-        reserveList.push(''); // Spacing
-      }
-
-      // Add healers
-      if (healers.length > 0) {
-        reserveList.push('**💚 HEALERS**');
-        for (let i = 0; i < healers.length; i++) {
-          const p = healers[i];
-          const position = ['⓵', '⓶', '⓷', '⓸', '⓹', '⓺', '⓻', '⓼', '⓽', '⓾'][i] || `${i + 1}.`;
-          const roleIcon = getRoleEmoji(p.role);
-          const cp = (p.cp || 0).toLocaleString();
-          reserveList.push(`${position} <@${p.userId}>\n   ${roleIcon} ${p.weapon1} / ${p.weapon2} • \`${cp} CP\``);
-        }
-        reserveList.push(''); // Spacing
-      }
-
-      // Add DPS
-      if (dpsPlayers.length > 0) {
-        reserveList.push('**⚔️ DPS**');
-        for (let i = 0; i < dpsPlayers.length; i++) {
-          const p = dpsPlayers[i];
-          const position = ['⓵', '⓶', '⓷', '⓸', '⓹', '⓺', '⓻', '⓼', '⓽', '⓾'][i] || `${i + 1}.`;
-          const roleIcon = getRoleEmoji(p.role);
-          const cp = (p.cp || 0).toLocaleString();
-          reserveList.push(`${position} <@${p.userId}>\n   ${roleIcon} ${p.weapon1} / ${p.weapon2} • \`${cp} CP\``);
-        }
-      }
-
-      reserveEmbed.setDescription(reserveList.join('\n'));
-
-      // Add stats fields
-      const totalReserveCP = reservePlayers.reduce((sum, p) => sum + (p.cp || 0), 0);
-      const avgReserveCP = reservePlayers.length > 0 ? Math.round(totalReserveCP / reservePlayers.length) : 0;
-
-      reserveEmbed.addFields(
-        { 
-          name: 'Reserve Status', 
-          value: `\`${reservePlayers.length} players in reserve\``, 
-          inline: true 
-        },
-        { 
-          name: 'Total CP', 
-          value: `\`${totalReserveCP.toLocaleString()}\``, 
-          inline: true 
-        },
-        { 
-          name: 'Average CP', 
-          value: `\`${avgReserveCP.toLocaleString()}\``, 
-          inline: true 
-        }
-      );
-
-      // Add role breakdown
-      const roleText = [
-        `🛡️ Tanks: ${tanks.length}`,
-        `💚 Healers: ${healers.length}`,
-        `⚔️ DPS: ${dpsPlayers.length}`
-      ].join('\n');
-
-      reserveEmbed.addFields({
-        name: '📊 Role Breakdown',
-        value: roleText,
-        inline: false
-      });
-
-      reserveEmbed.addFields({
-        name: 'ℹ️ About Reserve',
-        value: 
-          '• Players prioritized by: Role → CP → Time in reserve\n' +
-          '• Automatically promoted during rebalancing (every 72 hours)\n' +
-          '• Update CP with `/myinfo` to improve reserve position',
-        inline: false
-      });
-    }
-
-    embeds.push(reserveEmbed);
-
     // Discord allows up to 10 embeds per message
     if (embeds.length > 10) {
       console.warn(`Guild ${interaction.guildId} has ${embeds.length} embeds, truncating to 10`);
@@ -255,7 +133,7 @@ async function handlePartiesPanel({ interaction, collections }) {
     );
 
     return interaction.editReply({
-      content: '✅ Parties panel created! It will auto-update every 60 seconds.'
+      content: '✅ Parties panel created!'
     });
   } catch (err) {
     console.error('Error creating parties panel:', err);
