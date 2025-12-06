@@ -5,7 +5,7 @@ async function handleViewParties({ interaction, collections }) {
   const { parties } = collections;
 
   const allParties = await parties.find({ guildId: interaction.guildId })
-    .sort({ partyNumber: 1 })
+    .sort({ isReserve: 1, partyNumber: 1 })
     .toArray();
 
   const embed = createPartiesOverviewEmbed(allParties, interaction.guild);
@@ -14,12 +14,20 @@ async function handleViewParties({ interaction, collections }) {
 
   // Admin controls
   if (interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    const hasReserve = allParties.some(p => p.isReserve);
+
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('party_create')
         .setLabel('Create Party')
         .setStyle(ButtonStyle.Success)
         .setEmoji('➕'),
+      new ButtonBuilder()
+        .setCustomId('party_create_reserve')
+        .setLabel('Create Reserve')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('📦')
+        .setDisabled(hasReserve), // Disable if reserve already exists
       new ButtonBuilder()
         .setCustomId('party_manage')
         .setLabel('Manage Parties')

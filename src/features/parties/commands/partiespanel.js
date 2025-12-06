@@ -1,5 +1,6 @@
 const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { getRoleEmoji } = require('../roleDetection');
+const { RESERVE_PARTY_SIZE } = require('../constants');
 
 async function handlePartiesPanel({ interaction, collections }) {
   const { partyPanels, parties } = collections;
@@ -11,10 +12,10 @@ async function handlePartiesPanel({ interaction, collections }) {
   await interaction.deferReply({ flags: [64] });
 
   try {
-    // Get all parties
+    // Get all parties - sort with reserve last
     const allParties = await parties.find({ 
       guildId: interaction.guildId
-    }).sort({ partyNumber: 1 }).toArray();
+    }).sort({ isReserve: 1, partyNumber: 1 }).toArray();
 
     if (allParties.length === 0) {
       const embed = new EmbedBuilder()
@@ -48,6 +49,77 @@ async function handlePartiesPanel({ interaction, collections }) {
 
     for (const party of allParties) {
       const members = party.members || [];
+
+      // Special handling for reserve party
+      if (party.isReserve) {
+        const embed = new EmbedBuilder()
+          .setColor('#FFA500') // Orange for reserve
+          .setTitle('📦 Reserve Party')
+          .setTimestamp();
+
+        if (members.length === 0) {
+          embed.setDescription('```\n🔓 EMPTY - No reserve members yet\n```');
+          embed.addFields({ name: 'Status', value: `\`0/${RESERVE_PARTY_SIZE} slots filled\``, inline: true });
+        } else {
+          // Calculate total CP
+          const totalCP = party.totalCP || 0;
+          const avgCP = Math.round(totalCP / members.length);
+
+          // Build member list with role icons (sorted by CP descending)
+          const sortedMembers = [...members].sort((a, b) => (b.cp || 0) - (a.cp || 0));
+
+          const memberList = await Promise.all(sortedMembers.map(async (m, index) => {
+            const roleIcon = getRoleEmoji(m.role);
+            const cp = (m.cp || 0).toLocaleString();
+            const position = index + 1;
+
+            return `${position}. <@${m.userId}>\n   ${roleIcon} ${m.weapon1} / ${m.weapon2} • \`${cp} CP\``;
+          }));
+
+          embed.setDescription(memberList.join('\n\n'));
+
+          // Stats fields
+          const statusEmoji = members.length >= RESERVE_PARTY_SIZE ? '⚠️' : '✅';
+          embed.addFields(
+            { 
+              name: 'Reserve Status', 
+              value: `${statusEmoji} \`${members.length}/${RESERVE_PARTY_SIZE} slots filled\``, 
+              inline: true 
+            },
+            { 
+              name: 'Total CP', 
+              value: `\`${totalCP.toLocaleString()}\``, 
+              inline: true 
+            },
+            { 
+              name: 'Average CP', 
+              value: `\`${avgCP.toLocaleString()}\``, 
+              inline: true 
+            }
+          );
+
+          // Role composition
+          const roleComposition = party.roleComposition || { tank: 0, healer: 0, dps: 0 };
+          const roleText = [
+            `🛡️ Tanks: ${roleComposition.tank}`,
+            `💚 Healers: ${roleComposition.healer}`,
+            `⚔️ DPS: ${roleComposition.dps}`
+          ].join('\n');
+
+          embed.addFields({
+            name: '📊 Role Composition',
+            value: roleText,
+            inline: false
+          });
+
+          embed.setFooter({ text: 'Reserve members are standby for active parties' });
+        }
+
+        embeds.push(embed);
+        continue;
+      }
+
+      // Regular party handling
       const embed = new EmbedBuilder()
         .setColor(members.length >= 6 ? '#10B981' : members.length >= 4 ? '#F59E0B' : '#EF4444')
         .setTitle(`⚔️ Party ${party.partyNumber}`)
@@ -143,4 +215,4 @@ async function handlePartiesPanel({ interaction, collections }) {
   }
 }
 
-module.exports = { handlePartiesPanel };
+module.exports = { handlePartiesPanel };``

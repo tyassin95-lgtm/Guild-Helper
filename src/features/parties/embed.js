@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const { RESERVE_PARTY_SIZE } = require('./constants');
 
 async function createPlayerInfoEmbed(playerInfo, member, collections) {
   // Handle case where member might be null (DM context or fetch failure)
@@ -22,8 +23,8 @@ async function createPlayerInfoEmbed(playerInfo, member, collections) {
 
   // Check if in reserve
   if (playerInfo.inReserve && collections) {
-    embed.setColor('#e67e22'); // Orange for reserve
-    embed.setDescription('✅ Your party information is set up!\n\n⏳ **Status: In Reserve Pool**');
+    embed.setColor('#FFA500'); // Orange for reserve
+    embed.setDescription('✅ Your party information is set up!\n\n📦 **Status: In Reserve Party**');
 
     embed.addFields(
       { name: '⚔️ Role', value: `${playerInfo.weapon1} / ${playerInfo.weapon2}`, inline: true },
@@ -31,58 +32,55 @@ async function createPlayerInfoEmbed(playerInfo, member, collections) {
     );
 
     // Calculate reserve position
-    const { partyPlayers } = collections;
-    if (partyPlayers) {
-      const allReserves = await partyPlayers.find({ 
+    const { partyPlayers, parties } = collections;
+    if (partyPlayers && parties) {
+      const reserveParty = await parties.findOne({ 
         guildId: playerInfo.guildId, 
-        inReserve: true 
-      }).toArray();
-
-      // Sort by priority
-      const roleOrder = { tank: 0, healer: 1, dps: 2 };
-      allReserves.sort((a, b) => {
-        const roleDiff = roleOrder[a.role] - roleOrder[b.role];
-        if (roleDiff !== 0) return roleDiff;
-        const cpDiff = (b.cp || 0) - (a.cp || 0);
-        if (cpDiff !== 0) return cpDiff;
-        return new Date(a.reservedAt) - new Date(b.reservedAt);
+        isReserve: true 
       });
 
-      const overallPosition = allReserves.findIndex(p => p.userId === playerInfo.userId) + 1;
-      const roleReserves = allReserves.filter(p => p.role === playerInfo.role);
-      const rolePosition = roleReserves.findIndex(p => p.userId === playerInfo.userId) + 1;
+      if (reserveParty && reserveParty.members) {
+        // Sort by CP descending to find position
+        const sortedMembers = [...reserveParty.members].sort((a, b) => (b.cp || 0) - (a.cp || 0));
+        const overallPosition = sortedMembers.findIndex(p => p.userId === playerInfo.userId) + 1;
 
-      const timeSinceReserve = Date.now() - new Date(playerInfo.reservedAt).getTime();
-      const hours = Math.floor(timeSinceReserve / (1000 * 60 * 60));
-      const days = Math.floor(hours / 24);
+        // Role-specific position
+        const roleMembers = sortedMembers.filter(p => p.role === playerInfo.role);
+        const rolePosition = roleMembers.findIndex(p => p.userId === playerInfo.userId) + 1;
 
-      let timeString;
-      if (days > 0) {
-        timeString = `${days} day${days > 1 ? 's' : ''} ago`;
-      } else if (hours > 0) {
-        timeString = `${hours} hour${hours > 1 ? 's' : ''} ago`;
-      } else {
-        timeString = 'recently';
+        const memberInfo = reserveParty.members.find(m => m.userId === playerInfo.userId);
+        const timeSinceAdded = memberInfo?.addedAt ? Date.now() - new Date(memberInfo.addedAt).getTime() : 0;
+        const hours = Math.floor(timeSinceAdded / (1000 * 60 * 60));
+        const days = Math.floor(hours / 24);
+
+        let timeString;
+        if (days > 0) {
+          timeString = `${days} day${days > 1 ? 's' : ''} ago`;
+        } else if (hours > 0) {
+          timeString = `${hours} hour${hours > 1 ? 's' : ''} ago`;
+        } else {
+          timeString = 'recently';
+        }
+
+        embed.addFields({
+          name: '📊 Reserve Position',
+          value: 
+            `• **Role:** ${playerInfo.role.toUpperCase()} (#${rolePosition} of ${roleMembers.length})\n` +
+            `• **Overall:** #${overallPosition} of ${sortedMembers.length}\n` +
+            `• **Added to reserve:** ${timeString}`,
+          inline: false
+        });
+
+        embed.addFields({
+          name: 'ℹ️ About Reserve',
+          value:
+            '• Reserve members are standby for active parties\n' +
+            '• You may be promoted when slots open\n' +
+            '• Keep your CP updated to stay competitive\n\n' +
+            'You will be notified if promoted to an active party!',
+          inline: false
+        });
       }
-
-      embed.addFields({
-        name: '📊 Reserve Position',
-        value: 
-          `• **Role:** ${playerInfo.role.toUpperCase()} (#${rolePosition} of ${roleReserves.length})\n` +
-          `• **Overall:** #${overallPosition} of ${allReserves.length}\n` +
-          `• **In reserve since:** ${timeString}`,
-        inline: false
-      });
-
-      embed.addFields({
-        name: 'ℹ️ How to Get Promoted',
-        value:
-          '• Increase your CP to be more competitive\n' +
-          '• Wait for rebalancing (every 72 hours)\n' +
-          '• Wait for a slot to open in active parties\n\n' +
-          'You will be automatically notified when promoted!',
-        inline: false
-      });
     }
 
     return embed;
@@ -113,7 +111,12 @@ function createPartiesOverviewEmbed(parties, guild) {
     return embed;
   }
 
-  for (const party of parties) {
+  // Separate regular parties and reserve
+  const regularParties = parties.filter(p => !p.isReserve);
+  const reserveParty = parties.find(p => p.isReserve);
+
+  // Add regular parties
+  for (const party of regularParties) {
     const members = party.members || [];
 
     if (members.length === 0) {
@@ -136,6 +139,38 @@ function createPartiesOverviewEmbed(parties, guild) {
       value: memberList,
       inline: false
     });
+  }
+
+  // Add reserve party at the end if it exists
+  if (reserveParty) {
+    const members = reserveParty.members || [];
+
+    if (members.length === 0) {
+      embed.addFields({
+        name: `📦 Reserve Party (0/${RESERVE_PARTY_SIZE})`,
+        value: '*No reserve members*',
+        inline: false
+      });
+    } else {
+      // Sort reserve by CP descending
+      const sortedMembers = [...members].sort((a, b) => (b.cp || 0) - (a.cp || 0));
+
+      const memberList = sortedMembers.slice(0, 10).map(m => {
+        const role = m.weapon1 && m.weapon2 ? `${m.weapon1}/${m.weapon2}` : 'No role';
+        const cp = m.cp ? m.cp.toLocaleString() : '0';
+        return `• <@${m.userId}> - ${role} - ${cp} CP`;
+      }).join('\n');
+
+      const displayText = members.length > 10 
+        ? `${memberList}\n*...and ${members.length - 10} more*`
+        : memberList;
+
+      embed.addFields({
+        name: `📦 Reserve Party (${members.length}/${RESERVE_PARTY_SIZE})`,
+        value: displayText,
+        inline: false
+      });
+    }
   }
 
   return embed;

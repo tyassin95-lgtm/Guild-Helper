@@ -1,5 +1,5 @@
 const { ActionRowBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionFlagsBits } = require('discord.js');
-const { WEAPONS, MAX_PARTIES } = require('../constants');
+const { WEAPONS, MAX_PARTIES, RESERVE_PARTY_SIZE } = require('../constants');
 const { createPlayerInfoEmbed, createPartiesOverviewEmbed } = require('../embed');
 
 async function handlePartyButtons({ interaction, collections }) {
@@ -68,10 +68,18 @@ async function handlePartyButtons({ interaction, collections }) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
 
-    const existingParties = await parties.find({ guildId: interaction.guildId }).toArray();
+    // Check if reserve party exists
+    const reserveParty = await parties.findOne({ guildId: interaction.guildId, isReserve: true });
+    const existingParties = await parties.find({ 
+      guildId: interaction.guildId, 
+      isReserve: { $ne: true } 
+    }).toArray();
 
     if (existingParties.length >= MAX_PARTIES) {
-      return interaction.reply({ content: `❌ Maximum number of parties (${MAX_PARTIES}) already created.`, flags: [64] });
+      return interaction.reply({ 
+        content: `❌ Maximum number of regular parties (${MAX_PARTIES}) already created.`, 
+        flags: [64] 
+      });
     }
 
     // Find next available party number
@@ -84,6 +92,7 @@ async function handlePartyButtons({ interaction, collections }) {
     await parties.insertOne({
       guildId: interaction.guildId,
       partyNumber: nextNumber,
+      isReserve: false,
       members: [],
       totalCP: 0,
       roleComposition: { tank: 0, healer: 0, dps: 0 },
@@ -91,12 +100,56 @@ async function handlePartyButtons({ interaction, collections }) {
     });
 
     const allParties = await parties.find({ guildId: interaction.guildId })
-      .sort({ partyNumber: 1 })
+      .sort({ isReserve: 1, partyNumber: 1 })
       .toArray();
 
     const embed = createPartiesOverviewEmbed(allParties, interaction.guild);
 
     return interaction.update({ embeds: [embed] });
+  }
+
+  // Create reserve party
+  if (interaction.customId === 'party_create_reserve') {
+    if (!interaction.guildId) {
+      return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
+    }
+
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
+    }
+
+    // Check if reserve already exists
+    const existingReserve = await parties.findOne({ 
+      guildId: interaction.guildId, 
+      isReserve: true 
+    });
+
+    if (existingReserve) {
+      return interaction.reply({ 
+        content: '❌ A reserve party already exists!', 
+        flags: [64] 
+      });
+    }
+
+    await parties.insertOne({
+      guildId: interaction.guildId,
+      isReserve: true,
+      members: [],
+      totalCP: 0,
+      roleComposition: { tank: 0, healer: 0, dps: 0 },
+      createdAt: new Date()
+    });
+
+    const allParties = await parties.find({ guildId: interaction.guildId })
+      .sort({ isReserve: 1, partyNumber: 1 })
+      .toArray();
+
+    const embed = createPartiesOverviewEmbed(allParties, interaction.guild);
+
+    return interaction.update({ 
+      content: `✅ Reserve party created! (Capacity: ${RESERVE_PARTY_SIZE} members)`,
+      embeds: [embed] 
+    });
   }
 
   // Manage parties (admin only - guild context required)
@@ -110,21 +163,32 @@ async function handlePartyButtons({ interaction, collections }) {
     }
 
     const allParties = await parties.find({ guildId: interaction.guildId })
-      .sort({ partyNumber: 1 })
+      .sort({ isReserve: 1, partyNumber: 1 })
       .toArray();
 
     if (allParties.length === 0) {
       return interaction.reply({ content: '❌ No parties exist. Create one first!', flags: [64] });
     }
 
+    const options = allParties.map(p => {
+      if (p.isReserve) {
+        return {
+          label: `Reserve Party (${p.members?.length || 0}/${RESERVE_PARTY_SIZE})`,
+          value: 'reserve',
+          emoji: '📦'
+        };
+      }
+      return {
+        label: `Party ${p.partyNumber} (${p.members?.length || 0}/6)`,
+        value: p.partyNumber.toString()
+      };
+    });
+
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId('party_manage_select')
         .setPlaceholder('Select a party to manage')
-        .addOptions(allParties.map(p => ({
-          label: `Party ${p.partyNumber} (${p.members?.length || 0}/6)`,
-          value: p.partyNumber.toString()
-        })))
+        .addOptions(options)
     );
 
     return interaction.reply({ content: 'Select a party to manage:', components: [row], flags: [64] });
@@ -141,22 +205,34 @@ async function handlePartyButtons({ interaction, collections }) {
     }
 
     const allParties = await parties.find({ guildId: interaction.guildId })
-      .sort({ partyNumber: 1 })
+      .sort({ isReserve: 1, partyNumber: 1 })
       .toArray();
 
     if (allParties.length === 0) {
       return interaction.reply({ content: '❌ No parties exist to delete.', flags: [64] });
     }
 
+    const options = allParties.map(p => {
+      if (p.isReserve) {
+        return {
+          label: `Reserve Party (${p.members?.length || 0}/${RESERVE_PARTY_SIZE})`,
+          value: 'reserve',
+          description: 'This will remove all members from reserve',
+          emoji: '📦'
+        };
+      }
+      return {
+        label: `Party ${p.partyNumber} (${p.members?.length || 0}/6)`,
+        value: p.partyNumber.toString(),
+        description: 'This will remove all members from the party'
+      };
+    });
+
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId('party_delete_confirm')
         .setPlaceholder('Select a party to delete')
-        .addOptions(allParties.map(p => ({
-          label: `Party ${p.partyNumber} (${p.members?.length || 0}/6)`,
-          value: p.partyNumber.toString(),
-          description: 'This will remove all members from the party'
-        })))
+        .addOptions(options)
     );
 
     return interaction.reply({ content: '⚠️ Select a party to delete:', components: [row], flags: [64] });
