@@ -56,10 +56,10 @@ class RosterBuilder {
     // Build message header (only for first message)
     let messageHeader = '**🏰 GUILD ROSTER**\n';
     messageHeader += `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithData.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n`;
-    messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
     messageHeader += '```\n';
-    messageHeader += 'Name            Role      Weapons           CP       PvP\n';
-    messageHeader += '───────────────────────────────────────────────────────────────\n';
+    messageHeader += 'Name            Role      Weapons              CP  Total Events\n';
+    messageHeader += '─────────────────────────────────────────────────────────────────────\n';
     messageHeader += '```\n';
 
     let membersList = '';
@@ -76,36 +76,30 @@ class RosterBuilder {
       // Weapons column
       const weapon1 = player.weapon1 || 'Unknown';
       const weapon2 = player.weapon2 || 'Unknown';
-      const weaponsShort = `${weapon1.substring(0, 8)}/${weapon2.substring(0, 8)}`.substring(0, 17).padEnd(17);
+      const weaponsShort = `${weapon1.substring(0, 9)}/${weapon2.substring(0, 9)}`.substring(0, 20).padEnd(20);
 
-      // CP column
-      const cpFormatted = this.formatCombatPower(player.cp || 0).padStart(8);
+      // CP column - padded to 6 characters
+      const cpFormatted = this.formatCombatPower(player.cp || 0).padStart(6);
 
-      // PvP events column
-      const pvpFormatted = player.pvpEvents.toString().padStart(8);
+      // Total Events column - padded to 13 characters (centered under "Total Events")
+      const eventsFormatted = player.pvpEvents.toString().padStart(13);
 
       // Discord mention (outside code block)
       const discordMention = `<@${player.userId}>`;
 
       // Table row (inside code block)
-      const tableRow = '```\n' + `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${pvpFormatted}\n` + '```\n';
+      const tableRow = '```\n' + `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted}\n` + '```\n';
 
       const memberEntry = discordMention + '\n' + tableRow;
 
       // Check if adding this entry would exceed the limit
-      // For continuation messages, we need a shorter header
-      const continuationHeader = '```\n' +
-        'Name            Role      Weapons           CP       PvP\n' +
-        '───────────────────────────────────────────────────────────────\n' +
-        '```\n';
-
       if ((currentMessage + membersList + memberEntry).length > maxMessageLength) {
         // Finalize current message (no footer for seamless continuation)
         currentMessage += membersList;
         messages.push({ content: currentMessage });
 
-        // Start new message with just the table header (seamless continuation)
-        currentMessage = continuationHeader;
+        // Start new message with NO header (seamless continuation)
+        currentMessage = '';
         membersList = '';
         isFirstMessage = false;
       }
@@ -115,7 +109,7 @@ class RosterBuilder {
 
     // Finalize last message with legend
     currentMessage += membersList;
-    currentMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    currentMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
     currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS';
 
     messages.push({ content: currentMessage });
@@ -129,14 +123,14 @@ class RosterBuilder {
   static buildEmptyRosterMessage() {
     const content = '**🏰 GUILD ROSTER**\n' +
       `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 0 Members | 💪 0 Total CP\n` +
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
       '```\n' +
       '\n' +
       '              No members registered yet!\n' +
       '              Use /myinfo to join the roster.\n' +
       '\n' +
       '```\n' +
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
       '🛡️ Tank | 💚 Healer | ⚔️ DPS\n';
 
     return [{ content }];
