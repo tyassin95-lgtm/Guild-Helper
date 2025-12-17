@@ -58,7 +58,7 @@ class RosterBuilder {
     messageHeader += `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithData.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n`;
     messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
     messageHeader += '```\n';
-    messageHeader += 'Name            Role      Weapons                CP             Total Events\n';
+    messageHeader += 'Name            Role      Weapons                CP              Total Events\n';
     messageHeader += '─────────────────────────────────────────────────────────────────────\n';
     messageHeader += '```\n';
 
