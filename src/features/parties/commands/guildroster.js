@@ -23,7 +23,7 @@ async function updateGuildRoster(guild, channelId, collections) {
 
     // Build roster messages
     const messageContents = players.length > 0
-      ? await RosterBuilder.buildRosterMessages(guild, players)
+      ? await RosterBuilder.buildRosterMessages(guild, players, collections)
       : RosterBuilder.buildEmptyRosterMessage();
 
     // Get existing roster record

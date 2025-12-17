@@ -18,47 +18,57 @@ class RosterBuilder {
   /**
    * Build roster messages with proper pagination
    */
-  static async buildRosterMessages(guild, players) {
+  static async buildRosterMessages(guild, players, collections) {
     const messages = [];
     const maxMessageLength = 1900; // Safe limit for Discord messages
 
     // Sort players: first by role (tank > healer > dps), then alphabetically by display name
     const roleOrder = { tank: 0, healer: 1, dps: 2 };
 
-    // Fetch all member display names first
-    const playersWithNames = await Promise.all(
+    // Fetch all member display names and PvP event counts
+    const { pvpActivityRanking } = collections;
+
+    const playersWithData = await Promise.all(
       players.map(async (p) => {
         const member = await guild.members.fetch(p.userId).catch(() => null);
         const displayName = member ? member.displayName : 'Unknown';
-        return { ...p, displayName };
+
+        // Get PvP events attended
+        const pvpData = await pvpActivityRanking.findOne({
+          userId: p.userId,
+          guildId: guild.id
+        });
+        const pvpEvents = pvpData?.totalEvents || 0;
+
+        return { ...p, displayName, pvpEvents };
       })
     );
 
-    playersWithNames.sort((a, b) => {
+    playersWithData.sort((a, b) => {
       const roleCompare = (roleOrder[a.role] || 3) - (roleOrder[b.role] || 3);
       if (roleCompare !== 0) return roleCompare;
       return a.displayName.localeCompare(b.displayName);
     });
 
     // Calculate total CP
-    const totalCP = playersWithNames.reduce((sum, p) => sum + (p.cp || 0), 0);
+    const totalCP = playersWithData.reduce((sum, p) => sum + (p.cp || 0), 0);
 
-    // Build message content
-    let messageContent = '**🏰 GUILD ROSTER**\n';
-    messageContent += `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithNames.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n`;
-    messageContent += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-    messageContent += '```\n';
-    messageContent += 'Name               Role    Weapons           CP\n';
-    messageContent += '─────────────────────────────────────────────────────────────\n';
-    messageContent += '```\n';
+    // Build message header (only for first message)
+    let messageHeader = '**🏰 GUILD ROSTER**\n';
+    messageHeader += `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithData.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n`;
+    messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    messageHeader += '```\n';
+    messageHeader += 'Name            Role      Weapons           CP       PvP\n';
+    messageHeader += '───────────────────────────────────────────────────────────────\n';
+    messageHeader += '```\n';
 
     let membersList = '';
-    let currentMessage = messageContent;
-    let messageCount = 0;
+    let currentMessage = messageHeader;
+    let isFirstMessage = true;
 
-    for (const player of playersWithNames) {
+    for (const player of playersWithData) {
       // Build member data row
-      const name = player.displayName.substring(0, 18).padEnd(18);
+      const name = player.displayName.substring(0, 15).padEnd(15);
 
       const roleEmoji = getRoleEmoji(player.role);
       const roleDisplay = getRoleDisplayName(player.role).substring(0, 7).padEnd(7);
@@ -71,48 +81,41 @@ class RosterBuilder {
       // CP column
       const cpFormatted = this.formatCombatPower(player.cp || 0).padStart(8);
 
+      // PvP events column
+      const pvpFormatted = player.pvpEvents.toString().padStart(8);
+
       // Discord mention (outside code block)
       const discordMention = `<@${player.userId}>`;
 
       // Table row (inside code block)
-      const tableRow = '```\n' + `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted}\n` + '```\n';
+      const tableRow = '```\n' + `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${pvpFormatted}\n` + '```\n';
 
       const memberEntry = discordMention + '\n' + tableRow;
 
-      // Footer
-      const footer = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-                     '🛡️ Tank | 💚 Healer | ⚔️ DPS\n';
-
       // Check if adding this entry would exceed the limit
-      if ((currentMessage + membersList + memberEntry + footer).length > maxMessageLength) {
-        // Finalize current message
+      // For continuation messages, we need a shorter header
+      const continuationHeader = '```\n' +
+        'Name            Role      Weapons           CP       PvP\n' +
+        '───────────────────────────────────────────────────────────────\n' +
+        '```\n';
+
+      if ((currentMessage + membersList + memberEntry).length > maxMessageLength) {
+        // Finalize current message (no footer for seamless continuation)
         currentMessage += membersList;
-        currentMessage += `📄 Page ${messageCount + 1}\n`;
-        currentMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-        currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS\n';
-
         messages.push({ content: currentMessage });
-        messageCount++;
 
-        // Start new message
-        currentMessage = '**🏰 GUILD ROSTER (Continued)**\n';
-        currentMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-        currentMessage += '```\n';
-        currentMessage += 'Name               Role    Weapons           CP\n';
-        currentMessage += '─────────────────────────────────────────────────────────────\n';
-        currentMessage += '```\n';
+        // Start new message with just the table header (seamless continuation)
+        currentMessage = continuationHeader;
         membersList = '';
+        isFirstMessage = false;
       }
 
       membersList += memberEntry;
     }
 
-    // Finalize last message
+    // Finalize last message with legend
     currentMessage += membersList;
-    if (messages.length > 0) {
-      currentMessage += `📄 Page ${messageCount + 1}\n`;
-    }
-    currentMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    currentMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
     currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS';
 
     messages.push({ content: currentMessage });
@@ -126,14 +129,14 @@ class RosterBuilder {
   static buildEmptyRosterMessage() {
     const content = '**🏰 GUILD ROSTER**\n' +
       `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 0 Members | 💪 0 Total CP\n` +
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
       '```\n' +
       '\n' +
       '              No members registered yet!\n' +
       '              Use /myinfo to join the roster.\n' +
       '\n' +
       '```\n' +
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
       '🛡️ Tank | 💚 Healer | ⚔️ DPS\n';
 
     return [{ content }];
