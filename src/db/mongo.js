@@ -41,6 +41,7 @@ function getCollections(db = _db) {
     partyPlayers: db.collection('partyPlayers'),
     parties: db.collection('parties'),
     partyPanels: db.collection('partyPanels'),
+    guildRosters: db.collection('guildRosters'),
 
     // DM context tracking
     dmContexts: db.collection('dmContexts'),

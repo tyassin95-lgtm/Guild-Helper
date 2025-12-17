@@ -398,6 +398,11 @@ async function registerSlashCommands(client) {
       name: 'viewparties',
       description: 'View all static parties.'
     },
+    {
+      name: 'guildroster',
+      description: 'Admins: Create/update an auto-updating guild roster in this channel.',
+      default_member_permissions: ADMIN
+    },
     // Gambling Commands (Everyone)
     {
       name: 'gamblingbalance',
