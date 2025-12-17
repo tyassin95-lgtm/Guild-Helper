@@ -494,7 +494,8 @@ async function handlePartySelects({ interaction, collections }) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
 
-    const [, fromIdentifier, userId] = interaction.customId.split(':');
+    const [, fromIdentifier] = interaction.customId.split(':');
+    const userId = interaction.values[0];
     const isFromReserve = fromIdentifier === 'reserve';
 
     const otherParties = await parties.find({ 
