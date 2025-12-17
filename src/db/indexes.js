@@ -1,14 +1,15 @@
-async function ensureIndexes({ 
-  wishlists, 
-  panels, 
-  handedOut, 
-  liveSummaries, 
-  tokenRegenerations, 
-  userCooldowns, 
-  guildSettings, 
-  partyPlayers, 
-  parties, 
+async function ensureIndexes({
+  wishlists,
+  panels,
+  handedOut,
+  liveSummaries,
+  tokenRegenerations,
+  userCooldowns,
+  guildSettings,
+  partyPlayers,
+  parties,
   partyPanels,
+  guildRosters,
   raidSessions,
   raidEvents,
   dmContexts,
@@ -80,6 +81,10 @@ async function ensureIndexes({
   await parties.createIndex({ guildId: 1, totalCP: 1 });
 
   await partyPanels.createIndex({ guildId: 1 }, { unique: true });
+
+  // Guild rosters indexes
+  await guildRosters.createIndex({ guildId: 1 }, { unique: true });
+  await guildRosters.createIndex({ channelId: 1 });
 
   // Raid sessions indexes
   await raidSessions.createIndex({ guildId: 1, active: 1 });

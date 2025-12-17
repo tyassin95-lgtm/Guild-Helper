@@ -1,6 +1,7 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { createPlayerInfoEmbed } = require('../embed');
 const { updatePlayerRole } = require('../roleDetection');
+const { updateGuildRoster } = require('../commands/guildroster');
 
 async function handlePartyModals({ interaction, collections }) {
   const { partyPlayers, parties } = collections;
@@ -117,6 +118,18 @@ async function handlePartyModals({ interaction, collections }) {
           .setStyle(ButtonStyle.Success)
           .setEmoji('💪')
       );
+
+      // Update guild roster if it exists
+      if (guild) {
+        const { guildRosters } = collections;
+        const rosterRecord = await guildRosters.findOne({ guildId: guild.id });
+        if (rosterRecord && rosterRecord.channelId) {
+          // Update roster in background (don't wait)
+          updateGuildRoster(guild, rosterRecord.channelId, collections).catch(err => {
+            console.error('Error auto-updating guild roster:', err);
+          });
+        }
+      }
 
       return interaction.editReply({
         content: `✅ Combat Power set to **${cp.toLocaleString()}**!`,

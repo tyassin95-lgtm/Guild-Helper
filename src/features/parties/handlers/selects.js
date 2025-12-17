@@ -2,6 +2,7 @@ const { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, P
 const { createPlayerInfoEmbed, createPartiesOverviewEmbed } = require('../embed');
 const { PARTY_SIZE, RESERVE_PARTY_SIZE } = require('../constants');
 const { updatePlayerRole } = require('../roleDetection');
+const { updateGuildRoster } = require('../commands/guildroster');
 
 async function handlePartySelects({ interaction, collections }) {
   const { partyPlayers, parties } = collections;
@@ -145,17 +146,28 @@ async function handlePartySelects({ interaction, collections }) {
           .setEmoji('💪')
       );
 
-      return interaction.editReply({ 
-        content: `✅ Primary weapon set to **${weapon}**!`, 
-        embeds: [embed], 
-        components: [row] 
+      // Update guild roster if it exists
+      if (guild) {
+        const { guildRosters } = collections;
+        const rosterRecord = await guildRosters.findOne({ guildId: guild.id });
+        if (rosterRecord && rosterRecord.channelId) {
+          updateGuildRoster(guild, rosterRecord.channelId, collections).catch(err => {
+            console.error('Error auto-updating guild roster:', err);
+          });
+        }
+      }
+
+      return interaction.editReply({
+        content: `✅ Primary weapon set to **${weapon}**!`,
+        embeds: [embed],
+        components: [row]
       });
     } catch (err) {
       console.error('Error in party_select_weapon1:', err);
-      return interaction.editReply({ 
-        content: '❌ An error occurred while updating your weapon. Please try again.', 
-        embeds: [], 
-        components: [] 
+      return interaction.editReply({
+        content: '❌ An error occurred while updating your weapon. Please try again.',
+        embeds: [],
+        components: []
       });
     }
   }
@@ -299,17 +311,28 @@ async function handlePartySelects({ interaction, collections }) {
           .setEmoji('💪')
       );
 
-      return interaction.editReply({ 
-        content: `✅ Secondary weapon set to **${weapon}**!`, 
-        embeds: [embed], 
-        components: [row] 
+      // Update guild roster if it exists
+      if (guild) {
+        const { guildRosters } = collections;
+        const rosterRecord = await guildRosters.findOne({ guildId: guild.id });
+        if (rosterRecord && rosterRecord.channelId) {
+          updateGuildRoster(guild, rosterRecord.channelId, collections).catch(err => {
+            console.error('Error auto-updating guild roster:', err);
+          });
+        }
+      }
+
+      return interaction.editReply({
+        content: `✅ Secondary weapon set to **${weapon}**!`,
+        embeds: [embed],
+        components: [row]
       });
     } catch (err) {
       console.error('Error in party_select_weapon2:', err);
-      return interaction.editReply({ 
-        content: '❌ An error occurred while updating your weapon. Please try again.', 
-        embeds: [], 
-        components: [] 
+      return interaction.editReply({
+        content: '❌ An error occurred while updating your weapon. Please try again.',
+        embeds: [],
+        components: []
       });
     }
   }

@@ -21,6 +21,7 @@ const { handlePlayerList } = require('../../features/parties/commands/playerlist
 const { handlePartiesPanel } = require('../../features/parties/commands/partiespanel');
 const { handleResetParties, handleResetPartiesConfirmation } = require('../../features/parties/commands/resetparties');
 const { handleRemindParty } = require('../../features/parties/commands/remindparty');
+const { handleGuildRoster } = require('../../features/parties/commands/guildroster');
 const { handlePartyButtons } = require('../../features/parties/handlers/buttons');
 const { handlePartySelects } = require('../../features/parties/handlers/selects');
 const { handlePartyModals } = require('../../features/parties/handlers/modals');
@@ -122,6 +123,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'partiespanel') return handlePartiesPanel({ interaction, collections });
       if (name === 'resetparties') return handleResetParties({ interaction, collections });
       if (name === 'remindparty') return handleRemindParty({ interaction, collections });
+      if (name === 'guildroster') return handleGuildRoster({ interaction, collections });
 
       // PvP commands
       if (name === 'pvpevent')    return handlePvPEvent({ interaction, collections });
