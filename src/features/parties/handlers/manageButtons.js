@@ -72,7 +72,7 @@ async function handlePartyManageButtons({ interaction, collections }) {
     await interaction.deferUpdate();
 
     try {
-      const [, , partyIdentifier, pageStr] = interaction.customId.split(':');
+      const [, partyIdentifier, pageStr] = interaction.customId.split(':');
       const page = parseInt(pageStr);
 
       // Get all available players again
