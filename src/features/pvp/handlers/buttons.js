@@ -41,6 +41,15 @@ async function handlePvPButtons({ interaction, collections }) {
       .setPlaceholder('e.g., 1729450800 (Use https://www.unixtimestamp.com)')
       .setRequired(true);
 
+    const bonusPointsInput = new TextInputBuilder()
+      .setCustomId('bonus_points')
+      .setLabel('Bonus Points (for attendance)')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('e.g., 10, 20, 50')
+      .setRequired(true)
+      .setMinLength(1)
+      .setMaxLength(4);
+
     const imageInput = new TextInputBuilder()
       .setCustomId('image_url')
       .setLabel('Image URL (Optional)')
@@ -58,6 +67,7 @@ async function handlePvPButtons({ interaction, collections }) {
 
     modal.addComponents(
       new ActionRowBuilder().addComponents(timeInput),
+      new ActionRowBuilder().addComponents(bonusPointsInput),
       new ActionRowBuilder().addComponents(imageInput),
       new ActionRowBuilder().addComponents(messageInput)
     );

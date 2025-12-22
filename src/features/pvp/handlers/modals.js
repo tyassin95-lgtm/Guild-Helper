@@ -6,7 +6,7 @@ const { scheduleLiveSummaryUpdate } = require('../../../bot/liveSummary');
 async function handlePvPModals({ interaction, collections }) {
   const { pvpEvents, pvpBonuses, pvpActivityRanking } = collections;
 
-  // Location input modal (for Riftstone/Boonstone)
+  // Location input modal (for Riftstone/Boonstone/Guild Event)
   if (interaction.customId.startsWith('pvp_location_modal:')) {
     const eventType = interaction.customId.split(':')[1];
     const location = interaction.fields.getTextInputValue('location');
@@ -49,17 +49,18 @@ async function handlePvPModals({ interaction, collections }) {
       return interaction.editReply({ content: '❌ Incorrect password. Please try again.' });
     }
 
-    // FIXED: Use atomic operation to add user to attendees (prevents race conditions)
-    // This checks if the user is already in the array and adds them in a single atomic operation
+    // Get the bonus points for this event
+    const bonusPoints = event.bonusPoints || 10;
+
+    // Use atomic operation to add user to attendees (prevents race conditions)
     const updateResult = await pvpEvents.updateOne(
       { 
         _id: new ObjectId(eventId),
-        attendees: { $ne: interaction.user.id }, // Only match if user NOT in array
-        closed: false // Also verify event is still open
+        attendees: { $ne: interaction.user.id },
+        closed: false
       },
       { 
         $push: { attendees: interaction.user.id },
-        // Remove user from all RSVP lists when they record attendance
         $pull: {
           rsvpAttending: interaction.user.id,
           rsvpNotAttending: interaction.user.id,
@@ -70,7 +71,6 @@ async function handlePvPModals({ interaction, collections }) {
 
     // If matchedCount is 0, either the user already recorded attendance or event was closed
     if (updateResult.matchedCount === 0) {
-      // Fetch the event again to determine the exact reason
       const currentEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
 
       if (!currentEvent) {
@@ -85,18 +85,14 @@ async function handlePvPModals({ interaction, collections }) {
         return interaction.editReply({ content: '❌ You\'ve already recorded attendance for this event.' });
       }
 
-      // Shouldn't reach here, but just in case
       return interaction.editReply({ content: '❌ Unable to record attendance. Please try again.' });
     }
 
-    // If we get here, the attendance was successfully recorded
-    // Now add the bonuses and activity ranking
-
-    // Add +10 bonus to user (weekly bonus - can be reset)
+    // Add bonus points to user (weekly bonus - can be reset)
     await pvpBonuses.updateOne(
       { userId: interaction.user.id, guildId: interaction.guildId },
       { 
-        $inc: { bonusCount: 1 },
+        $inc: { bonusCount: bonusPoints },
         $set: { lastUpdated: new Date() }
       },
       { upsert: true }
@@ -120,7 +116,7 @@ async function handlePvPModals({ interaction, collections }) {
     await scheduleLiveSummaryUpdate(interaction, collections);
 
     return interaction.editReply({ 
-      content: '✅ **Attendance recorded!**\n\nYou\'ve earned a +10 PvP bonus for this event!' 
+      content: `✅ **Attendance recorded!**\n\nYou've earned **+${bonusPoints}** PvP bonus points for this event!` 
     });
   }
 
@@ -140,6 +136,9 @@ async function handlePvPModals({ interaction, collections }) {
     if (!event.closed) {
       return interaction.editReply({ content: '❌ This feature is only available for closed events.' });
     }
+
+    // Get the bonus points for this event
+    const bonusPoints = event.bonusPoints || 10;
 
     // Validate user ID
     const userId = userIdInput.trim();
@@ -162,7 +161,6 @@ async function handlePvPModals({ interaction, collections }) {
         { _id: new ObjectId(eventId) },
         { 
           $push: { attendees: userId },
-          // Remove user from all RSVP lists when they get attendance
           $pull: {
             rsvpAttending: userId,
             rsvpNotAttending: userId,
@@ -171,11 +169,11 @@ async function handlePvPModals({ interaction, collections }) {
         }
       );
 
-      // Add +10 bonus to user (weekly bonus - can be reset)
+      // Add bonus points to user (weekly bonus - can be reset)
       await pvpBonuses.updateOne(
         { userId: userId, guildId: interaction.guildId },
         { 
-          $inc: { bonusCount: 1 },
+          $inc: { bonusCount: bonusPoints },
           $set: { lastUpdated: new Date() }
         },
         { upsert: true }
@@ -199,7 +197,7 @@ async function handlePvPModals({ interaction, collections }) {
       await scheduleLiveSummaryUpdate(interaction, collections);
 
       return interaction.editReply({ 
-        content: `✅ **Attendance manually recorded for ${member.displayName}!**\n\nThey've been awarded a +10 PvP bonus.` 
+        content: `✅ **Attendance manually recorded for ${member.displayName}!**\n\nThey've been awarded **+${bonusPoints}** PvP bonus points.` 
       });
 
     } catch (err) {
@@ -213,10 +211,19 @@ async function handlePvPModals({ interaction, collections }) {
     const [_, eventType, location] = interaction.customId.split(':');
 
     const eventTime = interaction.fields.getTextInputValue('event_time');
-    const imageUrl = interaction.fields.getTextInputValue('image_url');
+    const bonusPointsInput = interaction.fields.getTextInputValue('bonus_points');
+    const imageUrl = interaction.fields.getTextInputValue('image_url').trim();
     const message = interaction.fields.getTextInputValue('message');
 
     await interaction.deferReply({ flags: [64] });
+
+    // Validate bonus points
+    const bonusPoints = parseInt(bonusPointsInput);
+    if (isNaN(bonusPoints) || bonusPoints < 1 || bonusPoints > 9999) {
+      return interaction.editReply({
+        content: '❌ Invalid bonus points. Please enter a number between 1 and 9999.'
+      });
+    }
 
     // Parse the time input (expecting ISO format or timestamp)
     let eventDate;
@@ -249,13 +256,14 @@ async function handlePvPModals({ interaction, collections }) {
       eventType,
       location: location !== 'none' ? location : null,
       eventTime: eventDate,
-      imageUrl: imageUrl || null,
+      bonusPoints, // Store the custom bonus points
+      imageUrl: (imageUrl && imageUrl.length > 0) ? imageUrl : null,
       message,
       password,
-      attendees: [], // Users who recorded attendance with password
-      rsvpAttending: [], // Users who clicked "Attending"
-      rsvpNotAttending: [], // Users who clicked "Not Attending"
-      rsvpMaybe: [], // Users who clicked "Maybe"
+      attendees: [],
+      rsvpAttending: [],
+      rsvpNotAttending: [],
+      rsvpMaybe: [],
       closed: false,
       createdBy: interaction.user.id,
       createdAt: new Date()
@@ -269,7 +277,8 @@ async function handlePvPModals({ interaction, collections }) {
       await interaction.user.send({
         content: `🔐 **PvP Event Password**\n\n` +
                  `Your event has been created!\n\n` +
-                 `**Attendance Code:** \`${password}\`\n\n` +
+                 `**Attendance Code:** \`${password}\`\n` +
+                 `**Bonus Points:** ${bonusPoints}\n\n` +
                  `Share this code with participants to record their attendance.`
       });
     } catch (err) {

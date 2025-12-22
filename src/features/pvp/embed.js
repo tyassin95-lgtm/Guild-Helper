@@ -5,18 +5,21 @@ async function createEventEmbed(event, client, collections) {
     siege: '🏰',
     riftstone: '💎',
     boonstone: '🔮',
-    wargames: '⚔️'
+    wargames: '⚔️',
+    guildevent: '🎪'
   };
 
   const eventTypeNames = {
     siege: 'Siege',
     riftstone: 'Riftstone Fight',
     boonstone: 'Boonstone Fight',
-    wargames: 'Wargames'
+    wargames: 'Wargames',
+    guildevent: 'Guild Event'
   };
 
   const emoji = eventTypeEmojis[event.eventType] || '⚔️';
   const typeName = eventTypeNames[event.eventType] || event.eventType;
+  const bonusPoints = event.bonusPoints || 10;
 
   const embed = new EmbedBuilder()
     .setColor(event.closed ? '#95a5a6' : '#e74c3c')
@@ -24,7 +27,8 @@ async function createEventEmbed(event, client, collections) {
     .setDescription(event.message)
     .setTimestamp();
 
-  if (event.imageUrl) {
+  // Only set image if URL exists and is not empty
+  if (event.imageUrl && event.imageUrl.trim().length > 0) {
     embed.setImage(event.imageUrl);
   }
 
@@ -42,6 +46,13 @@ async function createEventEmbed(event, client, collections) {
   embed.addFields({
     name: '⏰ Event Time',
     value: `<t:${timestamp}:F>\n<t:${timestamp}:R>`,
+    inline: true
+  });
+
+  // Add bonus points field
+  embed.addFields({
+    name: '🎁 Bonus Points',
+    value: `**+${bonusPoints}** points for attendance`,
     inline: true
   });
 

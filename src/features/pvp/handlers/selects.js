@@ -5,17 +5,23 @@ async function handlePvPSelects({ interaction, collections }) {
   if (interaction.customId === 'pvp_select_event_type') {
     const eventType = interaction.values[0];
 
-    // If Riftstone or Boonstone, ask for location via modal
-    if (eventType === 'riftstone' || eventType === 'boonstone') {
+    // If Riftstone, Boonstone, or Guild Event, ask for location via modal
+    if (eventType === 'riftstone' || eventType === 'boonstone' || eventType === 'guildevent') {
+      const eventNames = {
+        'riftstone': 'Riftstone Fight',
+        'boonstone': 'Boonstone Fight',
+        'guildevent': 'Guild Event'
+      };
+
       const modal = new ModalBuilder()
         .setCustomId(`pvp_location_modal:${eventType}`)
-        .setTitle(`${eventType === 'riftstone' ? 'Riftstone' : 'Boonstone'} Fight Location`);
+        .setTitle(`${eventNames[eventType]} Location`);
 
       const locationInput = new TextInputBuilder()
         .setCustomId('location')
         .setLabel('Enter Location Name')
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('e.g., Stonegard Castle, Fonos Basin, etc.')
+        .setPlaceholder('e.g., Stonegard Castle, Fonos Basin, Guild Hall, etc.')
         .setRequired(true)
         .setMaxLength(100);
 
@@ -42,6 +48,15 @@ function showEventDetailsModal(interaction, eventType, location) {
     .setPlaceholder('e.g., 1729450800 (Use https://www.unixtimestamp.com)')
     .setRequired(true);
 
+  const bonusPointsInput = new TextInputBuilder()
+    .setCustomId('bonus_points')
+    .setLabel('Bonus Points (for attendance)')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('e.g., 10, 20, 50')
+    .setRequired(true)
+    .setMinLength(1)
+    .setMaxLength(4);
+
   const imageInput = new TextInputBuilder()
     .setCustomId('image_url')
     .setLabel('Image URL (Optional)')
@@ -59,6 +74,7 @@ function showEventDetailsModal(interaction, eventType, location) {
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(timeInput),
+    new ActionRowBuilder().addComponents(bonusPointsInput),
     new ActionRowBuilder().addComponents(imageInput),
     new ActionRowBuilder().addComponents(messageInput)
   );
