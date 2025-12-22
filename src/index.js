@@ -7,6 +7,7 @@ const { registerSlashCommands } = require('./bot/commands');
 const { onInteractionCreate } = require('./bot/handlers/interaction');
 const { startTokenRegenerationChecker } = require('./bot/tokenRegeneration');
 const { resumeActiveRaidCountdowns, clearAllCountdownIntervals } = require('./features/raids/raidSession');
+const { resumeActiveItemRolls } = require('./features/itemroll/utils/itemRollResume');
 const { streamServer } = require('./features/broadcast/server/streamServer');
 const { broadcastManager } = require('./features/broadcast/utils/broadcastManager');
 
@@ -16,7 +17,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates  // ADDED: Required for voice receiving
+    GatewayIntentBits.GuildVoiceStates  // Required for voice receiving
   ]
 });
 
@@ -39,6 +40,9 @@ const client = new Client({
 
       // Resume active raid countdowns after bot restart
       await resumeActiveRaidCountdowns(client, collections);
+
+      // Resume active item rolls after bot restart
+      await resumeActiveItemRolls(client, collections);
     });
 
     client.on('interactionCreate', async (interaction) => {

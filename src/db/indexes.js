@@ -16,6 +16,7 @@ async function ensureIndexes({
   pvpEvents,
   pvpBonuses,
   pvpActivityRanking,
+  itemRolls,
   applicationPanels,
   applicationTickets,
   applicationResponses,
@@ -118,6 +119,14 @@ async function ensureIndexes({
   await pvpActivityRanking.createIndex({ userId: 1, guildId: 1 }, { unique: true });
   await pvpActivityRanking.createIndex({ guildId: 1 });
   await pvpActivityRanking.createIndex({ guildId: 1, totalEvents: -1 }); // Sort by total events descending
+
+  // Item Roll indexes
+  await itemRolls.createIndex({ guildId: 1 });
+  await itemRolls.createIndex({ guildId: 1, closed: 1 });
+  await itemRolls.createIndex({ guildId: 1, channelId: 1 });
+  await itemRolls.createIndex({ messageId: 1 });
+  await itemRolls.createIndex({ endsAt: 1 });
+  await itemRolls.createIndex({ 'rolls.userId': 1 });
 
   // Application System Indexes
   // Application panels

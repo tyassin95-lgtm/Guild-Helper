@@ -187,6 +187,11 @@ async function registerSlashCommands(client) {
       description: 'Admins: Reset all PvP bonuses (DANGEROUS!).',
       default_member_permissions: ADMIN
     },
+    {
+      name: 'itemroll',
+      description: 'Admins: Create an item roll event where players can roll for loot.',
+      default_member_permissions: ADMIN
+    },
     // Raid Commands
     {
       name: 'createraid',

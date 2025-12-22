@@ -34,6 +34,12 @@ const { handlePvPButtons } = require('../../features/pvp/handlers/buttons');
 const { handlePvPSelects } = require('../../features/pvp/handlers/selects');
 const { handlePvPModals } = require('../../features/pvp/handlers/modals');
 
+// Item Roll system imports
+const { handleItemRoll } = require('../../features/itemroll/commands/itemroll');
+const { handleItemRollButtons } = require('../../features/itemroll/handlers/itemRollButtons');
+const { handleItemRollSelects } = require('../../features/itemroll/handlers/itemRollSelects');
+const { handleItemRollModals } = require('../../features/itemroll/handlers/itemRollModals');
+
 // Raid system imports
 const { handleCreateRaid, handleCreateBasicModal } = require('../../features/raids/commands/createraid');
 const { handleDeleteRaid } = require('../../features/raids/commands/deleteraid');
@@ -128,6 +134,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // PvP commands
       if (name === 'pvpevent')    return handlePvPEvent({ interaction, collections });
       if (name === 'resetbonuses') return handleResetBonuses({ interaction, collections });
+      if (name === 'itemroll')    return handleItemRoll({ interaction, collections });
 
       // Raid commands
       if (name === 'createraid')  return handleCreateRaid({ interaction, collections });
@@ -199,6 +206,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Send confirmation buttons
       if (interaction.customId.startsWith('send_confirm:')) {
         return handleSendConfirmation({ interaction, collections });
+      }
+
+      // Item Roll buttons
+      if (interaction.customId.startsWith('itemroll_')) {
+        return handleItemRollButtons({ interaction, collections });
       }
 
       // PvP system buttons
@@ -310,6 +322,20 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       return handleSelects({ interaction, collections });
     }
 
+    // User Select Menu Interactions
+    if (interaction.isUserSelectMenu()) {
+      // Item Roll user selection
+      if (interaction.customId.startsWith('itemroll_select_users:')) {
+        return handleItemRollSelects({ interaction, collections });
+      }
+
+      // Application system role selects
+      if (interaction.customId === 'app_select_roles') {
+        const { handleSelectRoles } = require('../../features/applications/handlers/configButtons');
+        return handleSelectRoles({ interaction, collections });
+      }
+    }
+
     // Role Select Menu Interactions
     if (interaction.isRoleSelectMenu()) {
       // Application system role selects
@@ -324,6 +350,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Freeze raid setup modal
       if (interaction.customId === 'freeze_raid_setup') {
         return handleFreezeModal({ interaction, collections });
+      }
+
+      // Item Roll modals
+      if (interaction.customId.startsWith('itemroll_')) {
+        return handleItemRollModals({ interaction, collections });
       }
 
       // PvP system modals
