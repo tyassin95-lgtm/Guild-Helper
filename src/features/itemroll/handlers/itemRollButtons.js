@@ -1,5 +1,5 @@
 const { ObjectId } = require('mongodb');
-const { updateItemRollEmbed } = require('./itemRollEmbed');
+const { updateItemRollEmbed } = require('../itemRollEmbed');
 
 async function handleItemRollButtons({ interaction, collections }) {
   const { itemRolls, pvpBonuses } = collections;
@@ -105,7 +105,7 @@ async function handleItemRollButtons({ interaction, collections }) {
     delete global.tempItemRollData[tempId];
 
     // Create and send the embed
-    const { createItemRollEmbed } = require('./itemRollEmbed');
+    const { createItemRollEmbed } = require('../itemRollEmbed');
     const { embed, components } = await createItemRollEmbed(itemRoll, interaction.client, collections);
 
     const rollMessage = await interaction.channel.send({
@@ -192,7 +192,7 @@ async function closeItemRoll(rollId, client, collections) {
       const message = await channel.messages.fetch(updatedRoll.messageId);
       if (!message) return;
 
-      const { createItemRollEmbed } = require('./itemRollEmbed');
+      const { createItemRollEmbed } = require('../itemRollEmbed');
       const { embed, components } = await createItemRollEmbed(updatedRoll, client, collections);
 
       await message.edit({

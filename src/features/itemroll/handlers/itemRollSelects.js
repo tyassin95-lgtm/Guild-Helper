@@ -42,7 +42,7 @@ async function handleItemRollSelects({ interaction, collections }) {
     delete global.tempItemRollData[tempId];
 
     // Create and send the embed
-    const { createItemRollEmbed } = require('./itemRollEmbed');
+    const { createItemRollEmbed } = require('../itemRollEmbed');
     const { embed, components } = await createItemRollEmbed(itemRoll, interaction.client, collections);
 
     // Create mention string for selected users
