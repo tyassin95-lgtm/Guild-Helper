@@ -23,6 +23,7 @@ async function createPvPBonusEmbed(guildId, guild, collections) {
 
   // Build the list
   const bonusList = [];
+  let totalEventsCount = 0;
 
   for (const bonus of allBonuses) {
     try {
@@ -34,10 +35,10 @@ async function createPvPBonusEmbed(guildId, guild, collections) {
       }
 
       const displayName = member.displayName;
-      const bonusAmount = bonus.bonusCount * 10; // +10 per event
-      const eventCount = bonus.bonusCount;
+      const bonusAmount = bonus.bonusCount; // Now storing actual points, not event count
 
-      bonusList.push(`• **${displayName}**: +${bonusAmount} (${eventCount} event${eventCount !== 1 ? 's' : ''})`);
+      bonusList.push(`• **${displayName}**: +${bonusAmount} bonus`);
+      totalEventsCount += bonusAmount;
     } catch (err) {
       console.error('Failed to fetch member:', err);
     }
@@ -72,7 +73,8 @@ async function createPvPBonusEmbed(guildId, guild, collections) {
 
   embed.addFields({
     name: '📈 Summary',
-    value: `Total active players with bonuses: **${bonusList.length}**`,
+    value: `Total active players with bonuses: **${bonusList.length}**\n` +
+           `Total bonus points distributed: **${totalEventsCount}**`,
     inline: false
   });
 
