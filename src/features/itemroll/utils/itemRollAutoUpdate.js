@@ -10,14 +10,14 @@ let updateInterval = null;
  */
 function startItemRollAutoUpdate(client, collections) {
   const { itemRolls } = collections;
-  const UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
+  const UPDATE_INTERVAL = 1440 * 60 * 1000; // 24 hours in milliseconds
 
   // Clear any existing interval
   if (updateInterval) {
     clearInterval(updateInterval);
   }
 
-  console.log('Starting item roll auto-update service (5 minute interval)...');
+  console.log('Starting item roll auto-update service (24 hour interval)...');
 
   // Run immediately on start
   updateAllActiveItemRolls(client, collections);
