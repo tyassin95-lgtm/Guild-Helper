@@ -3,11 +3,23 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 async function createItemRollEmbed(itemRoll, client, collections) {
   const { pvpBonuses } = collections;
 
+  const isTiebreaker = itemRoll.isTiebreaker || false;
+  const tieDetected = itemRoll.tieDetected || false;
+
   const embed = new EmbedBuilder()
-    .setColor(itemRoll.closed ? '#95a5a6' : '#f39c12')
-    .setTitle(`🎲 Item Roll: ${itemRoll.itemName}`)
+    .setColor(itemRoll.closed ? '#95a5a6' : (isTiebreaker ? '#e74c3c' : '#f39c12'))
+    .setTitle(`${isTiebreaker ? '⚔️ TIEBREAKER - ' : '🎲 '}Item Roll: ${itemRoll.itemName}`)
     .setDescription(`**Trait:** ${itemRoll.trait}`)
     .setTimestamp();
+
+  // Add tiebreaker notice if applicable
+  if (isTiebreaker) {
+    embed.addFields({
+      name: '⚔️ Tiebreaker Round',
+      value: 'This is a tiebreaker roll to determine the final winner!',
+      inline: false
+    });
+  }
 
   // Add image if provided
   if (itemRoll.imageUrl && itemRoll.imageUrl.trim().length > 0) {
@@ -24,7 +36,7 @@ async function createItemRollEmbed(itemRoll, client, collections) {
 
   // Add eligible participants field
   let eligibleText;
-  if (itemRoll.eligibleUsers.length === 0) {
+  if (itemRoll.eligibleUsers.length === 0 && !isTiebreaker) {
     eligibleText = '@everyone';
   } else {
     const eligibleNames = await fetchUserNames(client, itemRoll.guildId, itemRoll.eligibleUsers);
@@ -35,7 +47,7 @@ async function createItemRollEmbed(itemRoll, client, collections) {
   }
 
   embed.addFields({
-    name: '👥 Eligible Participants',
+    name: isTiebreaker ? '👥 Tied Participants' : '👥 Eligible Participants',
     value: eligibleText,
     inline: true
   });
@@ -76,7 +88,7 @@ async function createItemRollEmbed(itemRoll, client, collections) {
     });
   }
 
-  // Show winner if closed
+  // Show winner if closed (and not a tie)
   if (itemRoll.closed && itemRoll.winnerId) {
     const winner = await client.guilds.cache.get(itemRoll.guildId)?.members.fetch(itemRoll.winnerId).catch(() => null);
     const winnerName = winner ? winner.displayName : 'Unknown User';
@@ -89,10 +101,41 @@ async function createItemRollEmbed(itemRoll, client, collections) {
     });
   }
 
+  // Show tie detection if closed with a tie
+  if (itemRoll.closed && tieDetected && !itemRoll.winnerId) {
+    const sortedRolls = itemRoll.rolls.sort((a, b) => b.total - a.total);
+    const highestScore = sortedRolls[0].total;
+    const tiedUsers = sortedRolls.filter(r => r.total === highestScore);
+
+    const tiedNames = await Promise.all(
+      tiedUsers.map(async (roll) => {
+        const member = await client.guilds.cache.get(itemRoll.guildId)?.members.fetch(roll.userId).catch(() => null);
+        return member ? member.displayName : 'Unknown User';
+      })
+    );
+
+    embed.addFields({
+      name: '⚔️ Tie Detected',
+      value: `**${tiedNames.join(', ')}** tied with **${highestScore}**!\nA tiebreaker has been created below.`,
+      inline: false
+    });
+  }
+
   // Add status field
+  let statusText;
+  if (itemRoll.closed) {
+    if (tieDetected && !itemRoll.winnerId) {
+      statusText = '⚔️ **Tie - Tiebreaker Created**';
+    } else {
+      statusText = '🔒 **Rolling Closed**';
+    }
+  } else {
+    statusText = '✅ **Rolling Open**';
+  }
+
   embed.addFields({
     name: '📊 Status',
-    value: itemRoll.closed ? '🔒 **Rolling Closed**' : '✅ **Rolling Open**',
+    value: statusText,
     inline: false
   });
 
@@ -103,7 +146,7 @@ async function createItemRollEmbed(itemRoll, client, collections) {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`itemroll_roll:${itemRoll._id}`)
-        .setLabel('Roll')
+        .setLabel(isTiebreaker ? 'Roll Again' : 'Roll')
         .setStyle(ButtonStyle.Primary)
         .setEmoji('🎲')
     );

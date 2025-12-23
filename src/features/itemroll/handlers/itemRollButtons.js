@@ -151,7 +151,7 @@ function scheduleItemRollClose(itemRoll, client, collections) {
 }
 
 /**
- * Close an item roll and determine winner
+ * Close an item roll and determine winner (or create tiebreaker)
  */
 async function closeItemRoll(rollId, client, collections) {
   const { itemRolls } = collections;
@@ -163,14 +163,73 @@ async function closeItemRoll(rollId, client, collections) {
       return;
     }
 
-    // Determine winner (highest roll)
-    let winnerId = null;
-    if (itemRoll.rolls.length > 0) {
-      const sortedRolls = itemRoll.rolls.sort((a, b) => b.total - a.total);
-      winnerId = sortedRolls[0].userId;
+    // No rolls at all
+    if (itemRoll.rolls.length === 0) {
+      await itemRolls.updateOne(
+        { _id: new ObjectId(rollId) },
+        {
+          $set: {
+            closed: true,
+            winnerId: null,
+            closedAt: new Date()
+          }
+        }
+      );
+
+      const updatedRoll = await itemRolls.findOne({ _id: new ObjectId(rollId) });
+      await updateItemRollEmbedOnClose(client, updatedRoll, collections);
+
+      try {
+        const channel = await client.channels.fetch(updatedRoll.channelId);
+        if (channel) {
+          await channel.send({
+            content: `⏰ **Item Roll Ended**\n\nNo one rolled for **${updatedRoll.itemName}**.`
+          });
+        }
+      } catch (err) {
+        console.error('Failed to send no-rolls message:', err);
+      }
+
+      return;
     }
 
-    // Update database
+    // Sort rolls by total (descending)
+    const sortedRolls = itemRoll.rolls.sort((a, b) => b.total - a.total);
+    const highestScore = sortedRolls[0].total;
+
+    // Find all users with the highest score
+    const tiedUsers = sortedRolls.filter(r => r.total === highestScore);
+
+    // Check for tie
+    if (tiedUsers.length > 1) {
+      console.log(`Tie detected for roll ${rollId}: ${tiedUsers.length} users with score ${highestScore}`);
+
+      // Mark original roll as closed
+      await itemRolls.updateOne(
+        { _id: new ObjectId(rollId) },
+        {
+          $set: {
+            closed: true,
+            isTiebreaker: false,
+            tieDetected: true,
+            closedAt: new Date()
+          }
+        }
+      );
+
+      // Update original embed
+      const updatedRoll = await itemRolls.findOne({ _id: new ObjectId(rollId) });
+      await updateItemRollEmbedOnClose(client, updatedRoll, collections);
+
+      // Create tiebreaker roll
+      await createTiebreakerRoll(itemRoll, tiedUsers, client, collections);
+
+      return;
+    }
+
+    // No tie - we have a clear winner
+    const winnerId = sortedRolls[0].userId;
+
     await itemRolls.updateOne(
       { _id: new ObjectId(rollId) },
       {
@@ -182,26 +241,13 @@ async function closeItemRoll(rollId, client, collections) {
       }
     );
 
-    // Update embed
     const updatedRoll = await itemRolls.findOne({ _id: new ObjectId(rollId) });
+    await updateItemRollEmbedOnClose(client, updatedRoll, collections);
 
+    // Announce winner
     try {
       const channel = await client.channels.fetch(updatedRoll.channelId);
-      if (!channel) return;
-
-      const message = await channel.messages.fetch(updatedRoll.messageId);
-      if (!message) return;
-
-      const { createItemRollEmbed } = require('../itemRollEmbed');
-      const { embed, components } = await createItemRollEmbed(updatedRoll, client, collections);
-
-      await message.edit({
-        embeds: [embed],
-        components
-      });
-
-      // Announce winner
-      if (winnerId) {
+      if (channel) {
         const winner = await client.guilds.cache.get(updatedRoll.guildId)?.members.fetch(winnerId).catch(() => null);
         if (winner) {
           const winningRoll = updatedRoll.rolls.find(r => r.userId === winnerId);
@@ -211,16 +257,105 @@ async function closeItemRoll(rollId, client, collections) {
                      `(Base: ${winningRoll.baseRoll} + Bonus: ${winningRoll.bonus})`
           });
         }
-      } else {
-        await channel.send({
-          content: `⏰ **Item Roll Ended**\n\nNo one rolled for **${updatedRoll.itemName}**.`
-        });
       }
     } catch (err) {
-      console.error('Failed to update item roll on close:', err);
+      console.error('Failed to announce winner:', err);
     }
+
   } catch (err) {
     console.error('Failed to close item roll:', err);
+  }
+}
+
+/**
+ * Create a tiebreaker roll for tied participants
+ */
+async function createTiebreakerRoll(originalRoll, tiedUsers, client, collections) {
+  const { itemRolls } = collections;
+
+  try {
+    // Create tiebreaker that lasts 2 hours
+    const tiebreakerEndsAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+
+    const tiebreakerRoll = {
+      guildId: originalRoll.guildId,
+      channelId: originalRoll.channelId,
+      itemName: originalRoll.itemName,
+      trait: originalRoll.trait,
+      imageUrl: originalRoll.imageUrl,
+      duration: 120, // 2 hours
+      endsAt: tiebreakerEndsAt,
+      createdBy: originalRoll.createdBy,
+      eligibleUsers: tiedUsers.map(u => u.userId),
+      rolls: [],
+      closed: false,
+      isTiebreaker: true,
+      originalRollId: originalRoll._id,
+      createdAt: new Date()
+    };
+
+    const result = await itemRolls.insertOne(tiebreakerRoll);
+    tiebreakerRoll._id = result.insertedId;
+
+    // Create and send the tiebreaker embed
+    const { createItemRollEmbed } = require('../itemRollEmbed');
+    const { embed, components } = await createItemRollEmbed(tiebreakerRoll, client, collections);
+
+    const channel = await client.channels.fetch(originalRoll.channelId);
+    if (!channel) {
+      console.error('Failed to fetch channel for tiebreaker');
+      return;
+    }
+
+    // Mention tied users
+    const mentions = tiedUsers.map(u => `<@${u.userId}>`).join(' ');
+
+    const tiebreakerMessage = await channel.send({
+      content: `⚔️ **TIEBREAKER!**\n\n` +
+               `${mentions}\n\n` +
+               `Multiple players tied with a roll of **${tiedUsers[0].total}**!\n` +
+               `You have **2 hours** to roll again to determine the winner.`,
+      embeds: [embed],
+      components,
+      allowedMentions: { parse: ['users'] }
+    });
+
+    // Save message ID
+    await itemRolls.updateOne(
+      { _id: tiebreakerRoll._id },
+      { $set: { messageId: tiebreakerMessage.id } }
+    );
+
+    // Schedule auto-close for tiebreaker
+    scheduleItemRollClose(tiebreakerRoll, client, collections);
+
+    console.log(`Tiebreaker roll created: ${tiebreakerRoll._id} for original roll ${originalRoll._id}`);
+
+  } catch (err) {
+    console.error('Failed to create tiebreaker roll:', err);
+  }
+}
+
+/**
+ * Update item roll embed on close
+ */
+async function updateItemRollEmbedOnClose(client, itemRoll, collections) {
+  try {
+    const channel = await client.channels.fetch(itemRoll.channelId);
+    if (!channel) return;
+
+    const message = await channel.messages.fetch(itemRoll.messageId);
+    if (!message) return;
+
+    const { createItemRollEmbed } = require('../itemRollEmbed');
+    const { embed, components } = await createItemRollEmbed(itemRoll, client, collections);
+
+    await message.edit({
+      embeds: [embed],
+      components
+    });
+  } catch (err) {
+    console.error('Failed to update item roll embed on close:', err);
   }
 }
 
