@@ -8,6 +8,7 @@ const { onInteractionCreate } = require('./bot/handlers/interaction');
 const { startTokenRegenerationChecker } = require('./bot/tokenRegeneration');
 const { resumeActiveRaidCountdowns, clearAllCountdownIntervals } = require('./features/raids/raidSession');
 const { resumeActiveItemRolls } = require('./features/itemroll/utils/itemRollResume');
+const { startItemRollAutoUpdate, stopItemRollAutoUpdate } = require('./features/itemroll/utils/itemRollAutoUpdate');
 const { streamServer } = require('./features/broadcast/server/streamServer');
 const { broadcastManager } = require('./features/broadcast/utils/broadcastManager');
 
@@ -43,6 +44,9 @@ const client = new Client({
 
       // Resume active item rolls after bot restart
       await resumeActiveItemRolls(client, collections);
+
+      // Start auto-updating item roll embeds every 5 minutes
+      startItemRollAutoUpdate(client, collections);
     });
 
     client.on('interactionCreate', async (interaction) => {
@@ -62,6 +66,9 @@ const client = new Client({
     process.on('SIGINT', async () => {
       console.log('\n🛑 Shutting down gracefully...');
 
+      // Stop item roll auto-updates
+      stopItemRollAutoUpdate();
+
       // Stop all broadcasts
       broadcastManager.stopAll();
       streamServer.stop();
@@ -78,6 +85,9 @@ const client = new Client({
 
     process.on('SIGTERM', async () => {
       console.log('\n🛑 SIGTERM received, shutting down...');
+
+      // Stop item roll auto-updates
+      stopItemRollAutoUpdate();
 
       // Stop all broadcasts
       broadcastManager.stopAll();
