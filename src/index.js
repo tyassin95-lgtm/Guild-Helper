@@ -5,7 +5,6 @@ const { connectMongo, getCollections } = require('./db/mongo');
 const { ensureIndexes } = require('./db/indexes');
 const { registerSlashCommands } = require('./bot/commands');
 const { onInteractionCreate } = require('./bot/handlers/interaction');
-const { resumeActiveRaidCountdowns, clearAllCountdownIntervals } = require('./features/raids/raidSession');
 const { resumeActiveItemRolls } = require('./features/itemroll/utils/itemRollResume');
 const { startItemRollAutoUpdate, stopItemRollAutoUpdate } = require('./features/itemroll/utils/itemRollAutoUpdate');
 const { streamServer } = require('./features/broadcast/server/streamServer');
@@ -34,9 +33,6 @@ const client = new Client({
 
       // Start the HTTP stream server
       streamServer.start();
-
-      // Resume active raid countdowns after bot restart
-      await resumeActiveRaidCountdowns(client, collections);
 
       // Resume active item rolls after bot restart
       await resumeActiveItemRolls(client, collections);
@@ -69,9 +65,6 @@ const client = new Client({
       broadcastManager.stopAll();
       streamServer.stop();
 
-      // Clear all raid countdown intervals
-      clearAllCountdownIntervals();
-
       // Destroy Discord client
       client.destroy();
 
@@ -88,9 +81,6 @@ const client = new Client({
       // Stop all broadcasts
       broadcastManager.stopAll();
       streamServer.stop();
-
-      // Clear all raid countdown intervals
-      clearAllCountdownIntervals();
 
       // Destroy Discord client
       client.destroy();

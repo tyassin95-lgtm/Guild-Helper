@@ -4,7 +4,6 @@ async function ensureIndexes({
   parties,
   partyPanels,
   guildRosters,
-  raidSessions,
   raidEvents,
   dmContexts,
   pvpEvents,
@@ -47,12 +46,6 @@ async function ensureIndexes({
   // Guild rosters indexes
   await guildRosters.createIndex({ guildId: 1 }, { unique: true });
   await guildRosters.createIndex({ channelId: 1 });
-
-  // Raid sessions indexes
-  await raidSessions.createIndex({ guildId: 1, active: 1 });
-  await raidSessions.createIndex({ guildId: 1 });
-  await raidSessions.createIndex({ frozenAt: 1 });
-  await raidSessions.createIndex({ active: 1 });
 
   // Raid events indexes
   await raidEvents.createIndex({ guildId: 1 });

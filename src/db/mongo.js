@@ -28,7 +28,6 @@ function getCollections(db = _db) {
     guildSettings: db.collection('guildSettings'),
 
     // Raid system
-    raidSessions: db.collection('raidSessions'),
     raidEvents: db.collection('raidEvents'),
 
     // Party system
