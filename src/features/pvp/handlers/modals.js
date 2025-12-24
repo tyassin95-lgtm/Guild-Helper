@@ -1,7 +1,6 @@
 const { ObjectId } = require('mongodb');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { updateEventEmbed } = require('../embed');
-const { scheduleLiveSummaryUpdate } = require('../../../bot/liveSummary');
 
 async function handlePvPModals({ interaction, collections }) {
   const { pvpEvents, pvpBonuses, pvpActivityRanking } = collections;
@@ -112,9 +111,6 @@ async function handlePvPModals({ interaction, collections }) {
     const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
     await updateEventEmbed(interaction, updatedEvent, collections);
 
-    // Update live summary to show new bonus AND activity ranking
-    await scheduleLiveSummaryUpdate(interaction, collections);
-
     return interaction.editReply({ 
       content: `✅ **Attendance recorded!**\n\nYou've earned **+${bonusPoints}** PvP bonus points for this event!` 
     });
@@ -192,9 +188,6 @@ async function handlePvPModals({ interaction, collections }) {
       // Update the event embed
       const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
       await updateEventEmbed(interaction, updatedEvent, collections);
-
-      // Update live summary to show new bonus AND activity ranking
-      await scheduleLiveSummaryUpdate(interaction, collections);
 
       return interaction.editReply({ 
         content: `✅ **Attendance manually recorded for ${member.displayName}!**\n\nThey've been awarded **+${bonusPoints}** PvP bonus points.` 
