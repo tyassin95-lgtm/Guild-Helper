@@ -19,11 +19,13 @@ const MAX_FIELD_VALUE_LENGTH = 1024;
 async function buildWishlistPanels({ submissions, guild, frozen = false, collections }) {
   const { wishlistGivenItems } = collections;
 
-  // Get all given items for this guild
+  // Get all given items for this guild (userId + itemId combinations)
   const givenItemsData = await wishlistGivenItems.find({ guildId: guild.id }).toArray();
   const givenItemsMap = new Map();
   givenItemsData.forEach(item => {
-    givenItemsMap.set(item.itemId, item.givenAt);
+    // Key format: userId:itemId
+    const key = `${item.userId}:${item.itemId}`;
+    givenItemsMap.set(key, item.givenAt);
   });
   // Group submissions by item
   const itemGroups = {
@@ -224,7 +226,7 @@ async function buildWishlistPanels({ submissions, guild, frozen = false, collect
  * @param {string} params.title - Category title
  * @param {Object} params.itemGroups - Grouped items
  * @param {Guild} params.guild - Discord guild
- * @param {Map} params.givenItemsMap - Map of given items with dates
+ * @param {Map} params.givenItemsMap - Map of userId:itemId combinations that were given
  * @returns {string|null} Section text or null if empty
  */
 async function buildCategorySection({ title, itemGroups, guild, givenItemsMap }) {
@@ -241,24 +243,8 @@ async function buildCategorySection({ title, itemGroups, guild, givenItemsMap })
     if (!item) continue;
 
     const users = itemGroups[itemId];
-    const isGiven = givenItemsMap.has(itemId);
-    const givenDate = givenItemsMap.get(itemId);
 
-    // Format item name with strikethrough if given
-    let itemDisplay = isGiven ? `~~${item.name}~~` : item.name;
-
-    section += `\n**${itemDisplay}** (${users.length} ${users.length === 1 ? 'user' : 'users'})`;
-
-    if (isGiven) {
-      const dateStr = new Date(givenDate).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      });
-      section += ` ✅ *Given on: ${dateStr}*`;
-    }
-
-    section += '\n';
+    section += `\n**${item.name}** (${users.length} ${users.length === 1 ? 'user' : 'users'})\n`;
 
     // Sort users by submission date (oldest first)
     users.sort((a, b) => a.submittedAt - b.submittedAt);
@@ -267,13 +253,28 @@ async function buildCategorySection({ title, itemGroups, guild, givenItemsMap })
     for (const user of users) {
       const member = await guild.members.fetch(user.userId).catch(() => null);
       const displayName = member ? member.displayName : `Unknown User (${user.userId})`;
-      const dateStr = new Date(user.submittedAt).toLocaleDateString('en-US', {
+      const addedDateStr = new Date(user.submittedAt).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric'
       });
 
-      section += `• ${displayName} - *Added ${dateStr}*\n`;
+      // Check if this specific user received this item
+      const givenKey = `${user.userId}:${itemId}`;
+      const givenData = givenItemsMap.get(givenKey);
+
+      if (givenData) {
+        // User received this item - show with strikethrough and date
+        const givenDateStr = new Date(givenData).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+        section += `• ~~${displayName}~~ ✅ *Received: ${givenDateStr}*\n`;
+      } else {
+        // User hasn't received it yet
+        section += `• ${displayName} - *Added ${addedDateStr}*\n`;
+      }
     }
   }
 

@@ -3,6 +3,7 @@ const { buildUserWishlistEmbed } = require('../utils/panelBuilder');
 const { createWishlistButtons } = require('../commands/mywishlist');
 const { validateWishlist, isWishlistEmpty } = require('../utils/wishlistValidator');
 const { updateWishlistPanels } = require('../commands/wishlists');
+const { createCategorySelect } = require('./wishlistSelects');
 
 // Store temporary wishlist states (in memory for this session)
 const draftWishlists = new Map();

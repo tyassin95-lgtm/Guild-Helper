@@ -187,8 +187,10 @@ async function ensureIndexes({
 
   await wishlistSettings.createIndex({ guildId: 1 }, { unique: true });
 
-  await wishlistGivenItems.createIndex({ guildId: 1, itemId: 1 }, { unique: true });
+  await wishlistGivenItems.createIndex({ guildId: 1, userId: 1, itemId: 1 }, { unique: true });
   await wishlistGivenItems.createIndex({ guildId: 1 });
+  await wishlistGivenItems.createIndex({ userId: 1 });
+  await wishlistGivenItems.createIndex({ itemId: 1 });
   await wishlistGivenItems.createIndex({ givenAt: -1 }); // Sort by given date
 
   console.log('All indexes created successfully');

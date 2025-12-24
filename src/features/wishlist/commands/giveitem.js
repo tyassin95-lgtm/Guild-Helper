@@ -1,10 +1,13 @@
 // Handler for /giveitem command
-const { PermissionFlagsBits, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { PermissionFlagsBits, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { WISHLIST_ITEMS, getItemById } = require('../utils/items');
 const { updateWishlistPanels } = require('./wishlists');
 
+// Store pending distributions (in memory for this session)
+const pendingDistributions = new Map();
+
 async function handleGiveItem({ interaction, collections, client }) {
-  const { wishlistSubmissions, wishlistGivenItems } = collections;
+  const { wishlistSubmissions } = collections;
 
   // Check admin permissions
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -26,26 +29,39 @@ async function handleGiveItem({ interaction, collections, client }) {
       });
     }
 
-    // Collect all wishlisted items
-    const wishlistedItems = new Set();
+    // Collect all wishlisted items with user counts
+    const itemUserMap = new Map();
 
     for (const submission of submissions) {
-      if (submission.archbossWeapon) submission.archbossWeapon.forEach(id => wishlistedItems.add(id));
-      if (submission.archbossArmor) submission.archbossArmor.forEach(id => wishlistedItems.add(id));
-      if (submission.t3Weapons) submission.t3Weapons.forEach(id => wishlistedItems.add(id));
-      if (submission.t3Armors) submission.t3Armors.forEach(id => wishlistedItems.add(id));
-      if (submission.t3Accessories) submission.t3Accessories.forEach(id => wishlistedItems.add(id));
+      const processItems = (itemIds) => {
+        if (!itemIds) return;
+        for (const itemId of itemIds) {
+          if (!itemUserMap.has(itemId)) {
+            itemUserMap.set(itemId, []);
+          }
+          itemUserMap.get(itemId).push(submission.userId);
+        }
+      };
+
+      processItems(submission.archbossWeapon);
+      processItems(submission.archbossArmor);
+      processItems(submission.t3Weapons);
+      processItems(submission.t3Armors);
+      processItems(submission.t3Accessories);
     }
 
-    if (wishlistedItems.size === 0) {
+    if (itemUserMap.size === 0) {
       return interaction.editReply({
         content: '❌ No items are currently wishlisted.'
       });
     }
 
     // Sort items by category
-    const sortedItems = Array.from(wishlistedItems)
-      .map(id => getItemById(id))
+    const sortedItems = Array.from(itemUserMap.keys())
+      .map(id => {
+        const item = getItemById(id);
+        return item ? { ...item, userCount: itemUserMap.get(id).length } : null;
+      })
       .filter(item => item !== null)
       .sort((a, b) => {
         // Sort by category/type, then by name
@@ -55,12 +71,15 @@ async function handleGiveItem({ interaction, collections, client }) {
         return a.name.localeCompare(b.name);
       });
 
-    // Create paginated select menus (25 items per page)
-    const itemsPerPage = 25;
-    const totalPages = Math.ceil(sortedItems.length / itemsPerPage);
+    // Initialize pending distribution
+    const sessionKey = `${interaction.guildId}_${interaction.user.id}`;
+    pendingDistributions.set(sessionKey, {
+      itemUserMap,
+      selectedDistributions: new Map() // itemId -> [userIds]
+    });
 
-    // Show first page
-    await showGiveItemPage(interaction, sortedItems, 0, totalPages, collections);
+    // Show first page of items
+    await showItemSelectionPage(interaction, sortedItems, 0, sessionKey, collections);
 
   } catch (error) {
     console.error('Error in /giveitem:', error);
@@ -71,10 +90,11 @@ async function handleGiveItem({ interaction, collections, client }) {
 }
 
 /**
- * Show a page of items to give
+ * Show a page of items to select from
  */
-async function showGiveItemPage(interaction, allItems, page, totalPages, collections) {
+async function showItemSelectionPage(interaction, allItems, page, sessionKey, collections) {
   const itemsPerPage = 25;
+  const totalPages = Math.ceil(allItems.length / itemsPerPage);
   const startIdx = page * itemsPerPage;
   const endIdx = startIdx + itemsPerPage;
   const pageItems = allItems.slice(startIdx, endIdx);
@@ -84,14 +104,14 @@ async function showGiveItemPage(interaction, allItems, page, totalPages, collect
     return new StringSelectMenuOptionBuilder()
       .setLabel(item.name)
       .setValue(item.id)
-      .setDescription(`${item.category || item.type}`);
+      .setDescription(`${item.category || item.type} - ${item.userCount} user(s)`);
   });
 
   const selectMenu = new StringSelectMenuBuilder()
-    .setCustomId(`giveitem_select:${page}`)
-    .setPlaceholder(`Select items to mark as given... (Page ${page + 1}/${totalPages})`)
+    .setCustomId(`giveitem_select_item:${page}:${sessionKey}`)
+    .setPlaceholder(`Select an item to see who wishlisted it... (Page ${page + 1}/${totalPages})`)
     .setMinValues(1)
-    .setMaxValues(options.length)
+    .setMaxValues(1) // Select one item at a time
     .addOptions(options);
 
   const components = [new ActionRowBuilder().addComponents(selectMenu)];
@@ -100,12 +120,12 @@ async function showGiveItemPage(interaction, allItems, page, totalPages, collect
   if (totalPages > 1) {
     const paginationRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`giveitem_page:prev:${page}`)
+        .setCustomId(`giveitem_page_items:prev:${page}:${sessionKey}`)
         .setLabel('◀ Previous')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(page === 0),
       new ButtonBuilder()
-        .setCustomId(`giveitem_page:next:${page}`)
+        .setCustomId(`giveitem_page_items:next:${page}:${sessionKey}`)
         .setLabel('Next ▶')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(page >= totalPages - 1)
@@ -113,32 +133,244 @@ async function showGiveItemPage(interaction, allItems, page, totalPages, collect
     components.push(paginationRow);
   }
 
-  const content = `**📦 Mark Items as Given**\n\nSelect one or more items that have been distributed to players.\nSelected items will be marked as "Given" on the wishlist panel.\n\n**Page ${page + 1} of ${totalPages}** • **Total wishlisted items:** ${allItems.length}`;
+  // Add action buttons
+  const session = pendingDistributions.get(sessionKey);
+  const totalSelected = Array.from(session.selectedDistributions.values())
+    .reduce((sum, users) => sum + users.length, 0);
+
+  const actionRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`giveitem_view_pending:${sessionKey}`)
+      .setLabel(`📋 Review (${totalSelected} selections)`)
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(totalSelected === 0),
+    new ButtonBuilder()
+      .setCustomId(`giveitem_finalize:${sessionKey}`)
+      .setLabel('✅ Give Items')
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(totalSelected === 0),
+    new ButtonBuilder()
+      .setCustomId(`giveitem_cancel:${sessionKey}`)
+      .setLabel('❌ Cancel')
+      .setStyle(ButtonStyle.Danger)
+  );
+  components.push(actionRow);
+
+  const content = `**📦 Give Items to Users**\n\n**Step 1:** Select an item to see who wishlisted it\n**Step 2:** Select user(s) to give the item to\n**Step 3:** Click "Give Items" when ready\n\n**Page ${page + 1} of ${totalPages}** • **Total items:** ${allItems.length}`;
 
   if (interaction.deferred || interaction.replied) {
-    await interaction.editReply({ content, components });
+    await interaction.editReply({ content, components, embeds: [] });
   } else {
     await interaction.reply({ content, components, flags: [64] });
   }
 }
 
 /**
- * Handle giveitem select menu
+ * Handle item selection - show users who wishlisted it
  */
-async function handleGiveItemSelect({ interaction, collections, client }) {
-  const { wishlistGivenItems } = collections;
+async function handleItemSelection({ interaction, collections, client }) {
+  const parts = interaction.customId.split(':');
+  const page = parseInt(parts[1]);
+  const sessionKey = parts[2];
+
+  const session = pendingDistributions.get(sessionKey);
+  if (!session) {
+    return interaction.reply({
+      content: '❌ Session expired. Please run `/giveitem` again.',
+      flags: [64]
+    });
+  }
+
+  const selectedItemId = interaction.values[0];
+  const item = getItemById(selectedItemId);
+  const userIds = session.itemUserMap.get(selectedItemId) || [];
 
   await interaction.deferUpdate();
 
-  try {
-    const selectedItems = interaction.values;
-    const now = new Date();
+  // Show user selection for this item
+  await showUserSelection(interaction, item, userIds, sessionKey, collections, client);
+}
 
-    // Mark items as given
-    for (const itemId of selectedItems) {
+/**
+ * Show users who wishlisted an item
+ */
+async function showUserSelection(interaction, item, userIds, sessionKey, collections, client) {
+  const session = pendingDistributions.get(sessionKey);
+
+  // Get already selected users for this item
+  const alreadySelected = session.selectedDistributions.get(item.id) || [];
+
+  // Fetch user display names
+  const userOptions = [];
+  for (const userId of userIds) {
+    try {
+      const member = await interaction.guild.members.fetch(userId);
+      userOptions.push({
+        userId,
+        displayName: member.displayName,
+        tag: member.user.tag
+      });
+    } catch (err) {
+      userOptions.push({
+        userId,
+        displayName: `Unknown User`,
+        tag: userId
+      });
+    }
+  }
+
+  // Sort by display name
+  userOptions.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  // Create select menu for users (max 25)
+  const options = userOptions.slice(0, 25).map(user => {
+    const isSelected = alreadySelected.includes(user.userId);
+    return new StringSelectMenuOptionBuilder()
+      .setLabel(user.displayName)
+      .setValue(user.userId)
+      .setDescription(isSelected ? '✅ Selected' : 'Not selected')
+      .setDefault(isSelected);
+  });
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId(`giveitem_select_users:${item.id}:${sessionKey}`)
+    .setPlaceholder('Select user(s) to give this item to...')
+    .setMinValues(0)
+    .setMaxValues(options.length)
+    .addOptions(options);
+
+  const components = [new ActionRowBuilder().addComponents(selectMenu)];
+
+  // Action buttons
+  const actionRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`giveitem_back_to_items:${sessionKey}`)
+      .setLabel('◀ Back to Items')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`giveitem_clear_item:${item.id}:${sessionKey}`)
+      .setLabel('Clear Item')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(alreadySelected.length === 0)
+  );
+  components.push(actionRow);
+
+  const totalSelected = Array.from(session.selectedDistributions.values())
+    .reduce((sum, users) => sum + users.length, 0);
+
+  const embed = new EmbedBuilder()
+    .setColor('#3498db')
+    .setTitle(`🎁 ${item.name}`)
+    .setDescription(`**Category:** ${item.category || item.type}\n**Total users who want this:** ${userIds.length}\n\nSelect the users who should receive this item.`)
+    .setFooter({ text: `Total selections across all items: ${totalSelected}` })
+    .setTimestamp();
+
+  await interaction.editReply({
+    content: null,
+    embeds: [embed],
+    components
+  });
+}
+
+/**
+ * Handle user selection for an item
+ */
+async function handleUserSelection({ interaction, collections, client }) {
+  const parts = interaction.customId.split(':');
+  const itemId = parts[1];
+  const sessionKey = parts[2];
+
+  const session = pendingDistributions.get(sessionKey);
+  if (!session) {
+    return interaction.reply({
+      content: '❌ Session expired. Please run `/giveitem` again.',
+      flags: [64]
+    });
+  }
+
+  const selectedUserIds = interaction.values;
+
+  // Update session
+  if (selectedUserIds.length > 0) {
+    session.selectedDistributions.set(itemId, selectedUserIds);
+  } else {
+    session.selectedDistributions.delete(itemId);
+  }
+
+  await interaction.deferUpdate();
+
+  // Show updated user selection
+  const item = getItemById(itemId);
+  const userIds = session.itemUserMap.get(itemId) || [];
+  await showUserSelection(interaction, item, userIds, sessionKey, collections, client);
+}
+
+/**
+ * Handle back to items button
+ */
+async function handleBackToItems({ interaction, collections }) {
+  const sessionKey = interaction.customId.split(':')[1];
+  const session = pendingDistributions.get(sessionKey);
+
+  if (!session) {
+    return interaction.reply({
+      content: '❌ Session expired. Please run `/giveitem` again.',
+      flags: [64]
+    });
+  }
+
+  await interaction.deferUpdate();
+
+  // Rebuild item list
+  const sortedItems = Array.from(session.itemUserMap.keys())
+    .map(id => {
+      const item = getItemById(id);
+      return item ? { ...item, userCount: session.itemUserMap.get(id).length } : null;
+    })
+    .filter(item => item !== null)
+    .sort((a, b) => {
+      const catA = a.category || a.type || '';
+      const catB = b.category || b.type || '';
+      if (catA !== catB) return catA.localeCompare(catB);
+      return a.name.localeCompare(b.name);
+    });
+
+  await showItemSelectionPage(interaction, sortedItems, 0, sessionKey, collections);
+}
+
+/**
+ * Handle finalize - actually give the items
+ */
+async function handleFinalize({ interaction, collections, client }) {
+  const sessionKey = interaction.customId.split(':')[1];
+  const session = pendingDistributions.get(sessionKey);
+
+  if (!session) {
+    return interaction.reply({
+      content: '❌ Session expired. Please run `/giveitem` again.',
+      flags: [64]
+    });
+  }
+
+  if (session.selectedDistributions.size === 0) {
+    return interaction.reply({
+      content: '❌ No items selected.',
+      flags: [64]
+    });
+  }
+
+  await interaction.deferUpdate();
+
+  const { wishlistGivenItems } = collections;
+  const now = new Date();
+
+  // Save all distributions to database
+  for (const [itemId, userIds] of session.selectedDistributions.entries()) {
+    for (const userId of userIds) {
       await wishlistGivenItems.updateOne(
         {
           guildId: interaction.guildId,
+          userId: userId,
           itemId: itemId
         },
         {
@@ -150,59 +382,103 @@ async function handleGiveItemSelect({ interaction, collections, client }) {
         { upsert: true }
       );
     }
-
-    // Update wishlist panels
-    await updateWishlistPanels({
-      client,
-      guildId: interaction.guildId,
-      collections
-    });
-
-    const itemNames = selectedItems.map(id => {
-      const item = getItemById(id);
-      return item ? item.name : id;
-    });
-
-    await interaction.followUp({
-      content: `✅ **Items marked as given!**\n\n${itemNames.map(name => `• ${name}`).join('\n')}\n\nThe wishlist panels have been updated.`,
-      flags: [64]
-    });
-
-  } catch (error) {
-    console.error('Error marking items as given:', error);
-    await interaction.followUp({
-      content: '❌ An error occurred while marking items as given.',
-      flags: [64]
-    });
   }
+
+  // Update wishlist panels
+  await updateWishlistPanels({
+    client,
+    guildId: interaction.guildId,
+    collections
+  });
+
+  // Build summary
+  let summary = '✅ **Items successfully distributed!**\n\n';
+  for (const [itemId, userIds] of session.selectedDistributions.entries()) {
+    const item = getItemById(itemId);
+    summary += `**${item.name}**\n`;
+    for (const userId of userIds) {
+      const member = await interaction.guild.members.fetch(userId).catch(() => null);
+      const name = member ? member.displayName : userId;
+      summary += `  • ${name}\n`;
+    }
+    summary += '\n';
+  }
+
+  // Clear session
+  pendingDistributions.delete(sessionKey);
+
+  await interaction.editReply({
+    content: summary,
+    embeds: [],
+    components: []
+  });
 }
 
 /**
- * Handle pagination for giveitem
+ * Handle cancel
  */
-async function handleGiveItemPagination({ interaction, collections }) {
-  const { wishlistSubmissions } = collections;
+async function handleCancel({ interaction }) {
+  const sessionKey = interaction.customId.split(':')[1];
+  pendingDistributions.delete(sessionKey);
 
+  await interaction.update({
+    content: '❌ Item distribution cancelled.',
+    embeds: [],
+    components: []
+  });
+}
+
+/**
+ * Handle clear item selections
+ */
+async function handleClearItem({ interaction, collections, client }) {
+  const parts = interaction.customId.split(':');
+  const itemId = parts[1];
+  const sessionKey = parts[2];
+
+  const session = pendingDistributions.get(sessionKey);
+  if (!session) {
+    return interaction.reply({
+      content: '❌ Session expired.',
+      flags: [64]
+    });
+  }
+
+  session.selectedDistributions.delete(itemId);
+
+  await interaction.deferUpdate();
+
+  const item = getItemById(itemId);
+  const userIds = session.itemUserMap.get(itemId) || [];
+  await showUserSelection(interaction, item, userIds, sessionKey, collections, client);
+}
+
+/**
+ * Handle pagination for items
+ */
+async function handleItemPagination({ interaction, collections }) {
   const parts = interaction.customId.split(':');
   const direction = parts[1];
   const currentPage = parseInt(parts[2]);
+  const sessionKey = parts[3];
+
+  const session = pendingDistributions.get(sessionKey);
+  if (!session) {
+    return interaction.reply({
+      content: '❌ Session expired.',
+      flags: [64]
+    });
+  }
 
   const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
 
-  // Get all wishlisted items again
-  const submissions = await wishlistSubmissions.find({ guildId: interaction.guildId }).toArray();
-  const wishlistedItems = new Set();
+  await interaction.deferUpdate();
 
-  for (const submission of submissions) {
-    if (submission.archbossWeapon) submission.archbossWeapon.forEach(id => wishlistedItems.add(id));
-    if (submission.archbossArmor) submission.archbossArmor.forEach(id => wishlistedItems.add(id));
-    if (submission.t3Weapons) submission.t3Weapons.forEach(id => wishlistedItems.add(id));
-    if (submission.t3Armors) submission.t3Armors.forEach(id => wishlistedItems.add(id));
-    if (submission.t3Accessories) submission.t3Accessories.forEach(id => wishlistedItems.add(id));
-  }
-
-  const sortedItems = Array.from(wishlistedItems)
-    .map(id => getItemById(id))
+  const sortedItems = Array.from(session.itemUserMap.keys())
+    .map(id => {
+      const item = getItemById(id);
+      return item ? { ...item, userCount: session.itemUserMap.get(id).length } : null;
+    })
     .filter(item => item !== null)
     .sort((a, b) => {
       const catA = a.category || a.type || '';
@@ -211,13 +487,16 @@ async function handleGiveItemPagination({ interaction, collections }) {
       return a.name.localeCompare(b.name);
     });
 
-  const totalPages = Math.ceil(sortedItems.length / 25);
-
-  await showGiveItemPage(interaction, sortedItems, newPage, totalPages, collections);
+  await showItemSelectionPage(interaction, sortedItems, newPage, sessionKey, collections);
 }
 
 module.exports = {
   handleGiveItem,
-  handleGiveItemSelect,
-  handleGiveItemPagination
+  handleItemSelection,
+  handleUserSelection,
+  handleBackToItems,
+  handleFinalize,
+  handleCancel,
+  handleClearItem,
+  handleItemPagination
 };

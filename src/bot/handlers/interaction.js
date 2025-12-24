@@ -88,7 +88,7 @@ const { handleWishlists } = require('../../features/wishlist/commands/wishlists'
 const { handleResetUserWishlist } = require('../../features/wishlist/commands/resetuserwishlist');
 const { handleFreezeWishlists } = require('../../features/wishlist/commands/freezewishlists');
 const { handleWishlistReminder } = require('../../features/wishlist/commands/wishlistreminder');
-const { handleGiveItem, handleGiveItemSelect, handleGiveItemPagination } = require('../../features/wishlist/commands/giveitem');
+const { handleGiveItem, handleItemSelection, handleUserSelection, handleBackToItems, handleFinalize, handleCancel, handleClearItem, handleItemPagination } = require('../../features/wishlist/commands/giveitem');
 const { handleWishlistButtons } = require('../../features/wishlist/handlers/wishlistButtons');
 const { handleWishlistSelects } = require('../../features/wishlist/handlers/wishlistSelects');
 
@@ -226,8 +226,27 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       }
 
       // Give item buttons
-      if (interaction.customId.startsWith('giveitem_page:')) {
-        return handleGiveItemPagination({ interaction, collections });
+      if (interaction.customId.startsWith('giveitem_page_items:')) {
+        return handleItemPagination({ interaction, collections });
+      }
+      if (interaction.customId.startsWith('giveitem_back_to_items:')) {
+        return handleBackToItems({ interaction, collections });
+      }
+      if (interaction.customId.startsWith('giveitem_finalize:')) {
+        return handleFinalize({ interaction, collections, client });
+      }
+      if (interaction.customId.startsWith('giveitem_cancel:')) {
+        return handleCancel({ interaction });
+      }
+      if (interaction.customId.startsWith('giveitem_clear_item:')) {
+        return handleClearItem({ interaction, collections, client });
+      }
+      if (interaction.customId.startsWith('giveitem_view_pending:')) {
+        // TODO: Implement review view
+        return interaction.reply({
+          content: 'Review view coming soon!',
+          flags: [64]
+        });
       }
 
       // Application system buttons
@@ -301,8 +320,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       }
 
       // Give item selects
-      if (interaction.customId.startsWith('giveitem_select:')) {
-        return handleGiveItemSelect({ interaction, collections, client });
+      if (interaction.customId.startsWith('giveitem_select_item:')) {
+        return handleItemSelection({ interaction, collections, client });
+      }
+      if (interaction.customId.startsWith('giveitem_select_users:')) {
+        return handleUserSelection({ interaction, collections, client });
       }
 
       // Application system selects
