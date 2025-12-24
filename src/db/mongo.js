@@ -74,7 +74,12 @@ function getCollections(db = _db) {
 
     // Broadcast system
     broadcastSessions: db.collection('broadcastSessions'),
-    broadcastUsers: db.collection('broadcastUsers')
+    broadcastUsers: db.collection('broadcastUsers'),
+
+    // Wishlist system
+    wishlistSubmissions: db.collection('wishlistSubmissions'),
+    wishlistPanels: db.collection('wishlistPanels'),
+    wishlistSettings: db.collection('wishlistSettings')
   };
 }
 

@@ -280,6 +280,47 @@ async function registerSlashCommands(client) {
       description: 'Admins: View current broadcast status and stream URL.',
       default_member_permissions: ADMIN
     },
+    // Wishlist Commands (Admin)
+    {
+      name: 'wishlists',
+      description: 'Admins: Create an auto-updating wishlist panel in this channel.',
+      default_member_permissions: ADMIN
+    },
+    {
+      name: 'resetuserwishlist',
+      description: 'Admins: Reset a specific user\'s wishlist.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 6, // USER
+          name: 'user',
+          description: 'User whose wishlist to reset',
+          required: true
+        }
+      ]
+    },
+    {
+      name: 'freezewishlists',
+      description: 'Admins: Freeze or unfreeze wishlist submissions.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'action',
+          description: 'Freeze or unfreeze wishlists',
+          required: true,
+          choices: [
+            { name: 'ON (freeze wishlists)', value: 'on' },
+            { name: 'OFF (unfreeze wishlists)', value: 'off' }
+          ]
+        }
+      ]
+    },
+    {
+      name: 'wishlistreminder',
+      description: 'Admins: Send DM reminders to users without submitted wishlists.',
+      default_member_permissions: ADMIN
+    },
 
     // ----- Everyone -----
     {
@@ -294,6 +335,11 @@ async function registerSlashCommands(client) {
       name: 'guildroster',
       description: 'Admins: Create/update an auto-updating guild roster in this channel.',
       default_member_permissions: ADMIN
+    },
+    // Wishlist Commands (Everyone)
+    {
+      name: 'mywishlist',
+      description: 'Setup and manage your item wishlist.'
     },
     // Gambling Commands (Everyone)
     {

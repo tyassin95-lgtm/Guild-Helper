@@ -82,6 +82,15 @@ const { handleRemoveBroadcaster } = require('../../features/broadcast/commands/r
 const { handleListBroadcasters } = require('../../features/broadcast/commands/listbroadcasters');
 const { handleBroadcastStatus } = require('../../features/broadcast/commands/broadcaststatus');
 
+// Wishlist system imports
+const { handleMyWishlist } = require('../../features/wishlist/commands/mywishlist');
+const { handleWishlists } = require('../../features/wishlist/commands/wishlists');
+const { handleResetUserWishlist } = require('../../features/wishlist/commands/resetuserwishlist');
+const { handleFreezeWishlists } = require('../../features/wishlist/commands/freezewishlists');
+const { handleWishlistReminder } = require('../../features/wishlist/commands/wishlistreminder');
+const { handleWishlistButtons } = require('../../features/wishlist/handlers/wishlistButtons');
+const { handleWishlistSelects } = require('../../features/wishlist/handlers/wishlistSelects');
+
 // Safe execution wrapper
 const { safeExecute } = require('../../utils/safeExecute');
 
@@ -142,6 +151,13 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'removebroadcaster')   return handleRemoveBroadcaster({ interaction, collections });
       if (name === 'listbroadcasters')    return handleListBroadcasters({ interaction, collections });
       if (name === 'broadcaststatus')     return handleBroadcastStatus({ interaction, collections, client });
+
+      // Wishlist commands
+      if (name === 'mywishlist')          return handleMyWishlist({ interaction, collections });
+      if (name === 'wishlists')           return handleWishlists({ interaction, collections });
+      if (name === 'resetuserwishlist')   return handleResetUserWishlist({ interaction, collections, client });
+      if (name === 'freezewishlists')     return handleFreezeWishlists({ interaction, collections, client });
+      if (name === 'wishlistreminder')    return handleWishlistReminder({ interaction, collections });
     }
 
     // Button Interactions
@@ -200,6 +216,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         }
 
         return handlePartyButtons({ interaction, collections });
+      }
+
+      // Wishlist system buttons
+      if (interaction.customId.startsWith('wishlist_')) {
+        return handleWishlistButtons({ interaction, collections, client });
       }
 
       // Application system buttons
@@ -265,6 +286,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Party system selects
       if (interaction.customId.startsWith('party_')) {
         return handlePartySelects({ interaction, collections });
+      }
+
+      // Wishlist system selects
+      if (interaction.customId.startsWith('wishlist_')) {
+        return handleWishlistSelects({ interaction, collections });
       }
 
       // Application system selects
