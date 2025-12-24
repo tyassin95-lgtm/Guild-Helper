@@ -295,9 +295,34 @@ async function handleClearAll({ interaction, collections }) {
   };
   draftWishlists.set(draftKey, clearedDraft);
 
+  // Create display wishlist that includes received items
+  const displayWishlist = {
+    archbossWeapon: [],
+    archbossArmor: [],
+    t3Weapons: [],
+    t3Armors: [],
+    t3Accessories: []
+  };
+
+  // Add received items to display wishlist
+  const { WISHLIST_ITEMS } = require('../utils/items');
+  for (const itemId of receivedItemIds) {
+    if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
+      displayWishlist.archbossWeapon.push(itemId);
+    } else if (WISHLIST_ITEMS.archbossArmors.find(i => i.id === itemId)) {
+      displayWishlist.archbossArmor.push(itemId);
+    } else if (WISHLIST_ITEMS.t3Weapons.find(i => i.id === itemId)) {
+      displayWishlist.t3Weapons.push(itemId);
+    } else if (WISHLIST_ITEMS.t3Armors.find(i => i.id === itemId)) {
+      displayWishlist.t3Armors.push(itemId);
+    } else if (WISHLIST_ITEMS.t3Accessories.find(i => i.id === itemId)) {
+      displayWishlist.t3Accessories.push(itemId);
+    }
+  }
+
   // Update embed
   const embed = buildUserWishlistEmbed({
-    wishlist: clearedDraft,
+    wishlist: displayWishlist,
     user: interaction.user,
     frozen: false,
     receivedItemIds: receivedItemIds,
@@ -401,9 +426,44 @@ async function handleSubmit({ interaction, collections, client }) {
 
     const receivedItemIds = receivedItems.map(item => item.itemId);
 
+    // Create display wishlist that merges draft with received items
+    const displayWishlist = {
+      archbossWeapon: [...draft.archbossWeapon],
+      archbossArmor: [...draft.archbossArmor],
+      t3Weapons: [...draft.t3Weapons],
+      t3Armors: [...draft.t3Armors],
+      t3Accessories: [...draft.t3Accessories]
+    };
+
+    // Add received items to display
+    const { WISHLIST_ITEMS } = require('../utils/items');
+    for (const itemId of receivedItemIds) {
+      if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
+        if (!displayWishlist.archbossWeapon.includes(itemId)) {
+          displayWishlist.archbossWeapon.push(itemId);
+        }
+      } else if (WISHLIST_ITEMS.archbossArmors.find(i => i.id === itemId)) {
+        if (!displayWishlist.archbossArmor.includes(itemId)) {
+          displayWishlist.archbossArmor.push(itemId);
+        }
+      } else if (WISHLIST_ITEMS.t3Weapons.find(i => i.id === itemId)) {
+        if (!displayWishlist.t3Weapons.includes(itemId)) {
+          displayWishlist.t3Weapons.push(itemId);
+        }
+      } else if (WISHLIST_ITEMS.t3Armors.find(i => i.id === itemId)) {
+        if (!displayWishlist.t3Armors.includes(itemId)) {
+          displayWishlist.t3Armors.push(itemId);
+        }
+      } else if (WISHLIST_ITEMS.t3Accessories.find(i => i.id === itemId)) {
+        if (!displayWishlist.t3Accessories.includes(itemId)) {
+          displayWishlist.t3Accessories.push(itemId);
+        }
+      }
+    }
+
     // Update message to show success
     const embed = buildUserWishlistEmbed({
-      wishlist: draft,
+      wishlist: displayWishlist,
       user: interaction.user,
       frozen: false,
       receivedItemIds: receivedItemIds,
