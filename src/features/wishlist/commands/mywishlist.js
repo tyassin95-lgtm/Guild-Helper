@@ -4,7 +4,7 @@ const { buildUserWishlistEmbed } = require('../utils/panelBuilder');
 const { isWishlistEmpty } = require('../utils/wishlistValidator');
 
 async function handleMyWishlist({ interaction, collections }) {
-  const { guildSettings, wishlistSubmissions, wishlistSettings } = collections;
+  const { guildSettings, wishlistSubmissions, wishlistSettings, wishlistGivenItems } = collections;
 
   // Check if user has excluded role
   const settings = await guildSettings.findOne({ guildId: interaction.guildId });
@@ -31,6 +31,14 @@ async function handleMyWishlist({ interaction, collections }) {
     });
   }
 
+  // Get user's received items
+  const receivedItems = await wishlistGivenItems.find({
+    userId: interaction.user.id,
+    guildId: interaction.guildId
+  }).toArray();
+
+  const receivedItemIds = receivedItems.map(item => item.itemId);
+
   // Check if user already has a submitted wishlist
   const existingSubmission = await wishlistSubmissions.findOne({
     userId: interaction.user.id,
@@ -38,25 +46,33 @@ async function handleMyWishlist({ interaction, collections }) {
   });
 
   if (existingSubmission) {
-    // User already submitted - cannot edit
+    // User already submitted - show wishlist with received items marked
     const embed = buildUserWishlistEmbed({
       wishlist: existingSubmission,
       user: interaction.user,
-      frozen: false
+      frozen: false,
+      receivedItemIds: receivedItemIds,
+      receivedItems: receivedItems
     });
 
     embed.setColor('#e74c3c');
     embed.setTitle('🎯 Your Submitted Wishlist');
-    embed.setDescription(
-      '**Your wishlist has already been submitted and cannot be edited.**\n\n' +
-      'If you need to make changes, please contact an administrator to reset your wishlist.\n\n' +
-      embed.data.description
-    );
+
+    let description = '**Your wishlist has already been submitted.**\n\n';
+
+    if (receivedItemIds.length > 0) {
+      description += `✅ **You have received ${receivedItemIds.length} item${receivedItemIds.length !== 1 ? 's' : ''}!**\n\n`;
+    }
+
+    description += 'If you need to make changes, contact an administrator to reset your wishlist.\n\n';
+    description += embed.data.description;
+
+    embed.setDescription(description);
 
     return interaction.reply({ embeds: [embed], flags: [64] });
   }
 
-  // Create new draft wishlist
+  // Create new draft wishlist (or edit existing draft after reset)
   const draftWishlist = {
     archbossWeapon: [],
     archbossArmor: [],
@@ -69,11 +85,13 @@ async function handleMyWishlist({ interaction, collections }) {
   const embed = buildUserWishlistEmbed({
     wishlist: draftWishlist,
     user: interaction.user,
-    frozen: false
+    frozen: false,
+    receivedItemIds: receivedItemIds,
+    receivedItems: receivedItems
   });
 
-  // Create action buttons
-  const buttons = createWishlistButtons(draftWishlist);
+  // Create action buttons (some may be disabled if categories are fully received)
+  const buttons = createWishlistButtons(draftWishlist, receivedItemIds);
 
   await interaction.reply({
     embeds: [embed],
@@ -85,37 +103,78 @@ async function handleMyWishlist({ interaction, collections }) {
 /**
  * Create wishlist action buttons
  * @param {Object} wishlist - Current wishlist state
+ * @param {Array} receivedItemIds - Array of item IDs the user has already received
  * @returns {Array<ActionRowBuilder>}
  */
-function createWishlistButtons(wishlist) {
+function createWishlistButtons(wishlist, receivedItemIds = []) {
+  const { LIMITS } = require('../utils/wishlistValidator');
+  const { WISHLIST_ITEMS } = require('../utils/items');
+
   const rows = [];
+
+  // Count how many items in each category have been received
+  const receivedCounts = {
+    archbossWeapon: 0,
+    archbossArmor: 0,
+    t3Weapons: 0,
+    t3Armors: 0,
+    t3Accessories: 0
+  };
+
+  // Count received items per category
+  for (const itemId of receivedItemIds) {
+    // Check which category this item belongs to
+    if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
+      receivedCounts.archbossWeapon++;
+    } else if (WISHLIST_ITEMS.archbossArmors.find(i => i.id === itemId)) {
+      receivedCounts.archbossArmor++;
+    } else if (WISHLIST_ITEMS.t3Weapons.find(i => i.id === itemId)) {
+      receivedCounts.t3Weapons++;
+    } else if (WISHLIST_ITEMS.t3Armors.find(i => i.id === itemId)) {
+      receivedCounts.t3Armors++;
+    } else if (WISHLIST_ITEMS.t3Accessories.find(i => i.id === itemId)) {
+      receivedCounts.t3Accessories++;
+    }
+  }
+
+  // Check if categories are fully locked (all items received)
+  const archbossWeaponLocked = receivedCounts.archbossWeapon >= LIMITS.archbossWeapon;
+  const archbossArmorLocked = receivedCounts.archbossArmor >= LIMITS.archbossArmor;
+  const t3WeaponsLocked = receivedCounts.t3Weapons >= LIMITS.t3Weapons;
+  const t3ArmorsLocked = receivedCounts.t3Armors >= LIMITS.t3Armors;
+  const t3AccessoriesLocked = receivedCounts.t3Accessories >= LIMITS.t3Accessories;
 
   // Row 1: Category selection buttons
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('wishlist_select_archboss_weapon')
-      .setLabel('⚔️ Archboss Weapons')
-      .setStyle(ButtonStyle.Primary),
+      .setLabel(archbossWeaponLocked ? '⚔️ Archboss Weapons 🔒' : '⚔️ Archboss Weapons')
+      .setStyle(archbossWeaponLocked ? ButtonStyle.Secondary : ButtonStyle.Primary)
+      .setDisabled(archbossWeaponLocked),
     new ButtonBuilder()
       .setCustomId('wishlist_select_archboss_armor')
-      .setLabel('🛡️ Archboss Armor')
-      .setStyle(ButtonStyle.Primary)
+      .setLabel(archbossArmorLocked ? '🛡️ Archboss Armor 🔒' : '🛡️ Archboss Armor')
+      .setStyle(archbossArmorLocked ? ButtonStyle.Secondary : ButtonStyle.Primary)
+      .setDisabled(archbossArmorLocked)
   );
 
   // Row 2: More category buttons
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('wishlist_select_t3_weapons')
-      .setLabel('⚔️ Weapons')
-      .setStyle(ButtonStyle.Primary),
+      .setLabel(t3WeaponsLocked ? '⚔️ Weapons 🔒' : '⚔️ Weapons')
+      .setStyle(t3WeaponsLocked ? ButtonStyle.Secondary : ButtonStyle.Primary)
+      .setDisabled(t3WeaponsLocked),
     new ButtonBuilder()
       .setCustomId('wishlist_select_t3_armors')
-      .setLabel('🛡️ Armor')
-      .setStyle(ButtonStyle.Primary),
+      .setLabel(t3ArmorsLocked ? '🛡️ Armor 🔒' : '🛡️ Armor')
+      .setStyle(t3ArmorsLocked ? ButtonStyle.Secondary : ButtonStyle.Primary)
+      .setDisabled(t3ArmorsLocked),
     new ButtonBuilder()
       .setCustomId('wishlist_select_t3_accessories')
-      .setLabel('💍 Accessories')
-      .setStyle(ButtonStyle.Primary)
+      .setLabel(t3AccessoriesLocked ? '💍 Accessories 🔒' : '💍 Accessories')
+      .setStyle(t3AccessoriesLocked ? ButtonStyle.Secondary : ButtonStyle.Primary)
+      .setDisabled(t3AccessoriesLocked)
   );
 
   // Row 3: Action buttons

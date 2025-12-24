@@ -11,9 +11,10 @@ const { draftWishlists } = require('../utils/wishlistStorage');
  * @param {string} categoryKey - Category key (archbossWeapons, etc)
  * @param {Array} currentSelections - Currently selected items
  * @param {number} page - Current page (0-indexed)
+ * @param {Array} receivedItemIds - Array of item IDs the user has already received (locked)
  * @returns {Object} { row: ActionRowBuilder, totalPages: number, hasMultiplePages: boolean }
  */
-function createCategorySelect(categoryKey, currentSelections = [], page = 0) {
+function createCategorySelect(categoryKey, currentSelections = [], page = 0, receivedItemIds = []) {
   const items = getItemsByCategory(categoryKey);
 
   // Determine max selections based on category
@@ -24,6 +25,9 @@ function createCategorySelect(categoryKey, currentSelections = [], page = 0) {
   if (categoryKey === 't3Armors') maxValues = LIMITS.t3Armors;
   if (categoryKey === 't3Accessories') maxValues = LIMITS.t3Accessories;
 
+  // Filter out received items from available options (but keep them in the list to show as locked)
+  const availableItems = items.filter(item => !receivedItemIds.includes(item.id));
+
   // Pagination - 25 items per page
   const itemsPerPage = 25;
   const totalPages = Math.ceil(items.length / itemsPerPage);
@@ -31,22 +35,34 @@ function createCategorySelect(categoryKey, currentSelections = [], page = 0) {
   const endIdx = startIdx + itemsPerPage;
   const pageItems = items.slice(startIdx, endIdx);
 
-  // Build options
+  // Build options - show all items but disable received ones
   const options = pageItems.map(item => {
-    const isSelected = currentSelections.includes(item.id);
+    const isReceived = receivedItemIds.includes(item.id);
+    const isSelected = currentSelections.includes(item.id) && !isReceived;
+
+    let description = item.category || item.type;
+    if (isReceived) {
+      description = '🔒 Already received (locked)';
+    } else if (isSelected) {
+      description = '✅ Selected';
+    }
 
     return new StringSelectMenuOptionBuilder()
-      .setLabel(item.name)
+      .setLabel(isReceived ? `${item.name} 🔒` : item.name)
       .setValue(item.id)
-      .setDescription(item.category || item.type)
+      .setDescription(description)
       .setDefault(isSelected);
   });
+
+  // Calculate how many slots are available (excluding received items)
+  const receivedCount = pageItems.filter(item => receivedItemIds.includes(item.id)).length;
+  const availableSlots = Math.min(maxValues, options.length - receivedCount);
 
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId(`wishlist_item_select:${categoryKey}:${page}`)
     .setPlaceholder(`Choose items... (Page ${page + 1}/${totalPages})`)
     .setMinValues(minValues)
-    .setMaxValues(Math.min(maxValues, options.length))
+    .setMaxValues(Math.max(1, availableSlots)) // At least 1 for Discord requirement
     .addOptions(options);
 
   return {
@@ -61,7 +77,7 @@ function createCategorySelect(categoryKey, currentSelections = [], page = 0) {
  * Handle wishlist select menu interactions
  */
 async function handleWishlistSelects({ interaction, collections }) {
-  const { wishlistSubmissions, wishlistSettings } = collections;
+  const { wishlistSubmissions, wishlistSettings, wishlistGivenItems } = collections;
 
   if (!interaction.customId.startsWith('wishlist_item_select:')) {
     return;
@@ -91,11 +107,29 @@ async function handleWishlistSelects({ interaction, collections }) {
     });
   }
 
+  // Get user's received items
+  const receivedItems = await wishlistGivenItems.find({
+    userId: interaction.user.id,
+    guildId: interaction.guildId
+  }).toArray();
+
+  const receivedItemIds = receivedItems.map(item => item.itemId);
+
   // Parse category and page from customId
   const parts = interaction.customId.split(':');
   const categoryKey = parts[1];
   const page = parseInt(parts[2]) || 0;
   const selectedValues = interaction.values;
+
+  // Filter out any received items from selection (in case of manipulation)
+  const validSelectedValues = selectedValues.filter(itemId => !receivedItemIds.includes(itemId));
+
+  if (validSelectedValues.length !== selectedValues.length) {
+    return interaction.reply({
+      content: '❌ You cannot select items you have already received.',
+      flags: [64]
+    });
+  }
 
   // Get or create draft
   const draftKey = `${interaction.guildId}_${interaction.user.id}`;
@@ -114,28 +148,30 @@ async function handleWishlistSelects({ interaction, collections }) {
 
   // Update draft based on category
   if (categoryKey === 'archbossWeapons') {
-    draft.archbossWeapon = selectedValues.slice(0, 1); // Only first selection
+    draft.archbossWeapon = validSelectedValues.slice(0, 1); // Only first selection
   } else if (categoryKey === 'archbossArmors') {
-    draft.archbossArmor = selectedValues.slice(0, 1); // Only first selection
+    draft.archbossArmor = validSelectedValues.slice(0, 1); // Only first selection
   } else if (categoryKey === 't3Weapons') {
-    draft.t3Weapons = selectedValues.slice(0, 1); // Only 1 weapon allowed
+    draft.t3Weapons = validSelectedValues.slice(0, 1); // Only 1 weapon allowed
   } else if (categoryKey === 't3Armors') {
-    draft.t3Armors = selectedValues.slice(0, LIMITS.t3Armors);
+    draft.t3Armors = validSelectedValues.slice(0, LIMITS.t3Armors);
   } else if (categoryKey === 't3Accessories') {
-    draft.t3Accessories = selectedValues.slice(0, LIMITS.t3Accessories);
+    draft.t3Accessories = validSelectedValues.slice(0, LIMITS.t3Accessories);
   }
 
   // Build updated embed and buttons
   const embed = buildUserWishlistEmbed({
     wishlist: draft,
     user: interaction.user,
-    frozen: false
+    frozen: false,
+    receivedItemIds: receivedItemIds,
+    receivedItems: receivedItems
   });
 
-  const buttons = createWishlistButtons(draft);
+  const buttons = createWishlistButtons(draft, receivedItemIds);
 
   // Determine category name for feedback
-  const selectedCount = selectedValues.length;
+  const selectedCount = validSelectedValues.length;
   let categoryName = '';
 
   if (categoryKey === 'archbossWeapons') categoryName = 'Archboss Weapon';

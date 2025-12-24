@@ -287,9 +287,11 @@ async function buildCategorySection({ title, itemGroups, guild, givenItemsMap })
  * @param {Object} params.wishlist - User's wishlist
  * @param {User} params.user - Discord user
  * @param {boolean} params.frozen - Whether wishlists are frozen
+ * @param {Array} params.receivedItemIds - Array of item IDs the user has received
+ * @param {Array} params.receivedItems - Array of received item objects with dates
  * @returns {EmbedBuilder}
  */
-function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
+function buildUserWishlistEmbed({ wishlist, user, frozen = false, receivedItemIds = [], receivedItems = [] }) {
   const embed = new EmbedBuilder()
     .setColor('#3498db')
     .setTitle('🎯 My Wishlist Configuration')
@@ -300,17 +302,37 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
     embed.setFooter({ text: '🔒 Wishlists are currently frozen - Cannot submit changes' });
   }
 
+  // Create a map of itemId -> received date for quick lookup
+  const receivedMap = new Map();
+  receivedItems.forEach(item => {
+    receivedMap.set(item.itemId, item.givenAt);
+  });
+
   let description = '**📦 CURRENT SELECTIONS:**\n\n';
+
+  // Helper function to format item with received status
+  const formatItem = (itemId) => {
+    const item = getItemById(itemId);
+    if (!item) return '';
+
+    const receivedDate = receivedMap.get(itemId);
+    if (receivedDate) {
+      const dateStr = new Date(receivedDate).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      });
+      return `✅ ~~${item.name}~~ *(Received ${dateStr})*\n`;
+    }
+    return `✅ ${item.name}\n`;
+  };
 
   // Archboss Weapon
   const abWeaponCount = (wishlist.archbossWeapon && wishlist.archbossWeapon.length) || 0;
-  description += `⚔️ **Archboss Weapon (${abWeaponCount}/1)**\n`;
+  const abWeaponReceived = wishlist.archbossWeapon?.filter(id => receivedItemIds.includes(id)).length || 0;
+  description += `⚔️ **Archboss Weapon (${abWeaponCount}/1)** ${abWeaponReceived > 0 ? '🔒' : ''}\n`;
   if (wishlist.archbossWeapon && wishlist.archbossWeapon.length > 0) {
     for (const itemId of wishlist.archbossWeapon) {
-      const item = getItemById(itemId);
-      if (item) {
-        description += `✅ ${item.name}\n`;
-      }
+      description += formatItem(itemId);
     }
   } else {
     description += '❌ None selected\n';
@@ -320,13 +342,11 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
 
   // Archboss Armor
   const abArmorCount = (wishlist.archbossArmor && wishlist.archbossArmor.length) || 0;
-  description += `🛡️ **Archboss Armor (${abArmorCount}/1)**\n`;
+  const abArmorReceived = wishlist.archbossArmor?.filter(id => receivedItemIds.includes(id)).length || 0;
+  description += `🛡️ **Archboss Armor (${abArmorCount}/1)** ${abArmorReceived > 0 ? '🔒' : ''}\n`;
   if (wishlist.archbossArmor && wishlist.archbossArmor.length > 0) {
     for (const itemId of wishlist.archbossArmor) {
-      const item = getItemById(itemId);
-      if (item) {
-        description += `✅ ${item.name}\n`;
-      }
+      description += formatItem(itemId);
     }
   } else {
     description += '❌ None selected\n';
@@ -336,13 +356,11 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
 
   // T3 Weapons
   const t3WeaponCount = (wishlist.t3Weapons && wishlist.t3Weapons.length) || 0;
-  description += `⚔️ **Weapons (${t3WeaponCount}/1)**\n`;
+  const t3WeaponReceived = wishlist.t3Weapons?.filter(id => receivedItemIds.includes(id)).length || 0;
+  description += `⚔️ **Weapons (${t3WeaponCount}/1)** ${t3WeaponReceived > 0 ? '🔒' : ''}\n`;
   if (wishlist.t3Weapons && wishlist.t3Weapons.length > 0) {
     for (const itemId of wishlist.t3Weapons) {
-      const item = getItemById(itemId);
-      if (item) {
-        description += `✅ ${item.name}\n`;
-      }
+      description += formatItem(itemId);
     }
   } else {
     description += '❌ None selected\n';
@@ -352,13 +370,11 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
 
   // T3 Armors
   const t3ArmorCount = (wishlist.t3Armors && wishlist.t3Armors.length) || 0;
-  description += `🛡️ **Armor (${t3ArmorCount}/4)**\n`;
+  const t3ArmorReceived = wishlist.t3Armors?.filter(id => receivedItemIds.includes(id)).length || 0;
+  description += `🛡️ **Armor (${t3ArmorCount}/4)** ${t3ArmorReceived >= 4 ? '🔒' : ''}\n`;
   if (wishlist.t3Armors && wishlist.t3Armors.length > 0) {
     for (const itemId of wishlist.t3Armors) {
-      const item = getItemById(itemId);
-      if (item) {
-        description += `✅ ${item.name}\n`;
-      }
+      description += formatItem(itemId);
     }
   } else {
     description += '❌ None selected\n';
@@ -368,16 +384,19 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
 
   // T3 Accessories
   const t3AccessoryCount = (wishlist.t3Accessories && wishlist.t3Accessories.length) || 0;
-  description += `💍 **Accessories (${t3AccessoryCount}/2)**\n`;
+  const t3AccessoryReceived = wishlist.t3Accessories?.filter(id => receivedItemIds.includes(id)).length || 0;
+  description += `💍 **Accessories (${t3AccessoryCount}/2)** ${t3AccessoryReceived >= 2 ? '🔒' : ''}\n`;
   if (wishlist.t3Accessories && wishlist.t3Accessories.length > 0) {
     for (const itemId of wishlist.t3Accessories) {
-      const item = getItemById(itemId);
-      if (item) {
-        description += `✅ ${item.name}\n`;
-      }
+      description += formatItem(itemId);
     }
   } else {
     description += '❌ None selected\n';
+  }
+
+  // Add note about locked items if any are received
+  if (receivedItemIds.length > 0) {
+    description += '\n\n*🔒 = Category locked (all items received)*\n*✅ with strikethrough = Item already received*';
   }
 
   embed.setDescription(description);

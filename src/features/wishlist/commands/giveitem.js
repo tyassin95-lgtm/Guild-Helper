@@ -156,7 +156,7 @@ async function showItemSelectionPage(interaction, allItems, page, sessionKey, co
   );
   components.push(actionRow);
 
-  const content = `**📦 Give Items to Users**\n\n**Step 1:** Select an item to see who wishlisted it\n**Step 2:** Select user(s) to give the item to\n**Step 3:** Click "Give Items" when ready\n\n**Page ${page + 1} of ${totalPages}** • **Total items:** ${allItems.length}`;
+  const content = `**📦 Give Items to Users**\n\n**Step 1:** Select an item to see who wishlisted it\n**Step 2:** Select user(s) to give the item to\n**Step 3:** Click "Review" to see all selections or "Give Items" when ready\n\n**Page ${page + 1} of ${totalPages}** • **Total items:** ${allItems.length}`;
 
   if (interaction.deferred || interaction.replied) {
     await interaction.editReply({ content, components, embeds: [] });
@@ -339,6 +339,130 @@ async function handleBackToItems({ interaction, collections }) {
 }
 
 /**
+ * Handle view pending - show review of all selections
+ */
+async function handleViewPending({ interaction, collections, client }) {
+  const sessionKey = interaction.customId.split(':')[1];
+  const session = pendingDistributions.get(sessionKey);
+
+  if (!session) {
+    return interaction.reply({
+      content: '❌ Session expired. Please run `/giveitem` again.',
+      flags: [64]
+    });
+  }
+
+  await interaction.deferUpdate();
+
+  // Build review embed
+  const embed = new EmbedBuilder()
+    .setColor('#3498db')
+    .setTitle('📋 Review Item Distributions')
+    .setTimestamp();
+
+  let description = '**Selected distributions:**\n\n';
+  let totalSelections = 0;
+
+  // Sort by item name for consistent display
+  const sortedEntries = Array.from(session.selectedDistributions.entries())
+    .sort((a, b) => {
+      const itemA = getItemById(a[0]);
+      const itemB = getItemById(b[0]);
+      return itemA.name.localeCompare(itemB.name);
+    });
+
+  for (const [itemId, userIds] of sortedEntries) {
+    const item = getItemById(itemId);
+    if (!item) continue;
+
+    description += `**${item.name}**\n`;
+
+    for (const userId of userIds) {
+      const member = await interaction.guild.members.fetch(userId).catch(() => null);
+      const name = member ? member.displayName : userId;
+      description += `  • ${name}\n`;
+      totalSelections++;
+    }
+    description += '\n';
+  }
+
+  embed.setDescription(description);
+  embed.setFooter({ text: `Total: ${totalSelections} distribution${totalSelections !== 1 ? 's' : ''}` });
+
+  // Create action buttons with edit/remove options
+  const components = [];
+
+  // Build select menu to choose which item to edit/remove
+  if (sortedEntries.length > 0) {
+    const options = sortedEntries.slice(0, 25).map(([itemId, userIds]) => {
+      const item = getItemById(itemId);
+      return new StringSelectMenuOptionBuilder()
+        .setLabel(item.name)
+        .setValue(itemId)
+        .setDescription(`${userIds.length} user${userIds.length !== 1 ? 's' : ''} selected`);
+    });
+
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`giveitem_review_select:${sessionKey}`)
+      .setPlaceholder('Select an item to edit or remove...')
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(options);
+
+    components.push(new ActionRowBuilder().addComponents(selectMenu));
+  }
+
+  // Action buttons
+  const actionRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`giveitem_back_to_items:${sessionKey}`)
+      .setLabel('◀ Back to Items')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(`giveitem_finalize:${sessionKey}`)
+      .setLabel('✅ Confirm & Give Items')
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(totalSelections === 0),
+    new ButtonBuilder()
+      .setCustomId(`giveitem_cancel:${sessionKey}`)
+      .setLabel('❌ Cancel All')
+      .setStyle(ButtonStyle.Danger)
+  );
+  components.push(actionRow);
+
+  await interaction.editReply({
+    content: null,
+    embeds: [embed],
+    components
+  });
+}
+
+/**
+ * Handle review select - when user picks an item to edit from review
+ */
+async function handleReviewSelect({ interaction, collections, client }) {
+  const parts = interaction.customId.split(':');
+  const sessionKey = parts[1];
+
+  const session = pendingDistributions.get(sessionKey);
+  if (!session) {
+    return interaction.reply({
+      content: '❌ Session expired. Please run `/giveitem` again.',
+      flags: [64]
+    });
+  }
+
+  const selectedItemId = interaction.values[0];
+  const item = getItemById(selectedItemId);
+  const userIds = session.itemUserMap.get(selectedItemId) || [];
+
+  await interaction.deferUpdate();
+
+  // Show user selection for this item (same as normal flow)
+  await showUserSelection(interaction, item, userIds, sessionKey, collections, client);
+}
+
+/**
  * Handle finalize - actually give the items
  */
 async function handleFinalize({ interaction, collections, client }) {
@@ -495,6 +619,8 @@ module.exports = {
   handleItemSelection,
   handleUserSelection,
   handleBackToItems,
+  handleViewPending,
+  handleReviewSelect,
   handleFinalize,
   handleCancel,
   handleClearItem,

@@ -34,7 +34,7 @@ async function handleWishlistButtons({ interaction, collections, client }) {
  * Handle category selection buttons
  */
 async function handleCategorySelection({ interaction, collections }) {
-  const { wishlistSubmissions, wishlistSettings } = collections;
+  const { wishlistSubmissions, wishlistSettings, wishlistGivenItems } = collections;
 
   // Check if wishlists are frozen
   const wishlistConfig = await wishlistSettings.findOne({ guildId: interaction.guildId });
@@ -60,6 +60,14 @@ async function handleCategorySelection({ interaction, collections }) {
     });
   }
 
+  // Get user's received items
+  const receivedItems = await wishlistGivenItems.find({
+    userId: interaction.user.id,
+    guildId: interaction.guildId
+  }).toArray();
+
+  const receivedItemIds = receivedItems.map(item => item.itemId);
+
   // Get or create draft wishlist
   const draftKey = `${interaction.guildId}_${interaction.user.id}`;
   let draft = draftWishlists.get(draftKey);
@@ -80,7 +88,7 @@ async function handleCategorySelection({ interaction, collections }) {
   const { createCategorySelect } = require('./wishlistSelects');
 
   if (customId === 'wishlist_select_archboss_weapon') {
-    const selectData = createCategorySelect('archbossWeapons', draft.archbossWeapon, 0);
+    const selectData = createCategorySelect('archbossWeapons', draft.archbossWeapon, 0, receivedItemIds);
     const components = [selectData.row];
 
     // Add pagination buttons if needed
@@ -90,14 +98,14 @@ async function handleCategorySelection({ interaction, collections }) {
     }
 
     return interaction.reply({
-      content: '⚔️ **Select Archboss Weapon** (max 1)\n\nChoose an item from the list below:',
+      content: '⚔️ **Select Archboss Weapon** (max 1)\n\nChoose an item from the list below:\n\n🔒 = Already received (locked)',
       components,
       flags: [64]
     });
   }
 
   if (customId === 'wishlist_select_archboss_armor') {
-    const selectData = createCategorySelect('archbossArmors', draft.archbossArmor, 0);
+    const selectData = createCategorySelect('archbossArmors', draft.archbossArmor, 0, receivedItemIds);
     const components = [selectData.row];
 
     if (selectData.hasMultiplePages) {
@@ -106,14 +114,14 @@ async function handleCategorySelection({ interaction, collections }) {
     }
 
     return interaction.reply({
-      content: '🛡️ **Select Archboss Armor** (max 1)\n\nChoose an item from the list below:',
+      content: '🛡️ **Select Archboss Armor** (max 1)\n\nChoose an item from the list below:\n\n🔒 = Already received (locked)',
       components,
       flags: [64]
     });
   }
 
   if (customId === 'wishlist_select_t3_weapons') {
-    const selectData = createCategorySelect('t3Weapons', draft.t3Weapons, 0);
+    const selectData = createCategorySelect('t3Weapons', draft.t3Weapons, 0, receivedItemIds);
     const components = [selectData.row];
 
     if (selectData.hasMultiplePages) {
@@ -122,14 +130,14 @@ async function handleCategorySelection({ interaction, collections }) {
     }
 
     return interaction.reply({
-      content: '⚔️ **Select Weapons** (max 1)\n\nChoose items from the list below:',
+      content: '⚔️ **Select Weapons** (max 1)\n\nChoose items from the list below:\n\n🔒 = Already received (locked)',
       components,
       flags: [64]
     });
   }
 
   if (customId === 'wishlist_select_t3_armors') {
-    const selectData = createCategorySelect('t3Armors', draft.t3Armors, 0);
+    const selectData = createCategorySelect('t3Armors', draft.t3Armors, 0, receivedItemIds);
     const components = [selectData.row];
 
     if (selectData.hasMultiplePages) {
@@ -138,14 +146,14 @@ async function handleCategorySelection({ interaction, collections }) {
     }
 
     return interaction.reply({
-      content: '🛡️ **Select Armor** (max 4)\n\nChoose items from the list below:',
+      content: '🛡️ **Select Armor** (max 4)\n\nChoose items from the list below:\n\n🔒 = Already received (locked)',
       components,
       flags: [64]
     });
   }
 
   if (customId === 'wishlist_select_t3_accessories') {
-    const selectData = createCategorySelect('t3Accessories', draft.t3Accessories, 0);
+    const selectData = createCategorySelect('t3Accessories', draft.t3Accessories, 0, receivedItemIds);
     const components = [selectData.row];
 
     if (selectData.hasMultiplePages) {
@@ -154,7 +162,7 @@ async function handleCategorySelection({ interaction, collections }) {
     }
 
     return interaction.reply({
-      content: '💍 **Select Accessories** (max 2)\n\nChoose items from the list below:',
+      content: '💍 **Select Accessories** (max 2)\n\nChoose items from the list below:\n\n🔒 = Already received (locked)',
       components,
       flags: [64]
     });
@@ -187,12 +195,21 @@ function createPaginationButtons(categoryKey, currentPage, totalPages) {
  * Handle pagination button clicks
  */
 async function handlePaginationButtons({ interaction, collections }) {
+  const { wishlistGivenItems } = collections;
   const parts = interaction.customId.split(':');
   const categoryKey = parts[1];
   const direction = parts[2];
   const currentPage = parseInt(parts[3]);
 
   const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
+
+  // Get user's received items
+  const receivedItems = await wishlistGivenItems.find({
+    userId: interaction.user.id,
+    guildId: interaction.guildId
+  }).toArray();
+
+  const receivedItemIds = receivedItems.map(item => item.itemId);
 
   // Get draft
   const draftKey = `${interaction.guildId}_${interaction.user.id}`;
@@ -218,7 +235,7 @@ async function handlePaginationButtons({ interaction, collections }) {
   else if (categoryKey === 't3Accessories') currentSelections = draft.t3Accessories;
 
   // Create new select menu for the page
-  const selectData = createCategorySelect(categoryKey, currentSelections, newPage);
+  const selectData = createCategorySelect(categoryKey, currentSelections, newPage, receivedItemIds);
   const components = [selectData.row];
 
   if (selectData.hasMultiplePages) {
@@ -233,7 +250,7 @@ async function handlePaginationButtons({ interaction, collections }) {
  * Handle clear all button
  */
 async function handleClearAll({ interaction, collections }) {
-  const { wishlistSubmissions, wishlistSettings } = collections;
+  const { wishlistSubmissions, wishlistSettings, wishlistGivenItems } = collections;
 
   // Check if wishlists are frozen
   const wishlistConfig = await wishlistSettings.findOne({ guildId: interaction.guildId });
@@ -259,6 +276,14 @@ async function handleClearAll({ interaction, collections }) {
     });
   }
 
+  // Get user's received items
+  const receivedItems = await wishlistGivenItems.find({
+    userId: interaction.user.id,
+    guildId: interaction.guildId
+  }).toArray();
+
+  const receivedItemIds = receivedItems.map(item => item.itemId);
+
   // Clear draft
   const draftKey = `${interaction.guildId}_${interaction.user.id}`;
   const clearedDraft = {
@@ -274,10 +299,12 @@ async function handleClearAll({ interaction, collections }) {
   const embed = buildUserWishlistEmbed({
     wishlist: clearedDraft,
     user: interaction.user,
-    frozen: false
+    frozen: false,
+    receivedItemIds: receivedItemIds,
+    receivedItems: receivedItems
   });
 
-  const buttons = createWishlistButtons(clearedDraft);
+  const buttons = createWishlistButtons(clearedDraft, receivedItemIds);
 
   await interaction.update({
     embeds: [embed],
@@ -294,7 +321,7 @@ async function handleClearAll({ interaction, collections }) {
  * Handle submit button
  */
 async function handleSubmit({ interaction, collections, client }) {
-  const { wishlistSubmissions, wishlistSettings } = collections;
+  const { wishlistSubmissions, wishlistSettings, wishlistGivenItems } = collections;
 
   // Check if wishlists are frozen
   const wishlistConfig = await wishlistSettings.findOne({ guildId: interaction.guildId });
@@ -366,11 +393,21 @@ async function handleSubmit({ interaction, collections, client }) {
       collections
     });
 
+    // Get user's received items for display
+    const receivedItems = await wishlistGivenItems.find({
+      userId: interaction.user.id,
+      guildId: interaction.guildId
+    }).toArray();
+
+    const receivedItemIds = receivedItems.map(item => item.itemId);
+
     // Update message to show success
     const embed = buildUserWishlistEmbed({
       wishlist: draft,
       user: interaction.user,
-      frozen: false
+      frozen: false,
+      receivedItemIds: receivedItemIds,
+      receivedItems: receivedItems
     });
 
     embed.setColor('#2ecc71');
