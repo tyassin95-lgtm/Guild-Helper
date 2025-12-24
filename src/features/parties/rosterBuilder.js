@@ -25,8 +25,8 @@ class RosterBuilder {
     // Sort players: first by role (tank > healer > dps), then alphabetically by display name
     const roleOrder = { tank: 0, healer: 1, dps: 2 };
 
-    // Fetch all member display names and PvP event counts
-    const { pvpActivityRanking } = collections;
+    // Fetch all member display names, PvP event counts, and PvP bonuses
+    const { pvpActivityRanking, pvpBonuses } = collections;
 
     const playersWithData = await Promise.all(
       players.map(async (p) => {
@@ -40,7 +40,14 @@ class RosterBuilder {
         });
         const pvpEvents = pvpData?.totalEvents || 0;
 
-        return { ...p, displayName, pvpEvents };
+        // Get PvP weekly roll bonus
+        const bonusData = await pvpBonuses.findOne({
+          userId: p.userId,
+          guildId: guild.id
+        });
+        const rollBonus = bonusData?.bonusCount || 0;
+
+        return { ...p, displayName, pvpEvents, rollBonus };
       })
     );
 
@@ -56,10 +63,10 @@ class RosterBuilder {
     // Build message header (only for first message)
     let messageHeader = '**🏰 GUILD ROSTER**\n';
     messageHeader += `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithData.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n`;
-    messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
     messageHeader += '```\n';
-    messageHeader += 'Name            Role      Weapons                CP              Total Events\n';
-    messageHeader += '─────────────────────────────────────────────────────────────────────\n';
+    messageHeader += 'Name            Role      Weapons                CP         Total Events  Weekly Bonus\n';
+    messageHeader += '──────────────────────────────────────────────────────────────────────────────────────\n';
     messageHeader += '```\n';
 
     let membersList = '';
@@ -84,11 +91,14 @@ class RosterBuilder {
       // Total Events column - padded to 13 characters (centered under "Total Events")
       const eventsFormatted = player.pvpEvents.toString().padStart(13);
 
+      // Weekly Bonus column - padded to 13 characters (centered under "Weekly Bonus")
+      const bonusFormatted = `+${player.rollBonus}`.padStart(13);
+
       // Discord mention (outside code block)
       const discordMention = `<@${player.userId}>`;
 
       // Table row (inside code block)
-      const tableRow = '```\n' + `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted}\n` + '```\n';
+      const tableRow = '```\n' + `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted} ${bonusFormatted}\n` + '```\n';
 
       const memberEntry = discordMention + '\n' + tableRow;
 
@@ -109,7 +119,7 @@ class RosterBuilder {
 
     // Finalize last message with legend
     currentMessage += membersList;
-    currentMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    currentMessage += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
     currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS';
 
     messages.push({ content: currentMessage });
@@ -123,14 +133,14 @@ class RosterBuilder {
   static buildEmptyRosterMessage() {
     const content = '**🏰 GUILD ROSTER**\n' +
       `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 0 Members | 💪 0 Total CP\n` +
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
       '```\n' +
       '\n' +
       '              No members registered yet!\n' +
       '              Use /myinfo to join the roster.\n' +
       '\n' +
       '```\n' +
-      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
       '🛡️ Tank | 💚 Healer | ⚔️ DPS\n';
 
     return [{ content }];
