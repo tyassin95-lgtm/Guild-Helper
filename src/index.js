@@ -5,7 +5,6 @@ const { connectMongo, getCollections } = require('./db/mongo');
 const { ensureIndexes } = require('./db/indexes');
 const { registerSlashCommands } = require('./bot/commands');
 const { onInteractionCreate } = require('./bot/handlers/interaction');
-const { startTokenRegenerationChecker } = require('./bot/tokenRegeneration');
 const { resumeActiveRaidCountdowns, clearAllCountdownIntervals } = require('./features/raids/raidSession');
 const { resumeActiveItemRolls } = require('./features/itemroll/utils/itemRollResume');
 const { startItemRollAutoUpdate, stopItemRollAutoUpdate } = require('./features/itemroll/utils/itemRollAutoUpdate');
@@ -35,9 +34,6 @@ const client = new Client({
 
       // Start the HTTP stream server
       streamServer.start();
-
-      // Start the token regeneration checker
-      startTokenRegenerationChecker(client, collections);
 
       // Resume active raid countdowns after bot restart
       await resumeActiveRaidCountdowns(client, collections);

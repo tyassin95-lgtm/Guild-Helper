@@ -24,13 +24,7 @@ function getClient() {
 
 function getCollections(db = _db) {
   return {
-    // Wishlist system
-    wishlists: db.collection('wishlists'),
-    panels: db.collection('panels'),
-    handedOut: db.collection('handedout'),
-    liveSummaries: db.collection('liveSummaries'),
-    tokenRegenerations: db.collection('tokenRegenerations'),
-    userCooldowns: db.collection('userCooldowns'),
+    // Guild settings (shared by all features)
     guildSettings: db.collection('guildSettings'),
 
     // Raid system

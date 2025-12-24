@@ -1,18 +1,4 @@
-const { handleCreatePanel } = require('./commands/createpanel');
-const { handleMyWishlist } = require('./commands/mywishlist');
-const { handleSummary } = require('./commands/summary');
-const { handleGrantTokens } = require('./commands/granttokens');
-const { handleRemoveTokens } = require('./commands/removetokens');
-const { handleResetUser } = require('./commands/resetuser');
-const { handleResetAll, handleResetAllConfirmation } = require('./commands/resetall');
-const { handleStats } = require('./commands/stats');
-const { handleSummaryLive } = require('./commands/summarylive');
-const { handleFreeze, handleFreezeStatus, handleFreezeModal, handleFreezeBossSelection } = require('./commands/freeze');
-const { handleRemind } = require('./commands/remind');
 const { handleExcludeRole } = require('./commands/excluderole');
-
-const { handleButtons } = require('./buttons');
-const { handleSelects } = require('./selects');
 
 // Party system imports
 const { handleMyInfo } = require('../../features/parties/commands/myinfo');
@@ -107,19 +93,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
     if (interaction.isChatInputCommand()) {
       const name = interaction.commandName;
 
-      // Wishlist commands
-      if (name === 'createpanel') return handleCreatePanel({ interaction, collections });
-      if (name === 'mywishlist')  return handleMyWishlist({ interaction, collections });
-      if (name === 'summary')     return handleSummary({ interaction, collections });
-      if (name === 'summarylive') return handleSummaryLive({ interaction, collections });
-      if (name === 'stats')       return handleStats({ interaction, collections });
-      if (name === 'granttokens') return handleGrantTokens({ interaction, collections });
-      if (name === 'removetokens')return handleRemoveTokens({ interaction, collections });
-      if (name === 'resetuser')   return handleResetUser({ interaction, collections });
-      if (name === 'resetall')    return handleResetAll({ interaction, collections });
-      if (name === 'freeze')      return handleFreeze({ interaction, collections });
-      if (name === 'freezestatus')return handleFreezeStatus({ interaction, collections });
-      if (name === 'remind')      return handleRemind({ interaction, collections });
+      // Admin commands
       if (name === 'excluderole') return handleExcludeRole({ interaction, collections });
 
       // Party commands
@@ -172,17 +146,6 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
     // Button Interactions
     if (interaction.isButton()) {
-      // Freeze finish selection button
-      if (interaction.customId === 'freeze_finish_selection') {
-        const { handleFreezeFinishButton } = require('./commands/freeze');
-        return handleFreezeFinishButton({ interaction, collections });
-      }
-
-      // Handle reset all confirmation buttons
-      if (interaction.customId.startsWith('confirm_reset_all_')) {
-        return handleResetAllConfirmation({ interaction, collections });
-      }
-
       // Handle reset parties confirmation buttons
       if (interaction.customId.startsWith('confirm_reset_parties_')) {
         return handleResetPartiesConfirmation({ interaction, collections });
@@ -284,17 +247,10 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         // Configuration buttons (during panel creation)
         return handleApplicationButtons({ interaction, collections });
       }
-
-      return handleButtons({ interaction, collections });
     }
 
     // String Select Menu Interactions
     if (interaction.isStringSelectMenu()) {
-      // Freeze boss selection
-      if (interaction.customId.startsWith('freeze_select_')) {
-        return handleFreezeBossSelection({ interaction, collections });
-      }
-
       // Raid signup selects
       if (interaction.customId.startsWith('raid_signup_')) {
         const { handleRaidSelects } = require('../../features/raids/handlers/selects');
@@ -318,8 +274,6 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         }
         return handleApplicationSelects({ interaction, collections });
       }
-
-      return handleSelects({ interaction, collections });
     }
 
     // User Select Menu Interactions
@@ -347,11 +301,6 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
     // Modal Submit Interactions
     if (interaction.isModalSubmit()) {
-      // Freeze raid setup modal
-      if (interaction.customId === 'freeze_raid_setup') {
-        return handleFreezeModal({ interaction, collections });
-      }
-
       // Item Roll modals
       if (interaction.customId.startsWith('itemroll_')) {
         return handleItemRollModals({ interaction, collections });

@@ -14,10 +14,17 @@ async function handleExcludeRole({ interaction, collections }) {
   const excludedRoles = settings?.excludedRoles || [];
 
   if (action === 'add') {
+    if (!role) {
+      return interaction.reply({
+        content: '❌ You must specify a role to exclude.',
+        flags: [64]
+      });
+    }
+
     // Check if role is already excluded
     if (excludedRoles.includes(role.id)) {
       return interaction.reply({
-        content: `❌ The role **${role.name}** is already excluded from wishlist tracking.`,
+        content: `❌ The role **${role.name}** is already excluded from tracking.`,
         flags: [64]
       });
     }
@@ -30,13 +37,20 @@ async function handleExcludeRole({ interaction, collections }) {
     );
 
     return interaction.reply({
-      content: `✅ **${role.name}** has been excluded from wishlist tracking.\n\n` +
-               `Members with this role will not appear in the "Not Submitted" or "Submitted" lists.`,
+      content: `✅ **${role.name}** has been excluded from tracking.\n\n` +
+               `Members with this role will not appear in various tracking lists.`,
       flags: [64]
     });
   }
 
   if (action === 'remove') {
+    if (!role) {
+      return interaction.reply({
+        content: '❌ You must specify a role to remove from exclusions.',
+        flags: [64]
+      });
+    }
+
     // Check if role is in exclusion list
     if (!excludedRoles.includes(role.id)) {
       return interaction.reply({
@@ -53,7 +67,7 @@ async function handleExcludeRole({ interaction, collections }) {
 
     return interaction.reply({
       content: `✅ **${role.name}** has been removed from the exclusion list.\n\n` +
-               `Members with this role will now appear in wishlist tracking.`,
+               `Members with this role will now appear in tracking.`,
       flags: [64]
     });
   }
@@ -61,7 +75,7 @@ async function handleExcludeRole({ interaction, collections }) {
   if (action === 'list') {
     if (excludedRoles.length === 0) {
       return interaction.reply({
-        content: 'ℹ️ No roles are currently excluded from wishlist tracking.',
+        content: 'ℹ️ No roles are currently excluded from tracking.',
         flags: [64]
       });
     }
@@ -69,7 +83,7 @@ async function handleExcludeRole({ interaction, collections }) {
     const embed = new EmbedBuilder()
       .setColor('#e67e22')
       .setTitle('📋 Excluded Roles')
-      .setDescription('Members with these roles will not appear in wishlist tracking.')
+      .setDescription('Members with these roles will not appear in various tracking features.')
       .setTimestamp();
 
     // Fetch role names
