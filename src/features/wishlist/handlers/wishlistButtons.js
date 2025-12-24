@@ -229,7 +229,6 @@ async function handlePaginationButtons({ interaction, collections }) {
 
   await interaction.update({ components });
 }
-}
 
 /**
  * Handle clear all button
