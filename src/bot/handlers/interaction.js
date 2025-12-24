@@ -305,6 +305,14 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
     // String Select Menu Interactions
     if (interaction.isStringSelectMenu()) {
+      // Item Roll select handlers (CATEGORY, SUBCATEGORY, ITEM, USERS)
+      if (interaction.customId === 'itemroll_select_category' ||
+          interaction.customId.startsWith('itemroll_select_subcategory:') ||
+          interaction.customId.startsWith('itemroll_select_item:') ||
+          interaction.customId.startsWith('itemroll_select_users:')) {
+        return handleItemRollSelects({ interaction, collections });
+      }
+
       // Raid signup selects
       if (interaction.customId.startsWith('raid_signup_')) {
         const { handleRaidSelects } = require('../../features/raids/handlers/selects');
@@ -348,7 +356,8 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
     // User Select Menu Interactions
     if (interaction.isUserSelectMenu()) {
-      // Item Roll user selection
+      // Item Roll user selection - MOVED TO STRING SELECT SECTION ABOVE
+      // (kept here as fallback if needed)
       if (interaction.customId.startsWith('itemroll_select_users:')) {
         return handleItemRollSelects({ interaction, collections });
       }
@@ -371,8 +380,8 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
     // Modal Submit Interactions
     if (interaction.isModalSubmit()) {
-      // Item Roll modals
-      if (interaction.customId.startsWith('itemroll_')) {
+      // Item Roll trait and duration modal
+      if (interaction.customId.startsWith('itemroll_trait_duration_modal:')) {
         return handleItemRollModals({ interaction, collections });
       }
 
