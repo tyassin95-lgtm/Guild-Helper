@@ -296,16 +296,6 @@ async function registerSlashCommands(client) {
           name: 'user',
           description: 'User whose wishlist to reset',
           required: true
-        },
-        {
-          type: 3, // STRING
-          name: 'reset_type',
-          description: 'Type of reset to perform',
-          required: false,
-          choices: [
-            { name: 'Normal (preserve received items)', value: 'normal' },
-            { name: 'Full (delete everything including received items)', value: 'full' }
-          ]
         }
       ]
     },

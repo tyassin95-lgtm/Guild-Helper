@@ -17,13 +17,22 @@ const { draftWishlists } = require('../utils/wishlistStorage');
 function createCategorySelect(categoryKey, currentSelections = [], page = 0, receivedItemIds = []) {
   const items = getItemsByCategory(categoryKey);
 
-  // Determine max selections based on category
-  let maxValues = 1;
-  let minValues = 0;
+  // Determine base max selections based on category
+  let baseMaxValues = 1;
 
-  if (categoryKey === 't3Weapons') maxValues = 1; // Changed from 2 to 1
-  if (categoryKey === 't3Armors') maxValues = LIMITS.t3Armors;
-  if (categoryKey === 't3Accessories') maxValues = LIMITS.t3Accessories;
+  if (categoryKey === 't3Weapons') baseMaxValues = 1;
+  if (categoryKey === 't3Armors') baseMaxValues = LIMITS.t3Armors;
+  if (categoryKey === 't3Accessories') baseMaxValues = LIMITS.t3Accessories;
+
+  // Count how many items from THIS category the user has already received
+  const receivedCountInCategory = items.filter(item => receivedItemIds.includes(item.id)).length;
+
+  // Calculate remaining slots: base limit - already received
+  const remainingSlots = Math.max(0, baseMaxValues - receivedCountInCategory);
+
+  // The actual max values for this selection
+  const maxValues = remainingSlots;
+  const minValues = 0;
 
   // Filter out received items from available options (but keep them in the list to show as locked)
   const availableItems = items.filter(item => !receivedItemIds.includes(item.id));
@@ -54,22 +63,23 @@ function createCategorySelect(categoryKey, currentSelections = [], page = 0, rec
       .setDefault(isSelected);
   });
 
-  // Calculate how many slots are available (excluding received items)
-  const receivedCount = pageItems.filter(item => receivedItemIds.includes(item.id)).length;
-  const availableSlots = Math.min(maxValues, options.length - receivedCount);
+  // Calculate how many available slots are on this page
+  const receivedCountOnPage = pageItems.filter(item => receivedItemIds.includes(item.id)).length;
+  const availableSlotsOnPage = Math.min(maxValues, options.length - receivedCountOnPage);
 
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId(`wishlist_item_select:${categoryKey}:${page}`)
-    .setPlaceholder(`Choose items... (Page ${page + 1}/${totalPages})`)
+    .setPlaceholder(remainingSlots > 0 ? `Choose items... (${remainingSlots} slot${remainingSlots !== 1 ? 's' : ''} remaining)` : 'All slots filled')
     .setMinValues(minValues)
-    .setMaxValues(Math.max(1, availableSlots)) // At least 1 for Discord requirement
+    .setMaxValues(Math.max(1, availableSlotsOnPage)) // At least 1 for Discord requirement
     .addOptions(options);
 
   return {
     row: new ActionRowBuilder().addComponents(selectMenu),
     totalPages,
     hasMultiplePages: totalPages > 1,
-    currentPage: page
+    currentPage: page,
+    remainingSlots
   };
 }
 
@@ -131,6 +141,26 @@ async function handleWishlistSelects({ interaction, collections }) {
     });
   }
 
+  // Calculate dynamic limits based on received items
+  const { WISHLIST_ITEMS } = require('../utils/items');
+  const allItemsInCategory = WISHLIST_ITEMS[categoryKey] || [];
+  const receivedInCategory = allItemsInCategory.filter(item => receivedItemIds.includes(item.id)).length;
+
+  let baseLimit = 1;
+  if (categoryKey === 't3Weapons') baseLimit = 1;
+  else if (categoryKey === 't3Armors') baseLimit = LIMITS.t3Armors;
+  else if (categoryKey === 't3Accessories') baseLimit = LIMITS.t3Accessories;
+
+  const remainingSlots = Math.max(0, baseLimit - receivedInCategory);
+
+  // Validate that user isn't selecting more than remaining slots
+  if (validSelectedValues.length > remainingSlots) {
+    return interaction.reply({
+      content: `❌ You can only select ${remainingSlots} more item${remainingSlots !== 1 ? 's' : ''} in this category (you've already received ${receivedInCategory}).`,
+      flags: [64]
+    });
+  }
+
   // Get or create draft
   const draftKey = `${interaction.guildId}_${interaction.user.id}`;
   let draft = draftWishlists.get(draftKey);
@@ -146,17 +176,17 @@ async function handleWishlistSelects({ interaction, collections }) {
     draftWishlists.set(draftKey, draft);
   }
 
-  // Update draft based on category
+  // Update draft based on category with dynamic limits
   if (categoryKey === 'archbossWeapons') {
-    draft.archbossWeapon = validSelectedValues.slice(0, 1); // Only first selection
+    draft.archbossWeapon = validSelectedValues.slice(0, remainingSlots);
   } else if (categoryKey === 'archbossArmors') {
-    draft.archbossArmor = validSelectedValues.slice(0, 1); // Only first selection
+    draft.archbossArmor = validSelectedValues.slice(0, remainingSlots);
   } else if (categoryKey === 't3Weapons') {
-    draft.t3Weapons = validSelectedValues.slice(0, 1); // Only 1 weapon allowed
+    draft.t3Weapons = validSelectedValues.slice(0, remainingSlots);
   } else if (categoryKey === 't3Armors') {
-    draft.t3Armors = validSelectedValues.slice(0, LIMITS.t3Armors);
+    draft.t3Armors = validSelectedValues.slice(0, remainingSlots);
   } else if (categoryKey === 't3Accessories') {
-    draft.t3Accessories = validSelectedValues.slice(0, LIMITS.t3Accessories);
+    draft.t3Accessories = validSelectedValues.slice(0, remainingSlots);
   }
 
   // Build updated embed and buttons

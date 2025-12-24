@@ -98,7 +98,7 @@ async function handleCategorySelection({ interaction, collections }) {
     }
 
     return interaction.reply({
-      content: '⚔️ **Select Archboss Weapon** (max 1)\n\nChoose an item from the list below:\n\n🔒 = Already received (locked)',
+      content: `⚔️ **Select Archboss Weapon** (${selectData.remainingSlots} slot${selectData.remainingSlots !== 1 ? 's' : ''} remaining)\n\nChoose an item from the list below:\n\n🔒 = Already received (locked)`,
       components,
       flags: [64]
     });
@@ -114,7 +114,7 @@ async function handleCategorySelection({ interaction, collections }) {
     }
 
     return interaction.reply({
-      content: '🛡️ **Select Archboss Armor** (max 1)\n\nChoose an item from the list below:\n\n🔒 = Already received (locked)',
+      content: `🛡️ **Select Archboss Armor** (${selectData.remainingSlots} slot${selectData.remainingSlots !== 1 ? 's' : ''} remaining)\n\nChoose an item from the list below:\n\n🔒 = Already received (locked)`,
       components,
       flags: [64]
     });
@@ -130,7 +130,7 @@ async function handleCategorySelection({ interaction, collections }) {
     }
 
     return interaction.reply({
-      content: '⚔️ **Select Weapons** (max 1)\n\nChoose items from the list below:\n\n🔒 = Already received (locked)',
+      content: `⚔️ **Select Weapons** (${selectData.remainingSlots} slot${selectData.remainingSlots !== 1 ? 's' : ''} remaining)\n\nChoose items from the list below:\n\n🔒 = Already received (locked)`,
       components,
       flags: [64]
     });
@@ -146,7 +146,7 @@ async function handleCategorySelection({ interaction, collections }) {
     }
 
     return interaction.reply({
-      content: '🛡️ **Select Armor** (max 4)\n\nChoose items from the list below:\n\n🔒 = Already received (locked)',
+      content: `🛡️ **Select Armor** (${selectData.remainingSlots} slot${selectData.remainingSlots !== 1 ? 's' : ''} remaining)\n\nChoose items from the list below:\n\n🔒 = Already received (locked)`,
       components,
       flags: [64]
     });
@@ -162,7 +162,7 @@ async function handleCategorySelection({ interaction, collections }) {
     }
 
     return interaction.reply({
-      content: '💍 **Select Accessories** (max 2)\n\nChoose items from the list below:\n\n🔒 = Already received (locked)',
+      content: `💍 **Select Accessories** (${selectData.remainingSlots} slot${selectData.remainingSlots !== 1 ? 's' : ''} remaining)\n\nChoose items from the list below:\n\n🔒 = Already received (locked)`,
       components,
       flags: [64]
     });
