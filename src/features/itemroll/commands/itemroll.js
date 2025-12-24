@@ -1,55 +1,26 @@
-const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+const { PermissionFlagsBits, StringSelectMenuBuilder, ActionRowBuilder } = require('discord.js');
+const { getCategories } = require('../data/items');
 
 async function handleItemRoll({ interaction, collections }) {
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
   }
 
-  // Show modal to collect item roll information
-  const modal = new ModalBuilder()
-    .setCustomId('itemroll_create_modal')
-    .setTitle('Create Item Roll');
+  // Show category selection
+  const categories = getCategories();
 
-  const itemNameInput = new TextInputBuilder()
-    .setCustomId('item_name')
-    .setLabel('Item Name')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('e.g., Epic Sword of Destiny')
-    .setRequired(true)
-    .setMaxLength(100);
+  const categorySelect = new StringSelectMenuBuilder()
+    .setCustomId('itemroll_select_category')
+    .setPlaceholder('Select item category')
+    .addOptions(categories);
 
-  const traitInput = new TextInputBuilder()
-    .setCustomId('trait')
-    .setLabel('Item Trait')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('e.g., +15% Attack Speed')
-    .setRequired(true)
-    .setMaxLength(200);
+  const row = new ActionRowBuilder().addComponents(categorySelect);
 
-  const imageInput = new TextInputBuilder()
-    .setCustomId('image_url')
-    .setLabel('Image URL (Optional)')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('https://i.imgur.com/example.png')
-    .setRequired(false);
-
-  const durationInput = new TextInputBuilder()
-    .setCustomId('duration')
-    .setLabel('Roll Duration (in minutes)')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('e.g., 5, 10, 15')
-    .setRequired(true)
-    .setMinLength(1)
-    .setMaxLength(3);
-
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(itemNameInput),
-    new ActionRowBuilder().addComponents(traitInput),
-    new ActionRowBuilder().addComponents(imageInput),
-    new ActionRowBuilder().addComponents(durationInput)
-  );
-
-  return interaction.showModal(modal);
+  return interaction.reply({
+    content: '**Step 1: Select Item Category**\n\nChoose the type of item for this roll:',
+    components: [row],
+    flags: [64]
+  });
 }
 
 module.exports = { handleItemRoll };

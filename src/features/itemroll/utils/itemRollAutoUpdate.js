@@ -4,7 +4,7 @@ const { createItemRollEmbed } = require('../itemRollEmbed');
 let updateInterval = null;
 
 /**
- * Start auto-updating item roll embeds every 5 minutes
+ * Start auto-updating item roll embeds every 24 hours
  * @param {Client} client - Discord client
  * @param {Object} collections - Database collections
  */
@@ -22,7 +22,7 @@ function startItemRollAutoUpdate(client, collections) {
   // Run immediately on start
   updateAllActiveItemRolls(client, collections);
 
-  // Then run every 5 minutes
+  // Then run every 24 hours
   updateInterval = setInterval(() => {
     updateAllActiveItemRolls(client, collections);
   }, UPDATE_INTERVAL);
