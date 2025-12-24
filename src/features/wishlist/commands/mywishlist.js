@@ -106,11 +106,11 @@ function createWishlistButtons(wishlist) {
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('wishlist_select_t3_weapons')
-      .setLabel('⚔️ T3 Weapons')
+      .setLabel('⚔️ Weapons')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('wishlist_select_t3_armors')
-      .setLabel('🛡️ T3 Armor')
+      .setLabel('🛡️ Armor')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('wishlist_select_t3_accessories')

@@ -114,7 +114,7 @@ async function buildWishlistPanels({ submissions, guild, frozen = false }) {
 
   // T3 Weapons
   const t3WeaponSection = await buildCategorySection({
-    title: '⚔️ T3 WEAPONS',
+    title: '⚔️ WEAPONS',
     itemGroups: itemGroups.t3Weapons,
     guild
   });
@@ -122,7 +122,7 @@ async function buildWishlistPanels({ submissions, guild, frozen = false }) {
 
   // T3 Armors
   const t3ArmorSection = await buildCategorySection({
-    title: '🛡️ T3 ARMORS',
+    title: '🛡️ ARMOR',
     itemGroups: itemGroups.t3Armors,
     guild
   });
@@ -130,7 +130,7 @@ async function buildWishlistPanels({ submissions, guild, frozen = false }) {
 
   // T3 Accessories
   const t3AccessorySection = await buildCategorySection({
-    title: '💍 T3 ACCESSORIES',
+    title: '💍 ACCESSORIES',
     itemGroups: itemGroups.t3Accessories,
     guild
   });
@@ -303,7 +303,7 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
 
   // T3 Weapons
   const t3WeaponCount = (wishlist.t3Weapons && wishlist.t3Weapons.length) || 0;
-  description += `⚔️ **T3 Weapons (${t3WeaponCount}/2)**\n`;
+  description += `⚔️ **Weapons (${t3WeaponCount}/2)**\n`;
   if (wishlist.t3Weapons && wishlist.t3Weapons.length > 0) {
     for (const itemId of wishlist.t3Weapons) {
       const item = getItemById(itemId);
@@ -319,7 +319,7 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
 
   // T3 Armors
   const t3ArmorCount = (wishlist.t3Armors && wishlist.t3Armors.length) || 0;
-  description += `🛡️ **T3 Armor (${t3ArmorCount}/4)**\n`;
+  description += `🛡️ **Armor (${t3ArmorCount}/4)**\n`;
   if (wishlist.t3Armors && wishlist.t3Armors.length > 0) {
     for (const itemId of wishlist.t3Armors) {
       const item = getItemById(itemId);
@@ -335,7 +335,7 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
 
   // T3 Accessories
   const t3AccessoryCount = (wishlist.t3Accessories && wishlist.t3Accessories.length) || 0;
-  description += `💍 **T3 Accessories (${t3AccessoryCount}/2)**\n`;
+  description += `💍 **Accessories (${t3AccessoryCount}/2)**\n`;
   if (wishlist.t3Accessories && wishlist.t3Accessories.length > 0) {
     for (const itemId of wishlist.t3Accessories) {
       const item = getItemById(itemId);

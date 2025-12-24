@@ -38,7 +38,7 @@ function createCategorySelect(categoryKey, currentSelections = []) {
     .setCustomId(`wishlist_item_select:${categoryKey}`)
     .setPlaceholder('Choose items...')
     .setMinValues(minValues)
-    .setMaxValues(Math.min(maxValues, options.length))
+    .setMaxValues(maxValues)
     .addOptions(options);
 
   return new ActionRowBuilder().addComponents(selectMenu);
@@ -110,57 +110,31 @@ async function handleWishlistSelects({ interaction, collections }) {
     draft.t3Accessories = selectedValues.slice(0, LIMITS.t3Accessories);
   }
 
-  // Find original message and update it
-  try {
-    // Fetch the original message (the one with the main wishlist embed)
-    const channel = interaction.channel;
-    const messages = await channel.messages.fetch({ limit: 10 });
+  // Build updated embed and buttons
+  const embed = buildUserWishlistEmbed({
+    wishlist: draft,
+    user: interaction.user,
+    frozen: false
+  });
 
-    // Find the message from the bot to the user
-    const originalMessage = messages.find(msg => 
-      msg.author.id === interaction.client.user.id &&
-      msg.embeds.length > 0 &&
-      msg.embeds[0].data.title?.includes('Wishlist Configuration')
-    );
+  const buttons = createWishlistButtons(draft);
 
-    if (originalMessage) {
-      // Update the original message
-      const embed = buildUserWishlistEmbed({
-        wishlist: draft,
-        user: interaction.user,
-        frozen: false
-      });
+  // Determine category name for feedback
+  const selectedCount = selectedValues.length;
+  let categoryName = '';
 
-      const buttons = createWishlistButtons(draft);
+  if (categoryKey === 'archbossWeapons') categoryName = 'Archboss Weapon';
+  else if (categoryKey === 'archbossArmors') categoryName = 'Archboss Armor';
+  else if (categoryKey === 't3Weapons') categoryName = 'Weapons';
+  else if (categoryKey === 't3Armors') categoryName = 'Armor';
+  else if (categoryKey === 't3Accessories') categoryName = 'Accessories';
 
-      await originalMessage.edit({
-        embeds: [embed],
-        components: buttons
-      });
-    }
-
-    // Acknowledge the selection
-    const selectedCount = selectedValues.length;
-    let categoryName = '';
-
-    if (categoryKey === 'archbossWeapons') categoryName = 'Archboss Weapon';
-    else if (categoryKey === 'archbossArmors') categoryName = 'Archboss Armor';
-    else if (categoryKey === 't3Weapons') categoryName = 'T3 Weapons';
-    else if (categoryKey === 't3Armors') categoryName = 'T3 Armor';
-    else if (categoryKey === 't3Accessories') categoryName = 'T3 Accessories';
-
-    await interaction.update({
-      content: `✅ **${categoryName}** updated! ${selectedCount} item${selectedCount !== 1 ? 's' : ''} selected.\n\nYour main wishlist has been updated. You can continue selecting other categories or submit when ready.`,
-      components: []
-    });
-
-  } catch (error) {
-    console.error('Error updating wishlist:', error);
-    await interaction.reply({
-      content: '❌ An error occurred while updating your wishlist. Please try again.',
-      flags: [64]
-    });
-  }
+  // Update the interaction message
+  await interaction.update({
+    content: `✅ **${categoryName}** updated! ${selectedCount} item${selectedCount !== 1 ? 's' : ''} selected.\n\nYou can continue selecting other categories or submit when ready.`,
+    embeds: [embed],
+    components: buttons
+  });
 }
 
 module.exports = {

@@ -96,7 +96,7 @@ async function handleCategorySelection({ interaction, collections }) {
   if (customId === 'wishlist_select_t3_weapons') {
     const selectMenu = createCategorySelect('t3Weapons', draft.t3Weapons);
     return interaction.reply({
-      content: '⚔️ **Select T3 Weapons** (max 2)\n\nChoose items from the list below:',
+      content: '⚔️ **Select Weapons** (max 2)\n\nChoose items from the list below:',
       components: [selectMenu],
       flags: [64]
     });
@@ -105,7 +105,7 @@ async function handleCategorySelection({ interaction, collections }) {
   if (customId === 'wishlist_select_t3_armors') {
     const selectMenu = createCategorySelect('t3Armors', draft.t3Armors);
     return interaction.reply({
-      content: '🛡️ **Select T3 Armor** (max 4)\n\nChoose items from the list below:',
+      content: '🛡️ **Select Armor** (max 4)\n\nChoose items from the list below:',
       components: [selectMenu],
       flags: [64]
     });
@@ -114,7 +114,7 @@ async function handleCategorySelection({ interaction, collections }) {
   if (customId === 'wishlist_select_t3_accessories') {
     const selectMenu = createCategorySelect('t3Accessories', draft.t3Accessories);
     return interaction.reply({
-      content: '💍 **Select T3 Accessories** (max 2)\n\nChoose items from the list below:',
+      content: '💍 **Select Accessories** (max 2)\n\nChoose items from the list below:',
       components: [selectMenu],
       flags: [64]
     });
