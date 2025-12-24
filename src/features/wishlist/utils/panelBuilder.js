@@ -13,9 +13,18 @@ const MAX_FIELD_VALUE_LENGTH = 1024;
  * @param {Array} params.submissions - All wishlist submissions
  * @param {Guild} params.guild - Discord guild object
  * @param {boolean} params.frozen - Whether wishlists are frozen
+ * @param {Object} params.collections - Database collections
  * @returns {Array<EmbedBuilder>} Array of embed builders
  */
-async function buildWishlistPanels({ submissions, guild, frozen = false }) {
+async function buildWishlistPanels({ submissions, guild, frozen = false, collections }) {
+  const { wishlistGivenItems } = collections;
+
+  // Get all given items for this guild
+  const givenItemsData = await wishlistGivenItems.find({ guildId: guild.id }).toArray();
+  const givenItemsMap = new Map();
+  givenItemsData.forEach(item => {
+    givenItemsMap.set(item.itemId, item.givenAt);
+  });
   // Group submissions by item
   const itemGroups = {
     archbossWeapons: {},
@@ -100,7 +109,8 @@ async function buildWishlistPanels({ submissions, guild, frozen = false }) {
   const abWeaponSection = await buildCategorySection({
     title: '⚔️ ARCHBOSS WEAPONS',
     itemGroups: itemGroups.archbossWeapons,
-    guild
+    guild,
+    givenItemsMap
   });
   if (abWeaponSection) sections.push(abWeaponSection);
 
@@ -108,7 +118,8 @@ async function buildWishlistPanels({ submissions, guild, frozen = false }) {
   const abArmorSection = await buildCategorySection({
     title: '🛡️ ARCHBOSS ARMORS',
     itemGroups: itemGroups.archbossArmors,
-    guild
+    guild,
+    givenItemsMap
   });
   if (abArmorSection) sections.push(abArmorSection);
 
@@ -116,7 +127,8 @@ async function buildWishlistPanels({ submissions, guild, frozen = false }) {
   const t3WeaponSection = await buildCategorySection({
     title: '⚔️ WEAPONS',
     itemGroups: itemGroups.t3Weapons,
-    guild
+    guild,
+    givenItemsMap
   });
   if (t3WeaponSection) sections.push(t3WeaponSection);
 
@@ -124,7 +136,8 @@ async function buildWishlistPanels({ submissions, guild, frozen = false }) {
   const t3ArmorSection = await buildCategorySection({
     title: '🛡️ ARMOR',
     itemGroups: itemGroups.t3Armors,
-    guild
+    guild,
+    givenItemsMap
   });
   if (t3ArmorSection) sections.push(t3ArmorSection);
 
@@ -132,7 +145,8 @@ async function buildWishlistPanels({ submissions, guild, frozen = false }) {
   const t3AccessorySection = await buildCategorySection({
     title: '💍 ACCESSORIES',
     itemGroups: itemGroups.t3Accessories,
-    guild
+    guild,
+    givenItemsMap
   });
   if (t3AccessorySection) sections.push(t3AccessorySection);
 
@@ -210,9 +224,10 @@ async function buildWishlistPanels({ submissions, guild, frozen = false }) {
  * @param {string} params.title - Category title
  * @param {Object} params.itemGroups - Grouped items
  * @param {Guild} params.guild - Discord guild
+ * @param {Map} params.givenItemsMap - Map of given items with dates
  * @returns {string|null} Section text or null if empty
  */
-async function buildCategorySection({ title, itemGroups, guild }) {
+async function buildCategorySection({ title, itemGroups, guild, givenItemsMap }) {
   const itemIds = Object.keys(itemGroups);
   if (itemIds.length === 0) return null;
 
@@ -226,9 +241,24 @@ async function buildCategorySection({ title, itemGroups, guild }) {
     if (!item) continue;
 
     const users = itemGroups[itemId];
+    const isGiven = givenItemsMap.has(itemId);
+    const givenDate = givenItemsMap.get(itemId);
 
-    // Add item name
-    section += `\n**${item.name}** (${users.length} ${users.length === 1 ? 'user' : 'users'})\n`;
+    // Format item name with strikethrough if given
+    let itemDisplay = isGiven ? `~~${item.name}~~` : item.name;
+
+    section += `\n**${itemDisplay}** (${users.length} ${users.length === 1 ? 'user' : 'users'})`;
+
+    if (isGiven) {
+      const dateStr = new Date(givenDate).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      section += ` ✅ *Given on: ${dateStr}*`;
+    }
+
+    section += '\n';
 
     // Sort users by submission date (oldest first)
     users.sort((a, b) => a.submittedAt - b.submittedAt);

@@ -79,7 +79,8 @@ function getCollections(db = _db) {
     // Wishlist system
     wishlistSubmissions: db.collection('wishlistSubmissions'),
     wishlistPanels: db.collection('wishlistPanels'),
-    wishlistSettings: db.collection('wishlistSettings')
+    wishlistSettings: db.collection('wishlistSettings'),
+    wishlistGivenItems: db.collection('wishlistGivenItems')
   };
 }
 

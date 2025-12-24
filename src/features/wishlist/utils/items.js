@@ -137,6 +137,18 @@ const WISHLIST_ITEMS = {
       name: 'Umbral Astarch Pants',
       icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_Set_LE_M_PT_00030.webp',
       type: 'Pants'
+    },
+    {
+      id: 'blood_moon_cloak',
+      name: 'Cloak of the Blood Moon',
+      icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00032.webp',
+      type: 'Cloak'
+    },
+    {
+      id: 'piercing_ice_cloak',
+      name: 'Cloak of Piercing Ice',
+      icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00029.webp',
+      type: 'Cloak'
     }
   ],
 
@@ -371,18 +383,6 @@ const WISHLIST_ITEMS = {
       name: 'Twilight Embrace Shoes',
       icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_Set_FA_M_BT_00005C.webp',
       type: 'Boots'
-    },
-    {
-      id: 'blood_moon_cloak',
-      name: 'Cloak of the Blood Moon',
-      icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00032.webp',
-      type: 'Cloak'
-    },
-    {
-      id: 'piercing_ice_cloak',
-      name: 'Cloak of Piercing Ice',
-      icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00029.webp',
-      type: 'Cloak'
     }
   ],
 

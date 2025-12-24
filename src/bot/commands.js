@@ -321,6 +321,11 @@ async function registerSlashCommands(client) {
       description: 'Admins: Send DM reminders to users without submitted wishlists.',
       default_member_permissions: ADMIN
     },
+    {
+      name: 'giveitem',
+      description: 'Admins: Mark wishlisted items as given/distributed.',
+      default_member_permissions: ADMIN
+    },
 
     // ----- Everyone -----
     {

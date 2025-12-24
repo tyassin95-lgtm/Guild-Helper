@@ -7,12 +7,13 @@ const { createWishlistButtons } = require('../commands/mywishlist');
 const { draftWishlists } = require('./wishlistButtons');
 
 /**
- * Create a category select menu
+ * Create a category select menu with pagination support
  * @param {string} categoryKey - Category key (archbossWeapons, etc)
  * @param {Array} currentSelections - Currently selected items
- * @returns {ActionRowBuilder}
+ * @param {number} page - Current page (0-indexed)
+ * @returns {Object} { row: ActionRowBuilder, totalPages: number, hasMultiplePages: boolean }
  */
-function createCategorySelect(categoryKey, currentSelections = []) {
+function createCategorySelect(categoryKey, currentSelections = [], page = 0) {
   const items = getItemsByCategory(categoryKey);
 
   // Determine max selections based on category
@@ -23,8 +24,15 @@ function createCategorySelect(categoryKey, currentSelections = []) {
   if (categoryKey === 't3Armors') maxValues = LIMITS.t3Armors;
   if (categoryKey === 't3Accessories') maxValues = LIMITS.t3Accessories;
 
+  // Pagination - 25 items per page
+  const itemsPerPage = 25;
+  const totalPages = Math.ceil(items.length / itemsPerPage);
+  const startIdx = page * itemsPerPage;
+  const endIdx = startIdx + itemsPerPage;
+  const pageItems = items.slice(startIdx, endIdx);
+
   // Build options
-  const options = items.map(item => {
+  const options = pageItems.map(item => {
     const isSelected = currentSelections.includes(item.id);
 
     return new StringSelectMenuOptionBuilder()
@@ -34,17 +42,19 @@ function createCategorySelect(categoryKey, currentSelections = []) {
       .setDefault(isSelected);
   });
 
-  // Discord has a limit of 25 options per select menu
-  const limitedOptions = options.slice(0, 25);
-
   const selectMenu = new StringSelectMenuBuilder()
-    .setCustomId(`wishlist_item_select:${categoryKey}`)
-    .setPlaceholder('Choose items...')
+    .setCustomId(`wishlist_item_select:${categoryKey}:${page}`)
+    .setPlaceholder(`Choose items... (Page ${page + 1}/${totalPages})`)
     .setMinValues(minValues)
-    .setMaxValues(Math.min(maxValues, limitedOptions.length))
-    .addOptions(limitedOptions);
+    .setMaxValues(Math.min(maxValues, options.length))
+    .addOptions(options);
 
-  return new ActionRowBuilder().addComponents(selectMenu);
+  return {
+    row: new ActionRowBuilder().addComponents(selectMenu),
+    totalPages,
+    hasMultiplePages: totalPages > 1,
+    currentPage: page
+  };
 }
 
 /**
@@ -81,8 +91,10 @@ async function handleWishlistSelects({ interaction, collections }) {
     });
   }
 
-  // Parse category from customId
-  const categoryKey = interaction.customId.split(':')[1];
+  // Parse category and page from customId
+  const parts = interaction.customId.split(':');
+  const categoryKey = parts[1];
+  const page = parseInt(parts[2]) || 0;
   const selectedValues = interaction.values;
 
   // Get or create draft

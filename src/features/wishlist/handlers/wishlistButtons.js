@@ -10,6 +10,11 @@ const draftWishlists = new Map();
 async function handleWishlistButtons({ interaction, collections, client }) {
   const customId = interaction.customId;
 
+  // Handle pagination buttons
+  if (customId.startsWith('wishlist_page:')) {
+    return handlePaginationButtons({ interaction, collections });
+  }
+
   // Handle category selection buttons
   if (customId.startsWith('wishlist_select_')) {
     return handleCategorySelection({ interaction, collections });
@@ -76,49 +81,154 @@ async function handleCategorySelection({ interaction, collections }) {
   const { createCategorySelect } = require('./wishlistSelects');
 
   if (customId === 'wishlist_select_archboss_weapon') {
-    const selectMenu = createCategorySelect('archbossWeapons', draft.archbossWeapon);
+    const selectData = createCategorySelect('archbossWeapons', draft.archbossWeapon, 0);
+    const components = [selectData.row];
+
+    // Add pagination buttons if needed
+    if (selectData.hasMultiplePages) {
+      const paginationRow = createPaginationButtons('archbossWeapons', 0, selectData.totalPages);
+      components.push(paginationRow);
+    }
+
     return interaction.reply({
       content: '⚔️ **Select Archboss Weapon** (max 1)\n\nChoose an item from the list below:',
-      components: [selectMenu],
+      components,
       flags: [64]
     });
   }
 
   if (customId === 'wishlist_select_archboss_armor') {
-    const selectMenu = createCategorySelect('archbossArmors', draft.archbossArmor);
+    const selectData = createCategorySelect('archbossArmors', draft.archbossArmor, 0);
+    const components = [selectData.row];
+
+    if (selectData.hasMultiplePages) {
+      const paginationRow = createPaginationButtons('archbossArmors', 0, selectData.totalPages);
+      components.push(paginationRow);
+    }
+
     return interaction.reply({
       content: '🛡️ **Select Archboss Armor** (max 1)\n\nChoose an item from the list below:',
-      components: [selectMenu],
+      components,
       flags: [64]
     });
   }
 
   if (customId === 'wishlist_select_t3_weapons') {
-    const selectMenu = createCategorySelect('t3Weapons', draft.t3Weapons);
+    const selectData = createCategorySelect('t3Weapons', draft.t3Weapons, 0);
+    const components = [selectData.row];
+
+    if (selectData.hasMultiplePages) {
+      const paginationRow = createPaginationButtons('t3Weapons', 0, selectData.totalPages);
+      components.push(paginationRow);
+    }
+
     return interaction.reply({
       content: '⚔️ **Select Weapons** (max 1)\n\nChoose items from the list below:',
-      components: [selectMenu],
+      components,
       flags: [64]
     });
   }
 
   if (customId === 'wishlist_select_t3_armors') {
-    const selectMenu = createCategorySelect('t3Armors', draft.t3Armors);
+    const selectData = createCategorySelect('t3Armors', draft.t3Armors, 0);
+    const components = [selectData.row];
+
+    if (selectData.hasMultiplePages) {
+      const paginationRow = createPaginationButtons('t3Armors', 0, selectData.totalPages);
+      components.push(paginationRow);
+    }
+
     return interaction.reply({
       content: '🛡️ **Select Armor** (max 4)\n\nChoose items from the list below:',
-      components: [selectMenu],
+      components,
       flags: [64]
     });
   }
 
   if (customId === 'wishlist_select_t3_accessories') {
-    const selectMenu = createCategorySelect('t3Accessories', draft.t3Accessories);
+    const selectData = createCategorySelect('t3Accessories', draft.t3Accessories, 0);
+    const components = [selectData.row];
+
+    if (selectData.hasMultiplePages) {
+      const paginationRow = createPaginationButtons('t3Accessories', 0, selectData.totalPages);
+      components.push(paginationRow);
+    }
+
     return interaction.reply({
       content: '💍 **Select Accessories** (max 2)\n\nChoose items from the list below:',
-      components: [selectMenu],
+      components,
       flags: [64]
     });
   }
+}
+
+/**
+ * Create pagination buttons for category selection
+ */
+function createPaginationButtons(categoryKey, currentPage, totalPages) {
+  const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`wishlist_page:${categoryKey}:prev:${currentPage}`)
+      .setLabel('◀ Previous')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(currentPage === 0),
+    new ButtonBuilder()
+      .setCustomId(`wishlist_page:${categoryKey}:next:${currentPage}`)
+      .setLabel('Next ▶')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(currentPage >= totalPages - 1)
+  );
+
+  return row;
+}
+
+/**
+ * Handle pagination button clicks
+ */
+async function handlePaginationButtons({ interaction, collections }) {
+  const parts = interaction.customId.split(':');
+  const categoryKey = parts[1];
+  const direction = parts[2];
+  const currentPage = parseInt(parts[3]);
+
+  const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
+
+  // Get draft
+  const draftKey = `${interaction.guildId}_${interaction.user.id}`;
+  let draft = draftWishlists.get(draftKey);
+
+  if (!draft) {
+    draft = {
+      archbossWeapon: [],
+      archbossArmor: [],
+      t3Weapons: [],
+      t3Armors: [],
+      t3Accessories: []
+    };
+    draftWishlists.set(draftKey, draft);
+  }
+
+  // Get current selections for this category
+  let currentSelections = [];
+  if (categoryKey === 'archbossWeapons') currentSelections = draft.archbossWeapon;
+  else if (categoryKey === 'archbossArmors') currentSelections = draft.archbossArmor;
+  else if (categoryKey === 't3Weapons') currentSelections = draft.t3Weapons;
+  else if (categoryKey === 't3Armors') currentSelections = draft.t3Armors;
+  else if (categoryKey === 't3Accessories') currentSelections = draft.t3Accessories;
+
+  // Create new select menu for the page
+  const selectData = createCategorySelect(categoryKey, currentSelections, newPage);
+  const components = [selectData.row];
+
+  if (selectData.hasMultiplePages) {
+    const paginationRow = createPaginationButtons(categoryKey, newPage, selectData.totalPages);
+    components.push(paginationRow);
+  }
+
+  await interaction.update({ components });
+}
 }
 
 /**
@@ -289,5 +399,7 @@ async function handleSubmit({ interaction, collections, client }) {
 
 module.exports = {
   handleWishlistButtons,
-  draftWishlists
+  draftWishlists,
+  handlePaginationButtons,
+  createPaginationButtons
 };

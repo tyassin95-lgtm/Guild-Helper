@@ -29,7 +29,8 @@ async function ensureIndexes({
   broadcastUsers,
   wishlistSubmissions,
   wishlistPanels,
-  wishlistSettings
+  wishlistSettings,
+  wishlistGivenItems
 }) {
   // Guild settings index
   await guildSettings.createIndex({ guildId: 1 }, { unique: true });
@@ -185,6 +186,10 @@ async function ensureIndexes({
   await wishlistPanels.createIndex({ channelId: 1 });
 
   await wishlistSettings.createIndex({ guildId: 1 }, { unique: true });
+
+  await wishlistGivenItems.createIndex({ guildId: 1, itemId: 1 }, { unique: true });
+  await wishlistGivenItems.createIndex({ guildId: 1 });
+  await wishlistGivenItems.createIndex({ givenAt: -1 }); // Sort by given date
 
   console.log('All indexes created successfully');
 }

@@ -88,6 +88,7 @@ const { handleWishlists } = require('../../features/wishlist/commands/wishlists'
 const { handleResetUserWishlist } = require('../../features/wishlist/commands/resetuserwishlist');
 const { handleFreezeWishlists } = require('../../features/wishlist/commands/freezewishlists');
 const { handleWishlistReminder } = require('../../features/wishlist/commands/wishlistreminder');
+const { handleGiveItem, handleGiveItemSelect, handleGiveItemPagination } = require('../../features/wishlist/commands/giveitem');
 const { handleWishlistButtons } = require('../../features/wishlist/handlers/wishlistButtons');
 const { handleWishlistSelects } = require('../../features/wishlist/handlers/wishlistSelects');
 
@@ -158,6 +159,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'resetuserwishlist')   return handleResetUserWishlist({ interaction, collections, client });
       if (name === 'freezewishlists')     return handleFreezeWishlists({ interaction, collections, client });
       if (name === 'wishlistreminder')    return handleWishlistReminder({ interaction, collections });
+      if (name === 'giveitem')            return handleGiveItem({ interaction, collections, client });
     }
 
     // Button Interactions
@@ -221,6 +223,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Wishlist system buttons
       if (interaction.customId.startsWith('wishlist_')) {
         return handleWishlistButtons({ interaction, collections, client });
+      }
+
+      // Give item buttons
+      if (interaction.customId.startsWith('giveitem_page:')) {
+        return handleGiveItemPagination({ interaction, collections });
       }
 
       // Application system buttons
@@ -291,6 +298,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // Wishlist system selects
       if (interaction.customId.startsWith('wishlist_')) {
         return handleWishlistSelects({ interaction, collections });
+      }
+
+      // Give item selects
+      if (interaction.customId.startsWith('giveitem_select:')) {
+        return handleGiveItemSelect({ interaction, collections, client });
       }
 
       // Application system selects

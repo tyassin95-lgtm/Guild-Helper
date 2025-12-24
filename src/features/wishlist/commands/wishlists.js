@@ -29,7 +29,8 @@ async function handleWishlists({ interaction, collections }) {
     const embeds = await buildWishlistPanels({
       submissions,
       guild: interaction.guild,
-      frozen
+      frozen,
+      collections
     });
 
     // Send all embeds as separate messages
@@ -102,7 +103,8 @@ async function updateWishlistPanels({ client, guildId, collections }) {
     const embeds = await buildWishlistPanels({
       submissions,
       guild,
-      frozen
+      frozen,
+      collections
     });
 
     // Delete old messages
