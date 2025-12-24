@@ -5,6 +5,7 @@ const { validateWishlist, isWishlistEmpty } = require('../utils/wishlistValidato
 const { updateWishlistPanels } = require('../commands/wishlists');
 const { createCategorySelect } = require('./wishlistSelects');
 const { draftWishlists } = require('../utils/wishlistStorage');
+const { WISHLIST_ITEMS } = require('../utils/items');
 
 async function handleWishlistButtons({ interaction, collections, client }) {
   const customId = interaction.customId;
@@ -305,7 +306,6 @@ async function handleClearAll({ interaction, collections }) {
   };
 
   // Add received items to display wishlist
-  const { WISHLIST_ITEMS } = require('../utils/items');
   for (const itemId of receivedItemIds) {
     if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
       displayWishlist.archbossWeapon.push(itemId);
@@ -436,7 +436,6 @@ async function handleSubmit({ interaction, collections, client }) {
     };
 
     // Add received items to display
-    const { WISHLIST_ITEMS } = require('../utils/items');
     for (const itemId of receivedItemIds) {
       if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
         if (!displayWishlist.archbossWeapon.includes(itemId)) {

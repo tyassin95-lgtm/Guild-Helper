@@ -142,7 +142,6 @@ async function handleWishlistSelects({ interaction, collections }) {
   }
 
   // Calculate dynamic limits based on received items
-  const { WISHLIST_ITEMS } = require('../utils/items');
   const allItemsInCategory = WISHLIST_ITEMS[categoryKey] || [];
   const receivedInCategory = allItemsInCategory.filter(item => receivedItemIds.includes(item.id)).length;
 
@@ -199,7 +198,6 @@ async function handleWishlistSelects({ interaction, collections }) {
   };
 
   // Add received items to display wishlist (they won't be in draft)
-  const { WISHLIST_ITEMS } = require('../utils/items');
   for (const itemId of receivedItemIds) {
     if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
       if (!displayWishlist.archbossWeapon.includes(itemId)) {
