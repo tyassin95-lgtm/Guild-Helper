@@ -1,5 +1,4 @@
 const { PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { scheduleLiveSummaryUpdate } = require('../../../bot/liveSummary');
 
 async function handleResetBonuses({ interaction, collections }) {
   const { pvpBonuses } = collections;
@@ -8,31 +7,28 @@ async function handleResetBonuses({ interaction, collections }) {
     return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
   }
 
-  // Count how many users have bonuses
-  const bonusCount = await pvpBonuses.countDocuments({ guildId: interaction.guildId });
-
-  if (bonusCount === 0) {
-    return interaction.reply({
-      content: '❌ No PvP bonuses to reset.',
-      flags: [64]
-    });
-  }
-
+  // Get confirmation first
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('confirm_reset_bonuses_yes')
-      .setLabel('Yes, Reset All Bonuses')
+      .setLabel('Yes, reset all bonuses')
       .setStyle(ButtonStyle.Danger)
       .setEmoji('⚠️'),
     new ButtonBuilder()
       .setCustomId('confirm_reset_bonuses_no')
-      .setLabel('No, Cancel')
+      .setLabel('No, cancel')
       .setStyle(ButtonStyle.Secondary)
   );
 
+  // Count current bonuses
+  const currentBonuses = await pvpBonuses.countDocuments({ guildId: interaction.guildId });
+
   return interaction.reply({
-    content: `⚠️ **WARNING: Reset PvP Bonuses**\n\n` +
-             `This will reset PvP bonuses for **${bonusCount}** user(s).\n\n` +
+    content: `⚠️ **WARNING**: This will reset **all PvP bonuses** for this server.\n\n` +
+             `Current bonuses: **${currentBonuses}**\n\n` +
+             `This will:\n` +
+             `• Clear all weekly PvP attendance bonuses\n` +
+             `• Reset all bonus counts to 0\n\n` +
              `**This action cannot be undone!**`,
     components: [row],
     flags: [64]
@@ -50,20 +46,17 @@ async function handleResetBonusesConfirmation({ interaction, collections }) {
     return interaction.update({ content: '❎ Reset cancelled. No changes made.', components: [] });
   }
 
-  if (interaction.customId === 'confirm_reset_bonuses_yes') {
-    await interaction.deferUpdate();
+  await interaction.deferUpdate();
 
-    const result = await pvpBonuses.deleteMany({ guildId: interaction.guildId });
+  // Reset all bonuses for this guild
+  const result = await pvpBonuses.deleteMany({ guildId: interaction.guildId });
 
-    // Update live summary to clear bonuses
-    await scheduleLiveSummaryUpdate(interaction, collections);
+  let message = `✅ **PvP bonus reset complete!**\n\n`;
+  message += `• Reset ${result.deletedCount} bonus record(s)\n`;
+  message += `• All users' weekly bonuses have been cleared\n`;
+  message += `• Bonuses will start accumulating again from the next PvP event`;
 
-    return interaction.editReply({
-      content: `✅ **PvP Bonuses Reset Complete!**\n\n` +
-               `Reset bonuses for **${result.deletedCount}** user(s).`,
-      components: []
-    });
-  }
+  return interaction.editReply({ content: message, components: [] });
 }
 
 module.exports = { handleResetBonuses, handleResetBonusesConfirmation };
