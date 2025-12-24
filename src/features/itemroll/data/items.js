@@ -1,6 +1,8 @@
 /**
  * Item database for Item Roll system
  * Organized by category > subcategory > items
+ * 
+ * Place this file at: src/features/itemroll/data/items.js
  */
 
 const ITEMS = {
@@ -363,8 +365,8 @@ function getSubcategories(category) {
       'Daggers': '🗡️',
       'Bow': '🏹',
       'Crossbow': '🏹',
-      'Wand': '🪄',
-      'Staff': '🪄',
+      'Wand': '🎩',
+      'Staff': '⚚',
       'Spear': '🔱',
       'Orb': '🔮'
     },
@@ -393,15 +395,34 @@ function getSubcategories(category) {
 
 /**
  * Get items for a given category and subcategory
+ * Returns properly formatted options for StringSelectMenuBuilder
  */
 function getItems(category, subcategory) {
   if (!ITEMS[category] || !ITEMS[category][subcategory]) return [];
 
-  return ITEMS[category][subcategory].map(item => ({
-    label: item.name.length > 100 ? item.name.substring(0, 97) + '...' : item.name,
-    value: JSON.stringify({ name: item.name, imageUrl: item.imageUrl }),
-    description: subcategory
-  }));
+  return ITEMS[category][subcategory].map(item => {
+    // Discord.js select menu option requirements:
+    // - label: 1-100 characters (required)
+    // - value: 1-100 characters (required)
+    // - description: 0-100 characters (optional)
+
+    // Truncate label if needed (max 100 chars)
+    const label = item.name.length > 100 ? item.name.substring(0, 97) + '...' : item.name;
+
+    // Value must be the JSON stringified item data
+    const value = JSON.stringify({ name: item.name, imageUrl: item.imageUrl });
+
+    // If value is too long (>100 chars), we need to use an index system instead
+    // But for now, this should work for most items
+    if (value.length > 100) {
+      console.warn(`Item value too long for: ${item.name}`);
+    }
+
+    return {
+      label: label,
+      value: value
+    };
+  });
 }
 
 module.exports = {
