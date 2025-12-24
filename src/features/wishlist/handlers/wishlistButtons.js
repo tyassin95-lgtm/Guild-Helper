@@ -73,7 +73,7 @@ async function handleCategorySelection({ interaction, collections }) {
 
   // Determine which category was clicked
   const customId = interaction.customId;
-  const { createCategorySelect } = require('../handlers/selects');
+  const { createCategorySelect } = require('./wishlistSelects');
 
   if (customId === 'wishlist_select_archboss_weapon') {
     const selectMenu = createCategorySelect('archbossWeapons', draft.archbossWeapon);
