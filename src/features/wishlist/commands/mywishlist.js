@@ -72,7 +72,8 @@ async function handleMyWishlist({ interaction, collections }) {
     return interaction.reply({ embeds: [embed], flags: [64] });
   }
 
-  // Create new draft wishlist (or edit existing draft after reset)
+  // No submission exists - show draft form
+  // Create wishlist object that shows received items
   const draftWishlist = {
     archbossWeapon: [],
     archbossArmor: [],
@@ -80,6 +81,27 @@ async function handleMyWishlist({ interaction, collections }) {
     t3Armors: [],
     t3Accessories: []
   };
+
+  // If user has received items but no submission, we need to show those received items
+  // in the wishlist display even though they're not "selected"
+  if (receivedItemIds.length > 0) {
+    const { WISHLIST_ITEMS } = require('../utils/items');
+
+    // Add received items to the appropriate categories for display purposes
+    for (const itemId of receivedItemIds) {
+      if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
+        draftWishlist.archbossWeapon.push(itemId);
+      } else if (WISHLIST_ITEMS.archbossArmors.find(i => i.id === itemId)) {
+        draftWishlist.archbossArmor.push(itemId);
+      } else if (WISHLIST_ITEMS.t3Weapons.find(i => i.id === itemId)) {
+        draftWishlist.t3Weapons.push(itemId);
+      } else if (WISHLIST_ITEMS.t3Armors.find(i => i.id === itemId)) {
+        draftWishlist.t3Armors.push(itemId);
+      } else if (WISHLIST_ITEMS.t3Accessories.find(i => i.id === itemId)) {
+        draftWishlist.t3Accessories.push(itemId);
+      }
+    }
+  }
 
   // Build initial embed
   const embed = buildUserWishlistEmbed({

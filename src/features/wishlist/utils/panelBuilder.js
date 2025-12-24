@@ -27,6 +27,7 @@ async function buildWishlistPanels({ submissions, guild, frozen = false, collect
     const key = `${item.userId}:${item.itemId}`;
     givenItemsMap.set(key, item.givenAt);
   });
+
   // Group submissions by item
   const itemGroups = {
     archbossWeapons: {},
@@ -99,6 +100,44 @@ async function buildWishlistPanels({ submissions, guild, frozen = false, collect
         itemGroups.t3Accessories[itemId].push({
           userId: submission.userId,
           submittedAt: submission.submittedAt
+        });
+      }
+    }
+  }
+
+  // IMPORTANT: Also add users who have received items but no current submission
+  // This ensures received items stay visible even after wishlist reset
+  for (const givenItem of givenItemsData) {
+    const { userId, itemId, givenAt } = givenItem;
+
+    // Determine which category this item belongs to
+    const { WISHLIST_ITEMS } = require('./items');
+    let categoryKey = null;
+
+    if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
+      categoryKey = 'archbossWeapons';
+    } else if (WISHLIST_ITEMS.archbossArmors.find(i => i.id === itemId)) {
+      categoryKey = 'archbossArmors';
+    } else if (WISHLIST_ITEMS.t3Weapons.find(i => i.id === itemId)) {
+      categoryKey = 't3Weapons';
+    } else if (WISHLIST_ITEMS.t3Armors.find(i => i.id === itemId)) {
+      categoryKey = 't3Armors';
+    } else if (WISHLIST_ITEMS.t3Accessories.find(i => i.id === itemId)) {
+      categoryKey = 't3Accessories';
+    }
+
+    if (categoryKey) {
+      // Check if this user+item combo is already in the group (from submission)
+      const existingEntry = itemGroups[categoryKey][itemId]?.find(entry => entry.userId === userId);
+
+      // If not already there, add them with the given date as submitted date
+      if (!existingEntry) {
+        if (!itemGroups[categoryKey][itemId]) {
+          itemGroups[categoryKey][itemId] = [];
+        }
+        itemGroups[categoryKey][itemId].push({
+          userId: userId,
+          submittedAt: givenAt // Use given date as "submitted" date for display purposes
         });
       }
     }
