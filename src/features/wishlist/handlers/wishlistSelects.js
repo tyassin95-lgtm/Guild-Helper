@@ -5,6 +5,7 @@ const { LIMITS } = require('../utils/wishlistValidator');
 const { buildUserWishlistEmbed } = require('../utils/panelBuilder');
 const { createWishlistButtons } = require('../commands/mywishlist');
 const { draftWishlists } = require('./wishlistButtons');
+const { draftWishlists } = require('./wishlistButtons');
 
 /**
  * Create a category select menu with pagination support
