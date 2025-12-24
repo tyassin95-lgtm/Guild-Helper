@@ -366,7 +366,7 @@ function getSubcategories(category) {
       'Bow': '🏹',
       'Crossbow': '🏹',
       'Wand': '🎩',
-      'Staff': '⚚',
+      'Staff': '✨',
       'Spear': '🔱',
       'Orb': '🔮'
     },
@@ -396,27 +396,18 @@ function getSubcategories(category) {
 /**
  * Get items for a given category and subcategory
  * Returns properly formatted options for StringSelectMenuBuilder
+ * Uses index-based values to avoid 100-character limit
  */
 function getItems(category, subcategory) {
   if (!ITEMS[category] || !ITEMS[category][subcategory]) return [];
 
-  return ITEMS[category][subcategory].map(item => {
-    // Discord.js select menu option requirements:
-    // - label: 1-100 characters (required)
-    // - value: 1-100 characters (required)
-    // - description: 0-100 characters (optional)
-
+  return ITEMS[category][subcategory].map((item, index) => {
     // Truncate label if needed (max 100 chars)
     const label = item.name.length > 100 ? item.name.substring(0, 97) + '...' : item.name;
 
-    // Value must be the JSON stringified item data
-    const value = JSON.stringify({ name: item.name, imageUrl: item.imageUrl });
-
-    // If value is too long (>100 chars), we need to use an index system instead
-    // But for now, this should work for most items
-    if (value.length > 100) {
-      console.warn(`Item value too long for: ${item.name}`);
-    }
+    // Use a compact index-based value format: "category:subcategory:index"
+    // This is always under 100 characters
+    const value = `${category}:${subcategory}:${index}`;
 
     return {
       label: label,
@@ -425,9 +416,25 @@ function getItems(category, subcategory) {
   });
 }
 
+/**
+ * Get item data from index-based value
+ * Parses "category:subcategory:index" format
+ */
+function getItemFromValue(value) {
+  const [category, subcategory, indexStr] = value.split(':');
+  const index = parseInt(indexStr);
+
+  if (!ITEMS[category] || !ITEMS[category][subcategory]) {
+    return null;
+  }
+
+  return ITEMS[category][subcategory][index] || null;
+}
+
 module.exports = {
   ITEMS,
   getCategories,
   getSubcategories,
-  getItems
+  getItems,
+  getItemFromValue
 };
