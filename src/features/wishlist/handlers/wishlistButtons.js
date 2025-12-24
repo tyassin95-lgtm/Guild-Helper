@@ -4,9 +4,7 @@ const { createWishlistButtons } = require('../commands/mywishlist');
 const { validateWishlist, isWishlistEmpty } = require('../utils/wishlistValidator');
 const { updateWishlistPanels } = require('../commands/wishlists');
 const { createCategorySelect } = require('./wishlistSelects');
-
-// Store temporary wishlist states (in memory for this session)
-const draftWishlists = new Map();
+const { draftWishlists } = require('../utils/wishlistStorage');
 
 async function handleWishlistButtons({ interaction, collections, client }) {
   const customId = interaction.customId;
@@ -399,7 +397,6 @@ async function handleSubmit({ interaction, collections, client }) {
 
 module.exports = {
   handleWishlistButtons,
-  draftWishlists,
   handlePaginationButtons,
   createPaginationButtons
 };

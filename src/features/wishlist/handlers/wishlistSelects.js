@@ -4,7 +4,7 @@ const { WISHLIST_ITEMS, getItemsByCategory } = require('../utils/items');
 const { LIMITS } = require('../utils/wishlistValidator');
 const { buildUserWishlistEmbed } = require('../utils/panelBuilder');
 const { createWishlistButtons } = require('../commands/mywishlist');
-const { draftWishlists } = require('./wishlistButtons');
+const { draftWishlists } = require('../utils/wishlistStorage');
 const { draftWishlists } = require('./wishlistButtons');
 
 /**
