@@ -65,7 +65,7 @@ class RosterBuilder {
     messageHeader += `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithData.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n`;
     messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
     messageHeader += '```\n';
-    messageHeader += 'Name             Role     Weapons                 CP        Total Events   Weekly Bonus\n';
+    messageHeader += 'Name            Role      Weapons                 CP         Total Events    Weekly Bonus\n';
     messageHeader += '────────────────────────────────────────────────────────────────────────────────────────────────────\n';
     messageHeader += '```\n';
 
@@ -89,10 +89,10 @@ class RosterBuilder {
       const cpFormatted = this.formatCombatPower(player.cp || 0).padStart(6);
 
       // Total Events column - padded to 13 characters (centered under "Total Events")
-      const eventsFormatted = player.pvpEvents.toString().padStart(13);
+      const eventsFormatted = player.pvpEvents.toString().padStart(14);
 
       // Weekly Bonus column - padded to 13 characters (centered under "Weekly Bonus")
-      const bonusFormatted = `+${player.rollBonus}`.padStart(13);
+      const bonusFormatted = `+${player.rollBonus}`.padStart(16);
 
       // Discord mention (outside code block)
       const discordMention = `<@${player.userId}>`;
