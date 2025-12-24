@@ -19,7 +19,7 @@ function createCategorySelect(categoryKey, currentSelections = []) {
   let maxValues = 1;
   let minValues = 0;
 
-  if (categoryKey === 't3Weapons') maxValues = LIMITS.t3Weapons;
+  if (categoryKey === 't3Weapons') maxValues = 1; // Changed from 2 to 1
   if (categoryKey === 't3Armors') maxValues = LIMITS.t3Armors;
   if (categoryKey === 't3Accessories') maxValues = LIMITS.t3Accessories;
 
@@ -34,12 +34,15 @@ function createCategorySelect(categoryKey, currentSelections = []) {
       .setDefault(isSelected);
   });
 
+  // Discord has a limit of 25 options per select menu
+  const limitedOptions = options.slice(0, 25);
+
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId(`wishlist_item_select:${categoryKey}`)
     .setPlaceholder('Choose items...')
     .setMinValues(minValues)
-    .setMaxValues(maxValues)
-    .addOptions(options);
+    .setMaxValues(Math.min(maxValues, limitedOptions.length))
+    .addOptions(limitedOptions);
 
   return new ActionRowBuilder().addComponents(selectMenu);
 }
@@ -103,7 +106,7 @@ async function handleWishlistSelects({ interaction, collections }) {
   } else if (categoryKey === 'archbossArmors') {
     draft.archbossArmor = selectedValues.slice(0, 1); // Only first selection
   } else if (categoryKey === 't3Weapons') {
-    draft.t3Weapons = selectedValues.slice(0, LIMITS.t3Weapons);
+    draft.t3Weapons = selectedValues.slice(0, 1); // Only 1 weapon allowed
   } else if (categoryKey === 't3Armors') {
     draft.t3Armors = selectedValues.slice(0, LIMITS.t3Armors);
   } else if (categoryKey === 't3Accessories') {

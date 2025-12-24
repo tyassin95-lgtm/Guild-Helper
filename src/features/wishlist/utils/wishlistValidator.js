@@ -3,7 +3,7 @@
 const LIMITS = {
   archbossWeapon: 1,
   archbossArmor: 1,
-  t3Weapons: 2,
+  t3Weapons: 1, // Changed from 2 to 1
   t3Armors: 4,
   t3Accessories: 2
 };

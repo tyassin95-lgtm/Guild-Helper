@@ -272,7 +272,8 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
   let description = '**📦 CURRENT SELECTIONS:**\n\n';
 
   // Archboss Weapon
-  description += '⚔️ **Archboss Weapon (0/1)**\n';
+  const abWeaponCount = (wishlist.archbossWeapon && wishlist.archbossWeapon.length) || 0;
+  description += `⚔️ **Archboss Weapon (${abWeaponCount}/1)**\n`;
   if (wishlist.archbossWeapon && wishlist.archbossWeapon.length > 0) {
     for (const itemId of wishlist.archbossWeapon) {
       const item = getItemById(itemId);
@@ -287,7 +288,8 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
   description += '\n';
 
   // Archboss Armor
-  description += '🛡️ **Archboss Armor (0/1)**\n';
+  const abArmorCount = (wishlist.archbossArmor && wishlist.archbossArmor.length) || 0;
+  description += `🛡️ **Archboss Armor (${abArmorCount}/1)**\n`;
   if (wishlist.archbossArmor && wishlist.archbossArmor.length > 0) {
     for (const itemId of wishlist.archbossArmor) {
       const item = getItemById(itemId);
@@ -303,7 +305,7 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false }) {
 
   // T3 Weapons
   const t3WeaponCount = (wishlist.t3Weapons && wishlist.t3Weapons.length) || 0;
-  description += `⚔️ **Weapons (${t3WeaponCount}/2)**\n`;
+  description += `⚔️ **Weapons (${t3WeaponCount}/1)**\n`;
   if (wishlist.t3Weapons && wishlist.t3Weapons.length > 0) {
     for (const itemId of wishlist.t3Weapons) {
       const item = getItemById(itemId);

@@ -96,7 +96,7 @@ async function handleCategorySelection({ interaction, collections }) {
   if (customId === 'wishlist_select_t3_weapons') {
     const selectMenu = createCategorySelect('t3Weapons', draft.t3Weapons);
     return interaction.reply({
-      content: '⚔️ **Select Weapons** (max 2)\n\nChoose items from the list below:',
+      content: '⚔️ **Select Weapons** (max 1)\n\nChoose items from the list below:',
       components: [selectMenu],
       flags: [64]
     });
