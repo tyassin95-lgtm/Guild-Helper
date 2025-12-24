@@ -47,8 +47,47 @@ async function handleMyWishlist({ interaction, collections }) {
 
   if (existingSubmission) {
     // User already submitted - show wishlist with received items marked
+
+    // Create display wishlist that merges submission with received items
+    const displayWishlist = {
+      archbossWeapon: [...(existingSubmission.archbossWeapon || [])],
+      archbossArmor: [...(existingSubmission.archbossArmor || [])],
+      t3Weapons: [...(existingSubmission.t3Weapons || [])],
+      t3Armors: [...(existingSubmission.t3Armors || [])],
+      t3Accessories: [...(existingSubmission.t3Accessories || [])]
+    };
+
+    // Add received items that aren't already in the submission
+    if (receivedItemIds.length > 0) {
+      const { WISHLIST_ITEMS } = require('../utils/items');
+
+      for (const itemId of receivedItemIds) {
+        if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
+          if (!displayWishlist.archbossWeapon.includes(itemId)) {
+            displayWishlist.archbossWeapon.push(itemId);
+          }
+        } else if (WISHLIST_ITEMS.archbossArmors.find(i => i.id === itemId)) {
+          if (!displayWishlist.archbossArmor.includes(itemId)) {
+            displayWishlist.archbossArmor.push(itemId);
+          }
+        } else if (WISHLIST_ITEMS.t3Weapons.find(i => i.id === itemId)) {
+          if (!displayWishlist.t3Weapons.includes(itemId)) {
+            displayWishlist.t3Weapons.push(itemId);
+          }
+        } else if (WISHLIST_ITEMS.t3Armors.find(i => i.id === itemId)) {
+          if (!displayWishlist.t3Armors.includes(itemId)) {
+            displayWishlist.t3Armors.push(itemId);
+          }
+        } else if (WISHLIST_ITEMS.t3Accessories.find(i => i.id === itemId)) {
+          if (!displayWishlist.t3Accessories.includes(itemId)) {
+            displayWishlist.t3Accessories.push(itemId);
+          }
+        }
+      }
+    }
+
     const embed = buildUserWishlistEmbed({
-      wishlist: existingSubmission,
+      wishlist: displayWishlist,
       user: interaction.user,
       frozen: false,
       receivedItemIds: receivedItemIds,

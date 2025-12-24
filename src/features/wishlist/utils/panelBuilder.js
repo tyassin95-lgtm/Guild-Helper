@@ -360,7 +360,7 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false, receivedItemId
         month: 'short',
         day: 'numeric'
       });
-      return `✅ ~~${item.name}~~ *(Received ${dateStr})*\n`;
+      return `🎁 ~~${item.name}~~ *(Received ${dateStr})*\n`;
     }
     return `✅ ${item.name}\n`;
   };
@@ -435,7 +435,7 @@ function buildUserWishlistEmbed({ wishlist, user, frozen = false, receivedItemId
 
   // Add note about locked items if any are received
   if (receivedItemIds.length > 0) {
-    description += '\n\n*🔒 = Category locked (all items received)*\n*✅ with strikethrough = Item already received*';
+    description += '\n\n*🔒 = Category locked (all items received)*\n*🎁 with strikethrough = Item already received*\n*✅ = Item selected (not yet received)*';
   }
 
   embed.setDescription(description);
