@@ -128,7 +128,7 @@ class RosterBuilder {
     // Finalize last message with legend
     currentMessage += membersList;
     currentMessage += '──────────────────────────────────────────────────────────────────────────────────────────────────\n';
-    currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS\n📸 Gear links appear to the right of each player row';
+    currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS\n📸 Gear links appear below each player row';
 
     messages.push({ content: currentMessage });
 
