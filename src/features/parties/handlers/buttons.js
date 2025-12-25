@@ -67,7 +67,8 @@ async function handlePartyButtons({ interaction, collections }) {
                '• Maximum size: 8MB\n' +
                '• This will be visible in the guild roster\n\n' +
                '**Send the image now!** (You have 60 seconds)',
-      flags: [64]
+      ephemeral: true,
+      flags: [64] // Ephemeral flag
     });
 
     // Get guild context - for DM support
@@ -90,7 +91,7 @@ async function handlePartyButtons({ interaction, collections }) {
       guild = await interaction.client.guilds.fetch(guildId).catch(() => null);
     }
 
-    // Store upload context with expiration
+    // Store upload context with expiration + the channel ID for cleanup
     await dmContexts.updateOne(
       { userId: interaction.user.id },
       { 
@@ -98,6 +99,7 @@ async function handlePartyButtons({ interaction, collections }) {
           type: 'gear_upload',
           guildId: guildId,
           guildName: guild?.name || 'Unknown',
+          channelId: interaction.channelId, // Store channel for cleanup
           sentAt: new Date(),
           expiresAt: new Date(Date.now() + 60 * 1000) // 60 seconds
         } 

@@ -62,6 +62,13 @@ async function handleGearUpload({ message, collections }) {
       type: 'gear_upload' 
     });
 
+    // Delete the user's uploaded image message to keep chat clean
+    try {
+      await message.delete();
+    } catch (err) {
+      console.warn('Could not delete user upload message:', err.message);
+    }
+
     // Get updated player info
     const playerInfo = await partyPlayers.findOne({
       userId: message.author.id,
@@ -124,7 +131,7 @@ async function handleGearUpload({ message, collections }) {
       }
     }
 
-    return message.reply({
+    return message.channel.send({
       content: '✅ **Gear screenshot uploaded successfully!**\n\n' +
                'Your gear is now visible in the guild roster.',
       embeds: [embed],
