@@ -131,12 +131,26 @@ async function handleGearUpload({ message, collections }) {
       }
     }
 
-    return message.channel.send({
-      content: '✅ **Gear screenshot uploaded successfully!**\n\n' +
-               'Your gear is now visible in the guild roster.',
-      embeds: [embed],
-      components: [row1, row2]
-    });
+    // Send ephemeral success message (only visible to the user)
+    // We need to send this to the user via DM or find another way since we can't reply to the original interaction
+    // Best approach: send ephemeral message in the same channel
+    try {
+      await message.author.send({
+        content: '✅ **Gear screenshot uploaded successfully!**\n\n' +
+                 'Your gear is now visible in the guild roster.',
+        embeds: [embed],
+        components: [row1, row2]
+      });
+    } catch (dmError) {
+      // If DM fails, send ephemeral message in channel (but we can't do that from a regular message)
+      // So just send a simple reply that will be visible
+      return message.channel.send({
+        content: `✅ <@${message.author.id}> Gear screenshot uploaded successfully! Check your DMs for details.`
+      }).then(msg => {
+        // Delete the confirmation after 5 seconds
+        setTimeout(() => msg.delete().catch(() => {}), 5000);
+      });
+    }
 
   } catch (err) {
     console.error('Error handling gear upload:', err);
