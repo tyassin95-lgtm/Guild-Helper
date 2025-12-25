@@ -67,8 +67,7 @@ async function handlePartyButtons({ interaction, collections }) {
                '• Maximum size: 8MB\n' +
                '• This will be visible in the guild roster\n\n' +
                '**Send the image now!** (You have 60 seconds)',
-      ephemeral: true,
-      flags: [64] // Ephemeral flag
+      flags: [64] // Ephemeral flag (64 = MessageFlags.Ephemeral)
     });
 
     // Get guild context - for DM support

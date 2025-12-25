@@ -1,5 +1,3 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { createPlayerInfoEmbed } = require('../embed');
 const { updateGuildRoster } = require('../commands/guildroster');
 
 /**
@@ -62,63 +60,15 @@ async function handleGearUpload({ message, collections }) {
       type: 'gear_upload' 
     });
 
+    // Wait 2 seconds before deleting to prevent Discord UI artifacts
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     // Delete the user's uploaded image message to keep chat clean
     try {
       await message.delete();
     } catch (err) {
       console.warn('Could not delete user upload message:', err.message);
     }
-
-    // Get updated player info
-    const playerInfo = await partyPlayers.findOne({
-      userId: message.author.id,
-      guildId: guildId
-    });
-
-    // Fetch member for embed
-    let member = null;
-    if (guild) {
-      try {
-        member = await guild.members.fetch(message.author.id);
-      } catch (err) {
-        console.warn('Could not fetch member:', err.message);
-      }
-    }
-
-    if (!member) {
-      member = {
-        displayName: message.author.username,
-        user: message.author
-      };
-    }
-
-    const embed = await createPlayerInfoEmbed(playerInfo, member, collections);
-
-    const row1 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('party_set_weapon1')
-        .setLabel('Set Primary Weapon')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('⚔️'),
-      new ButtonBuilder()
-        .setCustomId('party_set_weapon2')
-        .setLabel('Set Secondary Weapon')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('🗡️'),
-      new ButtonBuilder()
-        .setCustomId('party_set_cp')
-        .setLabel('Set Combat Power')
-        .setStyle(ButtonStyle.Success)
-        .setEmoji('💪')
-    );
-
-    const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('party_upload_gear')
-        .setLabel('Upload Gear Screenshot')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('📸')
-    );
 
     // Update guild roster if it exists
     if (guild) {
@@ -131,21 +81,16 @@ async function handleGearUpload({ message, collections }) {
       }
     }
 
-    // Send ephemeral success message (only visible to the user)
-    // We need to send this to the user via DM or find another way since we can't reply to the original interaction
-    // Best approach: send ephemeral message in the same channel
+    // Send simple ephemeral success message via DM
     try {
       await message.author.send({
         content: '✅ **Gear screenshot uploaded successfully!**\n\n' +
-                 'Your gear is now visible in the guild roster.',
-        embeds: [embed],
-        components: [row1, row2]
+                 'Your gear is now visible in the guild roster.'
       });
     } catch (dmError) {
-      // If DM fails, send ephemeral message in channel (but we can't do that from a regular message)
-      // So just send a simple reply that will be visible
+      // If DM fails, send ephemeral message in channel
       return message.channel.send({
-        content: `✅ <@${message.author.id}> Gear screenshot uploaded successfully! Check your DMs for details.`
+        content: `✅ <@${message.author.id}> Gear screenshot uploaded successfully!`
       }).then(msg => {
         // Delete the confirmation after 5 seconds
         setTimeout(() => msg.delete().catch(() => {}), 5000);
