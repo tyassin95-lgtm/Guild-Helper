@@ -103,7 +103,7 @@ class RosterBuilder {
       // Gear link (on the SAME LINE as the closing backticks)
       let gearLink;
       if (player.gearScreenshotUrl) {
-        gearLink = ` [gear](${player.gearScreenshotUrl})`;
+        gearLink = ` [gear](<${player.gearScreenshotUrl}>)`; // Angle brackets prevent auto-embed
       } else {
         gearLink = ` \`No gear\``;
       }
