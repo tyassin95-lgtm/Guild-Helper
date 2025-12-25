@@ -11,7 +11,7 @@ async function handleMyInfo({ interaction, collections }) {
 
   const embed = await createPlayerInfoEmbed(playerInfo, interaction.member, collections);
 
-  const row = new ActionRowBuilder().addComponents(
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('party_set_weapon1')
       .setLabel('Set Primary Weapon')
@@ -29,7 +29,15 @@ async function handleMyInfo({ interaction, collections }) {
       .setEmoji('💪')
   );
 
-  return interaction.reply({ embeds: [embed], components: [row], flags: [64] });
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('party_upload_gear')
+      .setLabel('Upload Gear Screenshot')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('📸')
+  );
+
+  return interaction.reply({ embeds: [embed], components: [row1, row2], flags: [64] });
 }
 
 module.exports = { handleMyInfo };

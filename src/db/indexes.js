@@ -40,6 +40,7 @@ async function ensureIndexes({
   await partyPlayers.createIndex({ guildId: 1 });
   await partyPlayers.createIndex({ guildId: 1, partyNumber: 1 });
   await partyPlayers.createIndex({ guildId: 1, role: 1 });
+  await partyPlayers.createIndex({ guildId: 1, gearScreenshotUrl: 1 }); // For filtering by gear upload status
 
   await parties.createIndex({ guildId: 1, partyNumber: 1 }, { unique: true });
   await parties.createIndex({ guildId: 1 });

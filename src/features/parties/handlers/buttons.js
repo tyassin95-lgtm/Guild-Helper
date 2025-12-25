@@ -3,7 +3,7 @@ const { WEAPONS, MAX_PARTIES, RESERVE_PARTY_SIZE } = require('../constants');
 const { createPlayerInfoEmbed, createPartiesOverviewEmbed } = require('../embed');
 
 async function handlePartyButtons({ interaction, collections }) {
-  const { partyPlayers, parties } = collections;
+  const { partyPlayers, parties, dmContexts } = collections;
 
   // Set weapon 1
   if (interaction.customId === 'party_set_weapon1') {
@@ -56,6 +56,56 @@ async function handlePartyButtons({ interaction, collections }) {
     modal.addComponents(row);
 
     return interaction.showModal(modal);
+  }
+
+  // Upload gear screenshot
+  if (interaction.customId === 'party_upload_gear') {
+    await interaction.reply({
+      content: '📸 **Upload your gear screenshot:**\n\n' +
+               'Please send your gear screenshot as an image in your **next message**.\n\n' +
+               '• Accepted formats: PNG, JPG, JPEG, WEBP\n' +
+               '• Maximum size: 8MB\n' +
+               '• This will be visible in the guild roster\n\n' +
+               '**Send the image now!** (You have 60 seconds)',
+      flags: [64]
+    });
+
+    // Get guild context - for DM support
+    let guildId = interaction.guildId;
+    let guild = interaction.guild;
+
+    if (!guildId) {
+      const context = await dmContexts.findOne({ 
+        userId: interaction.user.id,
+        expiresAt: { $gt: new Date() }
+      });
+
+      if (!context) {
+        return interaction.editReply({
+          content: '❌ This DM link has expired (24 hours). Please use `/myinfo` in the server to upload your gear screenshot.'
+        });
+      }
+
+      guildId = context.guildId;
+      guild = await interaction.client.guilds.fetch(guildId).catch(() => null);
+    }
+
+    // Store upload context with expiration
+    await dmContexts.updateOne(
+      { userId: interaction.user.id },
+      { 
+        $set: { 
+          type: 'gear_upload',
+          guildId: guildId,
+          guildName: guild?.name || 'Unknown',
+          sentAt: new Date(),
+          expiresAt: new Date(Date.now() + 60 * 1000) // 60 seconds
+        } 
+      },
+      { upsert: true }
+    );
+
+    return;
   }
 
   // Create party (admin only - guild context required)

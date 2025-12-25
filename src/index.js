@@ -9,6 +9,7 @@ const { resumeActiveItemRolls } = require('./features/itemroll/utils/itemRollRes
 const { startItemRollAutoUpdate, stopItemRollAutoUpdate } = require('./features/itemroll/utils/itemRollAutoUpdate');
 const { streamServer } = require('./features/broadcast/server/streamServer');
 const { broadcastManager } = require('./features/broadcast/utils/broadcastManager');
+const { handleGearUpload } = require('./features/parties/handlers/gearUploadHandler');
 
 const client = new Client({
   intents: [
@@ -16,7 +17,8 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates  // Required for voice receiving
+    GatewayIntentBits.GuildVoiceStates,  // Required for voice receiving
+    GatewayIntentBits.DirectMessages     // Required for DM gear uploads
   ]
 });
 
@@ -51,6 +53,21 @@ const client = new Client({
         } else {
           await interaction.reply({ content: '❌ An error occurred!', flags: [64] }).catch(() => {});
         }
+      }
+    });
+
+    // Handle message events for gear screenshot uploads
+    client.on('messageCreate', async (message) => {
+      // Ignore bot messages
+      if (message.author.bot) return;
+
+      // Only process messages with attachments
+      if (message.attachments.size === 0) return;
+
+      try {
+        await handleGearUpload({ message, collections });
+      } catch (err) {
+        console.error('Error handling gear upload:', err);
       }
     });
 

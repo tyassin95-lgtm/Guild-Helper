@@ -65,8 +65,8 @@ class RosterBuilder {
     messageHeader += `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithData.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n`;
     messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
     messageHeader += '```\n';
-    messageHeader += 'Name            Role      Weapons                 CP         Total Events    Weekly Bonus\n';
-    messageHeader += '────────────────────────────────────────────────────────────────────────────────────────────────────\n';
+    messageHeader += 'Name            Role      Weapons                 CP         Total Events    Weekly Bonus    Gear\n';
+    messageHeader += '────────────────────────────────────────────────────────────────────────────────────────────────────────────\n';
     messageHeader += '```\n';
 
     let membersList = '';
@@ -94,13 +94,22 @@ class RosterBuilder {
       // Weekly Bonus column - padded to 13 characters (centered under "Weekly Bonus")
       const bonusFormatted = `+${player.rollBonus}`.padStart(16);
 
+      // Gear column - show masked link or "Not uploaded"
+      let gearLink;
+      if (player.gearScreenshotUrl) {
+        gearLink = `[gear](${player.gearScreenshotUrl})`;
+      } else {
+        gearLink = '`Not uploaded`';
+      }
+
       // Discord mention (outside code block)
       const discordMention = `<@${player.userId}>`;
 
       // Table row (inside code block)
       const tableRow = '```\n' + `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted} ${bonusFormatted}\n` + '```\n';
 
-      const memberEntry = discordMention + '\n' + tableRow;
+      // Gear link (outside code block, after table row)
+      const memberEntry = discordMention + '\n' + tableRow + gearLink + '\n';
 
       // Check if adding this entry would exceed the limit
       if ((currentMessage + membersList + memberEntry).length > maxMessageLength) {
@@ -119,8 +128,8 @@ class RosterBuilder {
 
     // Finalize last message with legend
     currentMessage += membersList;
-    currentMessage += '──────────────────────────────────────────────────────────────────────────────────────────────\n';
-    currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS';
+    currentMessage += '──────────────────────────────────────────────────────────────────────────────────────────────────\n';
+    currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS | 📸 Gear = Click to view equipment screenshot';
 
     messages.push({ content: currentMessage });
 
@@ -141,7 +150,7 @@ class RosterBuilder {
       '\n' +
       '```\n' +
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-      '🛡️ Tank | 💚 Healer | ⚔️ DPS\n';
+      '🛡️ Tank | 💚 Healer | ⚔️ DPS | 📸 Gear = Click to view equipment screenshot\n';
 
     return [{ content }];
   }

@@ -31,6 +31,21 @@ async function createPlayerInfoEmbed(playerInfo, member, collections) {
       { name: '💪 Combat Power', value: `${(playerInfo.cp || 0).toLocaleString()}`, inline: true }
     );
 
+    // Add gear screenshot status
+    if (playerInfo.gearScreenshotUrl) {
+      embed.addFields({
+        name: '📸 Gear Screenshot',
+        value: `[View Gear](${playerInfo.gearScreenshotUrl})`,
+        inline: true
+      });
+    } else {
+      embed.addFields({
+        name: '📸 Gear Screenshot',
+        value: '❌ Not uploaded',
+        inline: true
+      });
+    }
+
     // Calculate reserve position
     const { partyPlayers, parties } = collections;
     if (partyPlayers && parties) {
@@ -93,8 +108,23 @@ async function createPlayerInfoEmbed(playerInfo, member, collections) {
     { name: '💪 Combat Power', value: `${(playerInfo.cp || 0).toLocaleString()}`, inline: true }
   );
 
+  // Add gear screenshot status
+  if (playerInfo.gearScreenshotUrl) {
+    embed.addFields({
+      name: '📸 Gear Screenshot',
+      value: `[View Gear](${playerInfo.gearScreenshotUrl})`,
+      inline: true
+    });
+  } else {
+    embed.addFields({
+      name: '📸 Gear Screenshot',
+      value: '❌ Not uploaded',
+      inline: true
+    });
+  }
+
   if (playerInfo.partyNumber) {
-    embed.addFields({ name: '👥 Assigned Party', value: `Party ${playerInfo.partyNumber}`, inline: true });
+    embed.addFields({ name: '👥 Assigned Party', value: `Party ${playerInfo.partyNumber}`, inline: false });
   }
 
   return embed;
