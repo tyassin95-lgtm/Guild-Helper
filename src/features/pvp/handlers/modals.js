@@ -2,6 +2,59 @@ const { ObjectId } = require('mongodb');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { updateEventEmbed } = require('../embed');
 
+// Default event images
+const DEFAULT_EVENT_IMAGES = {
+  siege: 'https://i.imgur.com/GVJjTpu.jpeg',
+  riftstone: 'https://i.imgur.com/3izMckr.jpeg',
+  boonstone: 'https://i.imgur.com/ELjWJeF.jpeg',
+  wargames: 'https://i.imgur.com/qtY18tv.jpeg',
+  guildevent: 'https://i.imgur.com/RLVX4iT.jpeg'
+};
+
+/**
+ * Parse user-friendly date/time input into a Date object
+ * Accepts formats like: "2025-12-27 18:00" or "2025-12-27 6:00 PM"
+ */
+function parseEventTime(timeInput) {
+  // Remove extra whitespace
+  timeInput = timeInput.trim();
+
+  // Try to parse as "YYYY-MM-DD HH:MM" format (24-hour)
+  const dateTimeRegex = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})$/;
+  const match = timeInput.match(dateTimeRegex);
+
+  if (match) {
+    const [_, year, month, day, hour, minute] = match;
+    const date = new Date(
+      parseInt(year),
+      parseInt(month) - 1, // JavaScript months are 0-indexed
+      parseInt(day),
+      parseInt(hour),
+      parseInt(minute),
+      0, // seconds
+      0  // milliseconds
+    );
+
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+  }
+
+  // Try parsing as ISO format as fallback
+  const isoDate = new Date(timeInput);
+  if (!isNaN(isoDate.getTime())) {
+    return isoDate;
+  }
+
+  // Try parsing as Unix timestamp as fallback
+  const timestamp = parseInt(timeInput);
+  if (!isNaN(timestamp)) {
+    return new Date(timestamp * 1000);
+  }
+
+  return null;
+}
+
 async function handlePvPModals({ interaction, collections }) {
   const { pvpEvents, pvpBonuses, pvpActivityRanking } = collections;
 
@@ -201,11 +254,13 @@ async function handlePvPModals({ interaction, collections }) {
 
   // Event details modal (from admin setup flow)
   if (interaction.customId.startsWith('pvp_event_details:')) {
-    const [_, eventType, location] = interaction.customId.split(':');
+    const parts = interaction.customId.split(':');
+    const eventType = parts[1];
+    const location = parts.slice(2).join(':'); // Rejoin in case location has colons
 
-    const eventTime = interaction.fields.getTextInputValue('event_time');
+    const eventTimeInput = interaction.fields.getTextInputValue('event_time');
     const bonusPointsInput = interaction.fields.getTextInputValue('bonus_points');
-    const imageUrl = interaction.fields.getTextInputValue('image_url').trim();
+    const imageUrlInput = interaction.fields.getTextInputValue('image_url').trim();
     const message = interaction.fields.getTextInputValue('message');
 
     await interaction.deferReply({ flags: [64] });
@@ -218,26 +273,31 @@ async function handlePvPModals({ interaction, collections }) {
       });
     }
 
-    // Parse the time input (expecting ISO format or timestamp)
-    let eventDate;
-    try {
-      // Try parsing as timestamp first
-      const timestamp = parseInt(eventTime);
-      if (!isNaN(timestamp)) {
-        eventDate = new Date(timestamp * 1000);
-      } else {
-        // Try parsing as ISO date
-        eventDate = new Date(eventTime);
-      }
+    // Parse the time input with improved parsing
+    const eventDate = parseEventTime(eventTimeInput);
 
-      if (isNaN(eventDate.getTime())) {
-        throw new Error('Invalid date');
-      }
-    } catch (err) {
+    if (!eventDate || isNaN(eventDate.getTime())) {
       return interaction.editReply({
-        content: '❌ Invalid date/time format. Please use a Unix timestamp or ISO format (e.g., 2025-10-20T18:00:00Z).'
+        content: '❌ Invalid date/time format. Please use the format: **YYYY-MM-DD HH:MM**\n\n' +
+                 'Examples:\n' +
+                 '• `2025-12-27 18:00` (6:00 PM)\n' +
+                 '• `2025-12-31 09:30` (9:30 AM)\n' +
+                 '• `2026-01-15 20:45` (8:45 PM)'
       });
     }
+
+    // Check if date is in the past
+    if (eventDate < new Date()) {
+      return interaction.editReply({
+        content: '⚠️ Warning: The event time you entered is in the past. Please double-check the date and time.\n\n' +
+                 'If this is intentional, please re-run the command with a future date.'
+      });
+    }
+
+    // Determine image URL - use custom if provided, otherwise use default for event type
+    const imageUrl = (imageUrlInput && imageUrlInput.length > 0) 
+      ? imageUrlInput 
+      : DEFAULT_EVENT_IMAGES[eventType];
 
     // Generate 4-digit password
     const password = Math.floor(1000 + Math.random() * 9000).toString();
@@ -249,8 +309,8 @@ async function handlePvPModals({ interaction, collections }) {
       eventType,
       location: location !== 'none' ? location : null,
       eventTime: eventDate,
-      bonusPoints, // Store the custom bonus points
-      imageUrl: (imageUrl && imageUrl.length > 0) ? imageUrl : null,
+      bonusPoints,
+      imageUrl,
       message,
       password,
       attendees: [],

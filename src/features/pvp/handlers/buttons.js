@@ -36,9 +36,9 @@ async function handlePvPButtons({ interaction, collections }) {
 
     const timeInput = new TextInputBuilder()
       .setCustomId('event_time')
-      .setLabel('Event Time (Unix Timestamp)')
+      .setLabel('Event Date & Time (YYYY-MM-DD HH:MM)')
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('e.g., 1729450800 (Use https://www.unixtimestamp.com)')
+      .setPlaceholder('e.g., 2025-12-27 18:00 (24-hour format, server time)')
       .setRequired(true);
 
     const bonusPointsInput = new TextInputBuilder()
@@ -54,7 +54,7 @@ async function handlePvPButtons({ interaction, collections }) {
       .setCustomId('image_url')
       .setLabel('Image URL (Optional)')
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('https://i.imgur.com/example.png')
+      .setPlaceholder('Leave blank to use default image for event type')
       .setRequired(false);
 
     const messageInput = new TextInputBuilder()
