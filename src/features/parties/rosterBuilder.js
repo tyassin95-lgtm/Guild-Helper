@@ -94,21 +94,19 @@ class RosterBuilder {
       // Weekly Bonus column - padded to 13 characters (centered under "Weekly Bonus")
       const bonusFormatted = `+${player.rollBonus}`.padStart(16);
 
-      // Discord mention (outside code block)
-      const discordMention = `<@${player.userId}>`;
-
-      // Table row (inside code block) - NO newline at the end
-      const tableRow = '```\n' + `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted} ${bonusFormatted}` + '```';
-
-      // Gear link (on the SAME LINE as the closing backticks)
+      // Discord mention with gear link on same line
       let gearLink;
       if (player.gearScreenshotUrl) {
-        gearLink = ` [gear](<${player.gearScreenshotUrl}>)`; // Angle brackets prevent auto-embed
+        gearLink = ` [${player.displayName}'s Gear](<${player.gearScreenshotUrl}>)`; // Angle brackets prevent auto-embed
       } else {
-        gearLink = ` \`No gear\``;
+        gearLink = ` [No Gear Uploaded](<https://example.com>)`; // Dummy link for consistent formatting
       }
+      const discordMention = `<@${player.userId}>` + gearLink;
 
-      const memberEntry = discordMention + '\n' + tableRow + gearLink + '\n';
+      // Table row (inside code block)
+      const tableRow = '```\n' + `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted} ${bonusFormatted}` + '```';
+
+      const memberEntry = discordMention + '\n' + tableRow + '\n';
 
       // Check if adding this entry would exceed the limit
       if ((currentMessage + membersList + memberEntry).length > maxMessageLength) {
@@ -128,7 +126,7 @@ class RosterBuilder {
     // Finalize last message with legend
     currentMessage += membersList;
     currentMessage += '──────────────────────────────────────────────────────────────────────────────────────────────────\n';
-    currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS\n📸 Gear links appear below each player row';
+    currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS\n📸 Gear links appear next to each player mention';
 
     messages.push({ content: currentMessage });
 
