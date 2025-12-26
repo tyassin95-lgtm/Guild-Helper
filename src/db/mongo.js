@@ -80,7 +80,11 @@ function getCollections(db = _db) {
     wishlistSubmissions: db.collection('wishlistSubmissions'),
     wishlistPanels: db.collection('wishlistPanels'),
     wishlistSettings: db.collection('wishlistSettings'),
-    wishlistGivenItems: db.collection('wishlistGivenItems')
+    wishlistGivenItems: db.collection('wishlistGivenItems'),
+
+    // AutoMod system
+    automodSettings: db.collection('automodSettings'),
+    automodLogs: db.collection('automodLogs')
   };
 }
 

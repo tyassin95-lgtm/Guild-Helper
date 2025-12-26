@@ -326,6 +326,117 @@ async function registerSlashCommands(client) {
       description: 'Admins: Mark wishlisted items as given/distributed.',
       default_member_permissions: ADMIN
     },
+    // AutoMod Commands
+    {
+      name: 'automod',
+      description: 'Admins: Configure automatic moderation system.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 1, // SUB_COMMAND
+          name: 'setup',
+          description: 'Initial AutoMod setup'
+        },
+        {
+          type: 1, // SUB_COMMAND
+          name: 'toggle',
+          description: 'Enable or disable AutoMod',
+          options: [
+            {
+              type: 3, // STRING
+              name: 'action',
+              description: 'Enable or disable',
+              required: true,
+              choices: [
+                { name: 'ON (Enable AutoMod)', value: 'on' },
+                { name: 'OFF (Disable AutoMod)', value: 'off' }
+              ]
+            }
+          ]
+        },
+        {
+          type: 1, // SUB_COMMAND
+          name: 'channels',
+          description: 'Manage monitored channels',
+          options: [
+            {
+              type: 3, // STRING
+              name: 'action',
+              description: 'What to do',
+              required: true,
+              choices: [
+                { name: 'add (monitor channel)', value: 'add' },
+                { name: 'remove (stop monitoring)', value: 'remove' },
+                { name: 'list (show monitored)', value: 'list' }
+              ]
+            },
+            {
+              type: 7, // CHANNEL
+              name: 'channel',
+              description: 'Channel to add/remove',
+              required: false
+            }
+          ]
+        },
+        {
+          type: 1, // SUB_COMMAND
+          name: 'exempt',
+          description: 'Manage exempt roles',
+          options: [
+            {
+              type: 3, // STRING
+              name: 'action',
+              description: 'What to do',
+              required: true,
+              choices: [
+                { name: 'add (exempt role)', value: 'add' },
+                { name: 'remove (unexempt role)', value: 'remove' },
+                { name: 'list (show exempt)', value: 'list' }
+              ]
+            },
+            {
+              type: 8, // ROLE
+              name: 'role',
+              description: 'Role to add/remove',
+              required: false
+            }
+          ]
+        },
+        {
+          type: 1, // SUB_COMMAND
+          name: 'logchannel',
+          description: 'Set channel for moderation logs',
+          options: [
+            {
+              type: 7, // CHANNEL
+              name: 'channel',
+              description: 'Channel for logs',
+              required: true
+            }
+          ]
+        },
+        {
+          type: 1, // SUB_COMMAND
+          name: 'timeout',
+          description: 'Set timeout duration',
+          options: [
+            {
+              type: 4, // INTEGER
+              name: 'minutes',
+              description: 'Timeout duration in minutes (1-1440)',
+              required: true,
+              min_value: 1,
+              max_value: 1440
+            }
+          ]
+        },
+        {
+          type: 1, // SUB_COMMAND
+          name: 'status',
+          description: 'View AutoMod configuration'
+        }
+      ]
+    },
 
     // ----- Everyone -----
     {

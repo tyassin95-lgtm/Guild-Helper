@@ -30,7 +30,9 @@ async function ensureIndexes({
   wishlistSubmissions,
   wishlistPanels,
   wishlistSettings,
-  wishlistGivenItems
+  wishlistGivenItems,
+  automodSettings,
+  automodLogs
 }) {
   // Guild settings index
   await guildSettings.createIndex({ guildId: 1 }, { unique: true });
@@ -193,6 +195,14 @@ async function ensureIndexes({
   await wishlistGivenItems.createIndex({ userId: 1 });
   await wishlistGivenItems.createIndex({ itemId: 1 });
   await wishlistGivenItems.createIndex({ givenAt: -1 }); // Sort by given date
+
+  // AutoMod System Indexes
+  await automodSettings.createIndex({ guildId: 1 }, { unique: true });
+
+  await automodLogs.createIndex({ guildId: 1 });
+  await automodLogs.createIndex({ userId: 1, guildId: 1 });
+  await automodLogs.createIndex({ timestamp: -1 }); // Sort by timestamp descending
+  await automodLogs.createIndex({ guildId: 1, userId: 1, timestamp: -1 });
 
   console.log('All indexes created successfully');
 }

@@ -103,6 +103,9 @@ const {
 const { handleWishlistButtons } = require('../../features/wishlist/handlers/wishlistButtons');
 const { handleWishlistSelects } = require('../../features/wishlist/handlers/wishlistSelects');
 
+// AutoMod system imports
+const { handleAutoMod } = require('../../features/automod/commands/automod');
+
 // Safe execution wrapper
 const { safeExecute } = require('../../utils/safeExecute');
 
@@ -116,6 +119,9 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
       // Admin commands
       if (name === 'excluderole') return handleExcludeRole({ interaction, collections });
+
+      // AutoMod command
+      if (name === 'automod') return handleAutoMod({ interaction, collections });
 
       // Party commands
       if (name === 'myinfo')      return handleMyInfo({ interaction, collections });

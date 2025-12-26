@@ -10,6 +10,7 @@ const { startItemRollAutoUpdate, stopItemRollAutoUpdate } = require('./features/
 const { streamServer } = require('./features/broadcast/server/streamServer');
 const { broadcastManager } = require('./features/broadcast/utils/broadcastManager');
 const { handleGearUpload } = require('./features/parties/handlers/gearUploadHandler');
+const { handleAutoModCheck } = require('./features/automod/handlers/messageHandler');
 
 const client = new Client({
   intents: [
@@ -56,18 +57,23 @@ const client = new Client({
       }
     });
 
-    // Handle message events for gear screenshot uploads
+    // Handle message events for gear screenshot uploads AND automod
     client.on('messageCreate', async (message) => {
       // Ignore bot messages
       if (message.author.bot) return;
 
-      // Only process messages with attachments
-      if (message.attachments.size === 0) return;
-
       try {
-        await handleGearUpload({ message, collections });
+        // Handle automod check for guild messages
+        if (message.guild) {
+          await handleAutoModCheck({ message, collections, client });
+        }
+
+        // Handle gear screenshot uploads (only process messages with attachments)
+        if (message.attachments.size > 0) {
+          await handleGearUpload({ message, collections });
+        }
       } catch (err) {
-        console.error('Error handling gear upload:', err);
+        console.error('Error handling message:', err);
       }
     });
 
