@@ -4,6 +4,14 @@ const { buildUserWishlistEmbed } = require('../utils/panelBuilder');
 const { isWishlistEmpty } = require('../utils/wishlistValidator');
 
 async function handleMyWishlist({ interaction, collections }) {
+  // Check if command was used in a server (not in DMs)
+  if (!interaction.guild || !interaction.member) {
+    return interaction.reply({
+      content: '❌ **This command can only be used in a server.**\n\nWishlists are server-specific. Please use this command in your guild\'s Discord server.',
+      flags: [64]
+    });
+  }
+
   const { guildSettings, wishlistSubmissions, wishlistSettings, wishlistGivenItems } = collections;
 
   // Check if user has excluded role
