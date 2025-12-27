@@ -197,6 +197,9 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
   // Set party leader
   if (interaction.customId.startsWith('party_set_leader:')) {
+    // CRITICAL: Defer immediately to prevent timeout
+    await interaction.deferReply({ flags: [64] }); // Ephemeral for this action
+
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
 
@@ -207,9 +210,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
     const partyLabel = isReserve ? 'Reserve' : `Party ${partyIdentifier}`;
 
     if (!party?.members || party.members.length === 0) {
-      return interaction.reply({ 
-        content: `❌ ${partyLabel} is empty!`, 
-        flags: [64]
+      return interaction.editReply({ 
+        content: `❌ ${partyLabel} is empty!`
       });
     }
 
@@ -235,10 +237,9 @@ async function handlePartyManageButtons({ interaction, collections }) {
         .addOptions(options)
     );
 
-    return interaction.reply({ 
+    return interaction.editReply({ 
       content: `**Setting party leader for ${partyLabel}**\n\nSelect a member:`, 
-      components: [row],
-      flags: [64]
+      components: [row]
     });
   }
 }

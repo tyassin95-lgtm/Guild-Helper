@@ -16,7 +16,7 @@ async function handleViewParties({ interaction, collections }) {
   if (interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     const hasReserve = allParties.some(p => p.isReserve);
 
-    const row1 = new ActionRowBuilder().addComponents(
+    const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('party_create')
         .setLabel('Create Party')
@@ -40,15 +40,7 @@ async function handleViewParties({ interaction, collections }) {
         .setEmoji('🗑️')
     );
 
-    const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('party_set_leaders')
-        .setLabel('Set Party Leaders')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('👑')
-    );
-
-    components.push(row1, row2);
+    components.push(row);
   }
 
   return interaction.reply({ embeds: [embed], components, flags: [64] });

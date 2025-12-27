@@ -600,30 +600,6 @@ async function handlePartySelects({ interaction, collections }) {
     });
   }
 
-  // Select party for leader assignment
-  if (interaction.customId === 'party_select_for_leader') {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
-    }
-
-    const partyIdentifier = interaction.values[0];
-    const isReserve = partyIdentifier === 'reserve';
-    const partyLabel = isReserve ? 'Reserve' : `Party ${partyIdentifier}`;
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`party_set_leader:${partyIdentifier}`)
-        .setLabel(`Set Leader for ${partyLabel}`)
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('👑')
-    );
-
-    return interaction.update({ 
-      content: `Managing leader for **${partyLabel}**\n\nClick below to select a new leader:`, 
-      components: [row] 
-    });
-  }
-
   if (interaction.customId === 'party_manage_select') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
