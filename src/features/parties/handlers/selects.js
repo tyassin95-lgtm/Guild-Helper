@@ -6,10 +6,13 @@ const { updateGuildRoster } = require('../commands/guildroster');
 const { getRoleEmoji } = require('../roleDetection');
 
 async function handlePartySelects({ interaction, collections }) {
+  console.log('[PARTY SELECTS] Handler called for:', interaction.customId);
+
   const { partyPlayers, parties } = collections;
 
   // Set weapon 1
   if (interaction.customId === 'party_select_weapon1') {
+    console.log('[PARTY SELECTS] party_select_weapon1');
     await interaction.deferUpdate();
 
     const weapon = interaction.values[0];
@@ -175,6 +178,7 @@ async function handlePartySelects({ interaction, collections }) {
 
   // Set weapon 2
   if (interaction.customId === 'party_select_weapon2') {
+    console.log('[PARTY SELECTS] party_select_weapon2');
     await interaction.deferUpdate();
 
     const weapon = interaction.values[0];
@@ -340,21 +344,33 @@ async function handlePartySelects({ interaction, collections }) {
 
   // All other handlers require guild context (admin actions)
   if (!interaction.guildId) {
+    console.log('[PARTY SELECTS] No guild context');
     return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
   }
 
   // NEW: Multi-select add players - CRITICAL FIX: Defer immediately
   if (interaction.customId.startsWith('party_add_selected:')) {
+    console.log('[PARTY SELECTS] party_add_selected - Deferring update...');
+
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      console.log('[PARTY SELECTS] Permission denied');
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
 
-    // CRITICAL: Defer IMMEDIATELY before any processing
-    await interaction.deferUpdate();
+    try {
+      // CRITICAL: Defer IMMEDIATELY before any processing
+      await interaction.deferUpdate();
+      console.log('[PARTY SELECTS] Deferred update successfully');
+    } catch (err) {
+      console.error('[PARTY SELECTS] Failed to defer update:', err.message);
+      return;
+    }
 
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
     const userIds = interaction.values; // Array of selected user IDs
+
+    console.log('[PARTY SELECTS] Adding', userIds.length, 'players to', partyIdentifier);
 
     if (userIds.length === 0) {
       return interaction.editReply({
@@ -382,6 +398,8 @@ async function handlePartySelects({ interaction, collections }) {
     // Process all selected players
     const addedPlayers = [];
     const failedPlayers = [];
+
+    console.log('[PARTY SELECTS] Processing players...');
 
     for (const userId of userIds) {
       const playerInfo = await partyPlayers.findOne({ userId, guildId: interaction.guildId });
@@ -436,6 +454,8 @@ async function handlePartySelects({ interaction, collections }) {
       addedPlayers.push(member?.displayName || userId);
     }
 
+    console.log('[PARTY SELECTS] Added:', addedPlayers.length, 'Failed:', failedPlayers.length);
+
     // Get updated party info
     const updatedParty = isReserve
       ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
@@ -451,6 +471,8 @@ async function handlePartySelects({ interaction, collections }) {
     }).toArray();
 
     allPlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
+
+    console.log('[PARTY SELECTS] Building response embed...');
 
     // Build updated embed
     const embed = new EmbedBuilder()
@@ -504,6 +526,7 @@ async function handlePartySelects({ interaction, collections }) {
 
     // If no more slots available or no more players, show completion
     if (newAvailableSlots === 0 || allPlayers.length === 0) {
+      console.log('[PARTY SELECTS] Party full or no more players, finishing');
       return interaction.editReply({
         content: newAvailableSlots === 0 
           ? `🎉 **${partyLabel} is now full!**`
@@ -512,6 +535,8 @@ async function handlePartySelects({ interaction, collections }) {
         components: []
       });
     }
+
+    console.log('[PARTY SELECTS] Building continuation UI...');
 
     // Continue showing the UI for more additions
     const pageSize = 25;
@@ -593,15 +618,22 @@ async function handlePartySelects({ interaction, collections }) {
     );
     components.push(actionRow);
 
-    return interaction.editReply({
+    console.log('[PARTY SELECTS] Sending continuation UI...');
+
+    const result = await interaction.editReply({
       content: `📊 Showing 1-${Math.min(pageSize, allPlayers.length)} of ${allPlayers.length} available players\n` +
                `💡 Select more players to continue adding, or use the buttons below for other actions.`,
       embeds: [embed],
       components
     });
+
+    console.log('[PARTY SELECTS] party_add_selected complete');
+    return result;
   }
 
   if (interaction.customId === 'party_manage_select') {
+    console.log('[PARTY SELECTS] party_manage_select');
+
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
@@ -639,6 +671,8 @@ async function handlePartySelects({ interaction, collections }) {
 
   // Remove player(s) - NOW SUPPORTS MULTI-SELECT
   if (interaction.customId.startsWith('party_remove_player:')) {
+    console.log('[PARTY SELECTS] party_remove_player');
+
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
@@ -700,6 +734,8 @@ async function handlePartySelects({ interaction, collections }) {
   }
 
   if (interaction.customId.startsWith('party_move_player:')) {
+    console.log('[PARTY SELECTS] party_move_player');
+
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
@@ -747,6 +783,8 @@ async function handlePartySelects({ interaction, collections }) {
   }
 
   if (interaction.customId.startsWith('party_move_destination:')) {
+    console.log('[PARTY SELECTS] party_move_destination');
+
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
@@ -839,6 +877,8 @@ async function handlePartySelects({ interaction, collections }) {
   }
 
   if (interaction.customId === 'party_delete_confirm') {
+    console.log('[PARTY SELECTS] party_delete_confirm');
+
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
@@ -881,6 +921,8 @@ async function handlePartySelects({ interaction, collections }) {
 
   // Select party leader
   if (interaction.customId.startsWith('party_select_leader:')) {
+    console.log('[PARTY SELECTS] party_select_leader - Processing selection');
+
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
@@ -888,6 +930,8 @@ async function handlePartySelects({ interaction, collections }) {
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
     const newLeaderId = interaction.values[0];
+
+    console.log('[PARTY SELECTS] Setting leader', newLeaderId, 'for', partyIdentifier);
 
     const updateQuery = isReserve
       ? { guildId: interaction.guildId, isReserve: true }
@@ -935,6 +979,8 @@ async function handlePartySelects({ interaction, collections }) {
       .toArray();
 
     const embed = createPartiesOverviewEmbed(allParties, interaction.guild);
+
+    console.log('[PARTY SELECTS] Leader set successfully, updating message');
 
     return interaction.update({ 
       content: `✅ Set <@${newLeaderId}> as the leader of ${partyLabel}!`, 
