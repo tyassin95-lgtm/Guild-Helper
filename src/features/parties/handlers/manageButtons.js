@@ -3,20 +3,33 @@ const { PARTY_SIZE, RESERVE_PARTY_SIZE } = require('../constants');
 const { getRoleEmoji } = require('../roleDetection');
 
 async function handlePartyManageButtons({ interaction, collections }) {
+  console.log('[MANAGE BUTTONS] Handler called for:', interaction.customId);
+
   const { partyPlayers, parties } = collections;
 
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    console.log('[MANAGE BUTTONS] Permission denied');
     return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
   }
 
   // Add member to party - NEW: Show persistent multi-select UI
   if (interaction.customId.startsWith('party_add_member:')) {
-    // CRITICAL: Defer immediately to prevent timeout - use reply for new message
-    await interaction.deferReply({ flags: [64] });
+    console.log('[MANAGE BUTTONS] party_add_member - Deferring reply...');
+
+    try {
+      // CRITICAL: Defer immediately to prevent timeout - use reply for new message
+      await interaction.deferReply({ flags: [64] });
+      console.log('[MANAGE BUTTONS] Deferred successfully');
+    } catch (err) {
+      console.error('[MANAGE BUTTONS] Failed to defer:', err.message);
+      return;
+    }
 
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
     const partyNumber = isReserve ? null : parseInt(partyIdentifier);
+
+    console.log('[MANAGE BUTTONS] Party identifier:', partyIdentifier, 'isReserve:', isReserve);
 
     const party = isReserve 
       ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
@@ -26,6 +39,7 @@ async function handlePartyManageButtons({ interaction, collections }) {
     const partyLabel = isReserve ? 'Reserve' : `Party ${partyNumber}`;
 
     if ((party?.members?.length || 0) >= maxSize) {
+      console.log('[MANAGE BUTTONS] Party full');
       return interaction.editReply({ 
         content: `❌ ${partyLabel} is full (${maxSize}/${maxSize})!`
       });
@@ -40,6 +54,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
       inReserve: { $ne: true }
     }).toArray();
 
+    console.log('[MANAGE BUTTONS] Found', allPlayers.length, 'available players');
+
     if (allPlayers.length === 0) {
       return interaction.editReply({ 
         content: '❌ No available players to add! All players with party info are already assigned.'
@@ -49,18 +65,30 @@ async function handlePartyManageButtons({ interaction, collections }) {
     // Sort by CP descending
     allPlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
+    console.log('[MANAGE BUTTONS] Showing multi-select UI...');
     // Show first page of multi-select UI
     await showMultiSelectUI(interaction, allPlayers, 0, partyIdentifier, party, collections, true);
+    console.log('[MANAGE BUTTONS] Multi-select UI shown');
   }
 
   // Handle page navigation for multi-select
   if (interaction.customId.startsWith('party_add_page:')) {
-    // CRITICAL: Use deferUpdate for button interactions to update the existing message
-    await interaction.deferUpdate();
+    console.log('[MANAGE BUTTONS] party_add_page - Deferring update...');
+
+    try {
+      // CRITICAL: Use deferUpdate for button interactions to update the existing message
+      await interaction.deferUpdate();
+      console.log('[MANAGE BUTTONS] Deferred update successfully');
+    } catch (err) {
+      console.error('[MANAGE BUTTONS] Failed to defer update:', err.message);
+      return;
+    }
 
     const [, partyIdentifier, pageStr] = interaction.customId.split(':');
     const page = parseInt(pageStr);
     const isReserve = partyIdentifier === 'reserve';
+
+    console.log('[MANAGE BUTTONS] Navigating to page', page, 'for party', partyIdentifier);
 
     // Get party info
     const party = isReserve
@@ -78,8 +106,11 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
     allPlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
+    console.log('[MANAGE BUTTONS] Found', allPlayers.length, 'players, showing page', page);
+
     // Show the requested page (use false since we deferred update)
     await showMultiSelectUI(interaction, allPlayers, page, partyIdentifier, party, collections, false);
+    console.log('[MANAGE BUTTONS] Page navigation complete');
   }
 
   // Handle "Add Selected" button
@@ -197,8 +228,16 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
   // Set party leader
   if (interaction.customId.startsWith('party_set_leader:')) {
-    // CRITICAL: Use deferUpdate instead of deferReply to update the existing message
-    await interaction.deferUpdate();
+    console.log('[MANAGE BUTTONS] party_set_leader - Deferring update...');
+
+    try {
+      // CRITICAL: Use deferUpdate instead of deferReply to update the existing message
+      await interaction.deferUpdate();
+      console.log('[MANAGE BUTTONS] Deferred update successfully');
+    } catch (err) {
+      console.error('[MANAGE BUTTONS] Failed to defer update:', err.message);
+      return;
+    }
 
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
@@ -238,10 +277,13 @@ async function handlePartyManageButtons({ interaction, collections }) {
         .addOptions(options)
     );
 
-    return interaction.editReply({ 
+    console.log('[MANAGE BUTTONS] Sending set leader menu...');
+    const result = await interaction.editReply({ 
       content: `**Setting party leader for ${partyLabel}**\n\nSelect a member:`, 
       components: [row]
     });
+    console.log('[MANAGE BUTTONS] Set leader menu sent');
+    return result;
   }
 }
 
@@ -256,6 +298,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
  * @param {boolean} useEditReply - If true, use editReply (after defer); if false, use update
  */
 async function showMultiSelectUI(interaction, allPlayers, page, partyIdentifier, party, collections, useEditReply = false) {
+  console.log('[SHOW UI] Called with page:', page, 'useEditReply:', useEditReply);
+
   const pageSize = 25;
   const totalPages = Math.ceil(allPlayers.length / pageSize);
   const start = page * pageSize;
@@ -267,6 +311,8 @@ async function showMultiSelectUI(interaction, allPlayers, page, partyIdentifier,
   const maxSize = isReserve ? RESERVE_PARTY_SIZE : PARTY_SIZE;
   const currentSize = party?.members?.length || 0;
   const availableSlots = maxSize - currentSize;
+
+  console.log('[SHOW UI] Building embed...');
 
   // Build embed showing current party roster
   const embed = new EmbedBuilder()
@@ -298,6 +344,8 @@ async function showMultiSelectUI(interaction, allPlayers, page, partyIdentifier,
       inline: false
     });
   }
+
+  console.log('[SHOW UI] Building player options...');
 
   // Build player options for current page
   const options = await Promise.all(playersOnPage.map(async p => {
@@ -395,11 +443,22 @@ async function showMultiSelectUI(interaction, allPlayers, page, partyIdentifier,
     components
   };
 
-  if (useEditReply) {
-    // After deferReply() or deferUpdate(), use editReply
-    return interaction.editReply(message);
-  } else {
-    return interaction.update(message);
+  console.log('[SHOW UI] Sending message with method:', useEditReply ? 'editReply' : 'update');
+
+  try {
+    if (useEditReply) {
+      // After deferReply() or deferUpdate(), use editReply
+      const result = await interaction.editReply(message);
+      console.log('[SHOW UI] editReply successful');
+      return result;
+    } else {
+      const result = await interaction.update(message);
+      console.log('[SHOW UI] update successful');
+      return result;
+    }
+  } catch (err) {
+    console.error('[SHOW UI] Failed to send message:', err.message);
+    throw err;
   }
 }
 
