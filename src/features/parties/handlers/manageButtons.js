@@ -55,6 +55,9 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
   // Handle page navigation for multi-select
   if (interaction.customId.startsWith('party_add_page:')) {
+    // CRITICAL: Defer immediately to prevent timeout
+    await interaction.deferUpdate();
+
     const [, partyIdentifier, pageStr] = interaction.customId.split(':');
     const page = parseInt(pageStr);
     const isReserve = partyIdentifier === 'reserve';
@@ -75,8 +78,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
     allPlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
-    // Show the requested page
-    await showMultiSelectUI(interaction, allPlayers, page, partyIdentifier, party, collections, false);
+    // Show the requested page (use editReply since we deferred)
+    await showMultiSelectUI(interaction, allPlayers, page, partyIdentifier, party, collections, true);
   }
 
   // Handle "Add Selected" button
@@ -248,9 +251,9 @@ async function handlePartyManageButtons({ interaction, collections }) {
  * @param {string} partyIdentifier - Party identifier (number or 'reserve')
  * @param {Object} party - Party document from database
  * @param {Object} collections - Database collections
- * @param {boolean} isReply - If true, use reply instead of update
+ * @param {boolean} useEditReply - If true, use editReply (after defer); if false, use update
  */
-async function showMultiSelectUI(interaction, allPlayers, page, partyIdentifier, party, collections, isReply = false) {
+async function showMultiSelectUI(interaction, allPlayers, page, partyIdentifier, party, collections, useEditReply = false) {
   const pageSize = 25;
   const totalPages = Math.ceil(allPlayers.length / pageSize);
   const start = page * pageSize;
@@ -390,8 +393,8 @@ async function showMultiSelectUI(interaction, allPlayers, page, partyIdentifier,
     components
   };
 
-  if (isReply) {
-    // Non-ephemeral so admin can see their work
+  if (useEditReply) {
+    // After deferReply() or deferUpdate(), use editReply
     return interaction.editReply(message);
   } else {
     return interaction.update(message);
