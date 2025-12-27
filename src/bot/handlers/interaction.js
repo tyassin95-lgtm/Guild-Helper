@@ -227,10 +227,13 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
       // Party system buttons
       if (interaction.customId.startsWith('party_')) {
-        // Management buttons (add/remove/move)
+        // Management buttons (add/remove/move/set_leader/pagination/done)
         if (interaction.customId.startsWith('party_add_member:') ||
             interaction.customId.startsWith('party_remove_member:') ||
-            interaction.customId.startsWith('party_move_member:')) {
+            interaction.customId.startsWith('party_move_member:') ||
+            interaction.customId.startsWith('party_set_leader:') ||
+            interaction.customId.startsWith('party_add_page:') ||
+            interaction.customId.startsWith('party_done_managing:')) {
           return handlePartyManageButtons({ interaction, collections });
         }
 

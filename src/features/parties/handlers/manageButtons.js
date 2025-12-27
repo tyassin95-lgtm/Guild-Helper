@@ -152,7 +152,16 @@ async function handlePartyManageButtons({ interaction, collections }) {
   // SET LEADER
   // =========================
   if (interaction.customId.startsWith('party_set_leader:')) {
-    await interaction.deferReply({ flags: [64] });
+    // When clicked from Add Members UI, interaction may already be in a deferred state
+    // We need to update the existing message, not create a new reply
+    const shouldUpdate = interaction.message && interaction.message.components && 
+                         interaction.message.components.length > 0;
+
+    if (!shouldUpdate) {
+      await interaction.deferReply({ flags: [64] });
+    } else {
+      await interaction.deferUpdate();
+    }
 
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
@@ -162,9 +171,11 @@ async function handlePartyManageButtons({ interaction, collections }) {
       : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
 
     if (!party || !party.members || party.members.length === 0) {
-      return interaction.editReply({
-        content: `❌ ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`} has no members.`
-      });
+      const response = {
+        content: `❌ ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`} has no members.`,
+        components: []
+      };
+      return shouldUpdate ? interaction.editReply(response) : interaction.editReply(response);
     }
 
     // Build member options
@@ -184,10 +195,12 @@ async function handlePartyManageButtons({ interaction, collections }) {
         .addOptions(options)
     );
 
-    return interaction.editReply({
+    const response = {
       content: `**Setting party leader for ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`}**\n\nSelect the new leader:`,
       components: [row]
-    });
+    };
+
+    return interaction.editReply(response);
   }
 
   // =========================
