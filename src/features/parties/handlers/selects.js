@@ -919,12 +919,21 @@ async function handlePartySelects({ interaction, collections }) {
     });
   }
 
-  // Select party leader
+  // Select party leader - FIXED WITH DEFER
   if (interaction.customId.startsWith('party_select_leader:')) {
-    console.log('[PARTY SELECTS] party_select_leader - Processing selection');
+    console.log('[PARTY SELECTS] party_select_leader - Deferring update');
 
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
+    }
+
+    // CRITICAL FIX: Defer immediately
+    try {
+      await interaction.deferUpdate();
+      console.log('[PARTY SELECTS] Deferred successfully');
+    } catch (err) {
+      console.error('[PARTY SELECTS] Failed to defer:', err.message);
+      return;
     }
 
     const partyIdentifier = interaction.customId.split(':')[1];
@@ -941,7 +950,7 @@ async function handlePartySelects({ interaction, collections }) {
     const partyLabel = isReserve ? 'Reserve' : `Party ${partyIdentifier}`;
 
     if (!party) {
-      return interaction.update({ content: '❌ Party not found!', components: [] });
+      return interaction.editReply({ content: '❌ Party not found!', components: [] });
     }
 
     // Remove leader status from all members
@@ -980,9 +989,9 @@ async function handlePartySelects({ interaction, collections }) {
 
     const embed = createPartiesOverviewEmbed(allParties, interaction.guild);
 
-    console.log('[PARTY SELECTS] Leader set successfully, updating message');
+    console.log('[PARTY SELECTS] Leader set successfully, sending response');
 
-    return interaction.update({ 
+    return interaction.editReply({ 
       content: `✅ Set <@${newLeaderId}> as the leader of ${partyLabel}!`, 
       embeds: [embed], 
       components: [] 
