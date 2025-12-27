@@ -62,7 +62,7 @@ async function handlePartyManageButtons({ interaction, collections }) {
   }
 
   // =========================
-  // PAGINATION (FIXED)
+  // PAGINATION
   // =========================
   if (interaction.customId.startsWith('party_add_page:')) {
     await interaction.deferUpdate();
@@ -85,7 +85,6 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
     allPlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
-    // 🔧 FIX: useEditReply = false because we deferred UPDATE
     return showMultiSelectUI(
       interaction,
       allPlayers,
@@ -98,9 +97,11 @@ async function handlePartyManageButtons({ interaction, collections }) {
   }
 
   // =========================
-  // SET PARTY LEADER (FIXED)
+  // SET PARTY LEADER - FIXED
   // =========================
   if (interaction.customId.startsWith('party_set_leader:')) {
+    await interaction.deferUpdate();
+
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
 
@@ -109,7 +110,7 @@ async function handlePartyManageButtons({ interaction, collections }) {
       : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
 
     if (!party?.members?.length) {
-      return interaction.update({
+      return interaction.editReply({
         content: '❌ Party is empty!',
         components: []
       });
@@ -131,8 +132,7 @@ async function handlePartyManageButtons({ interaction, collections }) {
         .addOptions(options)
     );
 
-    // 🔧 FIX: no deferUpdate + update directly
-    return interaction.update({
+    return interaction.editReply({
       content: `**Setting party leader for ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`}**`,
       components: [row]
     });
