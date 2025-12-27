@@ -342,6 +342,30 @@ async function handlePartySelects({ interaction, collections }) {
     return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
   }
 
+  // NEW: Select party for leader assignment
+  if (interaction.customId === 'party_select_for_leader') {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
+    }
+
+    const partyIdentifier = interaction.values[0];
+    const isReserve = partyIdentifier === 'reserve';
+    const partyLabel = isReserve ? 'Reserve' : `Party ${partyIdentifier}`;
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`party_set_leader:${partyIdentifier}`)
+        .setLabel(`Set Leader for ${partyLabel}`)
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('👑')
+    );
+
+    return interaction.update({ 
+      content: `Managing leader for **${partyLabel}**\n\nClick below to select a new leader:`, 
+      components: [row] 
+    });
+  }
+
   if (interaction.customId === 'party_manage_select') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
@@ -687,6 +711,70 @@ async function handlePartySelects({ interaction, collections }) {
 
     return interaction.update({ 
       content: `✅ ${partyLabel} has been deleted!`, 
+      embeds: [embed], 
+      components: [] 
+    });
+  }
+
+  // NEW: Select party leader
+  if (interaction.customId.startsWith('party_select_leader:')) {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
+    }
+
+    const partyIdentifier = interaction.customId.split(':')[1];
+    const isReserve = partyIdentifier === 'reserve';
+    const newLeaderId = interaction.values[0];
+
+    const updateQuery = isReserve
+      ? { guildId: interaction.guildId, isReserve: true }
+      : { guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) };
+
+    const party = await parties.findOne(updateQuery);
+    const partyLabel = isReserve ? 'Reserve' : `Party ${partyIdentifier}`;
+
+    if (!party) {
+      return interaction.update({ content: '❌ Party not found!', components: [] });
+    }
+
+    // Remove leader status from all members
+    await parties.updateOne(
+      updateQuery,
+      { $set: { 'members.$[].isLeader': false } }
+    );
+
+    // Set new leader
+    await parties.updateOne(
+      { ...updateQuery, 'members.userId': newLeaderId },
+      { $set: { 'members.$.isLeader': true } }
+    );
+
+    // Update player record
+    await partyPlayers.updateOne(
+      { userId: newLeaderId, guildId: interaction.guildId },
+      { $set: { isPartyLeader: true } }
+    );
+
+    // Remove isPartyLeader from other members in this party
+    const otherMemberIds = party.members
+      .filter(m => m.userId !== newLeaderId)
+      .map(m => m.userId);
+
+    if (otherMemberIds.length > 0) {
+      await partyPlayers.updateMany(
+        { userId: { $in: otherMemberIds }, guildId: interaction.guildId },
+        { $unset: { isPartyLeader: '' } }
+      );
+    }
+
+    const allParties = await parties.find({ guildId: interaction.guildId })
+      .sort({ isReserve: 1, partyNumber: 1 })
+      .toArray();
+
+    const embed = createPartiesOverviewEmbed(allParties, interaction.guild);
+
+    return interaction.update({ 
+      content: `✅ Set <@${newLeaderId}> as the leader of ${partyLabel}!`, 
       embeds: [embed], 
       components: [] 
     });

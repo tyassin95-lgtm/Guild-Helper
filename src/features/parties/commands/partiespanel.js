@@ -73,7 +73,10 @@ async function handlePartiesPanel({ interaction, collections }) {
             const cp = (m.cp || 0).toLocaleString();
             const position = index + 1;
 
-            return `${position}. <@${m.userId}>\n   ${roleIcon} ${m.weapon1} / ${m.weapon2} • \`${cp} CP\``;
+            // Add crown for party leader
+            const leaderCrown = m.isLeader ? '👑 ' : '';
+
+            return `${position}. ${leaderCrown}<@${m.userId}>\n   ${roleIcon} ${m.weapon1} / ${m.weapon2} • \`${cp} CP\``;
           }));
 
           embed.setDescription(memberList.join('\n\n'));
@@ -133,13 +136,16 @@ async function handlePartiesPanel({ interaction, collections }) {
         const totalCP = party.totalCP || 0;
         const avgCP = Math.round(totalCP / members.length);
 
-        // Build member list with role icons
+        // Build member list with role icons and leader crown
         const memberList = await Promise.all(members.map(async (m, index) => {
           const roleIcon = getRoleEmoji(m.role);
           const cp = (m.cp || 0).toLocaleString();
           const position = ['⓵', '⓶', '⓷', '⓸', '⓹', '⓺'][index] || `${index + 1}.`;
 
-          return `${position} <@${m.userId}>\n   ${roleIcon} ${m.weapon1} / ${m.weapon2} • \`${cp} CP\``;
+          // Add crown for party leader
+          const leaderCrown = m.isLeader ? '👑 ' : '';
+
+          return `${position} ${leaderCrown}<@${m.userId}>\n   ${roleIcon} ${m.weapon1} / ${m.weapon2} • \`${cp} CP\``;
         }));
 
         embed.setDescription(memberList.join('\n\n'));
@@ -215,4 +221,4 @@ async function handlePartiesPanel({ interaction, collections }) {
   }
 }
 
-module.exports = { handlePartiesPanel };``
+module.exports = { handlePartiesPanel };

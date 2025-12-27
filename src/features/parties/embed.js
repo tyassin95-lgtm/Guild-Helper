@@ -161,7 +161,8 @@ function createPartiesOverviewEmbed(parties, guild) {
     const memberList = members.map(m => {
       const role = m.weapon1 && m.weapon2 ? `${m.weapon1}/${m.weapon2}` : 'No role';
       const cp = m.cp ? m.cp.toLocaleString() : '0';
-      return `• <@${m.userId}> - ${role} - ${cp} CP`;
+      const leaderCrown = m.isLeader ? '👑 ' : '';
+      return `• ${leaderCrown}<@${m.userId}> - ${role} - ${cp} CP${m.isLeader ? ' • Leader' : ''}`;
     }).join('\n');
 
     embed.addFields({
@@ -188,7 +189,8 @@ function createPartiesOverviewEmbed(parties, guild) {
       const memberList = sortedMembers.slice(0, 10).map(m => {
         const role = m.weapon1 && m.weapon2 ? `${m.weapon1}/${m.weapon2}` : 'No role';
         const cp = m.cp ? m.cp.toLocaleString() : '0';
-        return `• <@${m.userId}> - ${role} - ${cp} CP`;
+        const leaderCrown = m.isLeader ? '👑 ' : '';
+        return `• ${leaderCrown}<@${m.userId}> - ${role} - ${cp} CP${m.isLeader ? ' • Leader' : ''}`;
       }).join('\n');
 
       const displayText = members.length > 10 

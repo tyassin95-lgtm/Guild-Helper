@@ -10,8 +10,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
   // Add member to party
   if (interaction.customId.startsWith('party_add_member:')) {
-    // CRITICAL: Defer immediately to prevent timeout
-    await interaction.deferUpdate();
+    // CRITICAL: Update immediately to prevent timeout
+    await interaction.update({ content: '⏳ Loading players...', components: [] });
 
     try {
       const partyIdentifier = interaction.customId.split(':')[1];
@@ -56,7 +56,7 @@ async function handlePartyManageButtons({ interaction, collections }) {
       const totalPages = Math.ceil(allPlayers.length / pageSize);
 
       // Show first page
-      await showPlayerPage(interaction, allPlayers, 0, partyIdentifier, totalPages, collections);
+      await showPlayerPage(interaction, allPlayers, 0, partyIdentifier, totalPages, collections, true);
     } catch (err) {
       console.error('Error in party_add_member:', err);
       return interaction.editReply({ 
@@ -66,14 +66,17 @@ async function handlePartyManageButtons({ interaction, collections }) {
     }
   }
 
-  // Handle page navigation
+  // Handle page navigation - FIX: Update immediately to prevent timeout
   if (interaction.customId.startsWith('party_add_page:')) {
-    // CRITICAL: Defer FIRST before any async operations
-    await interaction.deferUpdate();
-
     try {
       const [, partyIdentifier, pageStr] = interaction.customId.split(':');
       const page = parseInt(pageStr);
+
+      // CRITICAL: Show loading state immediately to prevent timeout
+      await interaction.update({ 
+        content: '⏳ Loading players...', 
+        components: [] 
+      });
 
       // Get all available players again
       const allPlayers = await partyPlayers.find({ 
@@ -89,7 +92,7 @@ async function handlePartyManageButtons({ interaction, collections }) {
       const pageSize = 25;
       const totalPages = Math.ceil(allPlayers.length / pageSize);
 
-      await showPlayerPage(interaction, allPlayers, page, partyIdentifier, totalPages, collections);
+      await showPlayerPage(interaction, allPlayers, page, partyIdentifier, totalPages, collections, true);
     } catch (err) {
       console.error('Error in page navigation:', err);
       return interaction.editReply({ 
@@ -126,10 +129,13 @@ async function handlePartyManageButtons({ interaction, collections }) {
         const role = `${m.weapon1}/${m.weapon2}`;
         const cp = (m.cp || 0).toLocaleString();
 
+        // Show party leader badge
+        const leaderBadge = m.isLeader ? '👑 ' : '';
+
         return {
-          label: `${displayName} - ${role}`,
+          label: `${leaderBadge}${displayName} - ${role}`,
           value: m.userId,
-          description: `${cp} CP`
+          description: `${cp} CP${m.isLeader ? ' • Party Leader' : ''}`
         };
       }));
 
@@ -180,10 +186,12 @@ async function handlePartyManageButtons({ interaction, collections }) {
         const role = `${m.weapon1}/${m.weapon2}`;
         const cp = (m.cp || 0).toLocaleString();
 
+        const leaderBadge = m.isLeader ? '👑 ' : '';
+
         return {
-          label: `${displayName} - ${role}`,
+          label: `${leaderBadge}${displayName} - ${role}`,
           value: m.userId,
-          description: `${cp} CP`
+          description: `${cp} CP${m.isLeader ? ' • Party Leader' : ''}`
         };
       }));
 
@@ -206,12 +214,69 @@ async function handlePartyManageButtons({ interaction, collections }) {
       });
     }
   }
+
+  // NEW: Set party leader
+  if (interaction.customId.startsWith('party_set_leader:')) {
+    await interaction.deferUpdate();
+
+    try {
+      const partyIdentifier = interaction.customId.split(':')[1];
+      const isReserve = partyIdentifier === 'reserve';
+
+      const party = isReserve
+        ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
+        : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
+
+      const partyLabel = isReserve ? 'Reserve' : `Party ${partyIdentifier}`;
+
+      if (!party?.members || party.members.length === 0) {
+        return interaction.editReply({ 
+          content: `❌ ${partyLabel} is empty!`, 
+          components: [] 
+        });
+      }
+
+      const options = await Promise.all(party.members.map(async m => {
+        const member = await interaction.guild.members.fetch(m.userId).catch(() => null);
+        const displayName = member ? member.displayName : 'Unknown';
+        const role = `${m.weapon1}/${m.weapon2}`;
+        const cp = (m.cp || 0).toLocaleString();
+
+        const leaderBadge = m.isLeader ? '👑 ' : '';
+
+        return {
+          label: `${leaderBadge}${displayName} - ${role}`,
+          value: m.userId,
+          description: `${cp} CP${m.isLeader ? ' • Current Leader' : ''}`
+        };
+      }));
+
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`party_select_leader:${partyIdentifier}`)
+          .setPlaceholder('Select new party leader')
+          .addOptions(options)
+      );
+
+      return interaction.editReply({ 
+        content: `Setting party leader for ${partyLabel}:`, 
+        components: [row] 
+      });
+    } catch (err) {
+      console.error('Error in party_set_leader:', err);
+      return interaction.editReply({ 
+        content: '❌ Failed to load members. Please try again.', 
+        components: [] 
+      });
+    }
+  }
 }
 
 /**
  * Show a page of players for selection
+ * @param {boolean} isEdit - If true, use editReply instead of update
  */
-async function showPlayerPage(interaction, allPlayers, page, partyIdentifier, totalPages, collections) {
+async function showPlayerPage(interaction, allPlayers, page, partyIdentifier, totalPages, collections, isEdit = false) {
   const pageSize = 25;
   const start = page * pageSize;
   const end = start + pageSize;
@@ -280,7 +345,12 @@ async function showPlayerPage(interaction, allPlayers, page, partyIdentifier, to
 
   const message = `Adding member to ${partyLabel}:\n\n**${allPlayers.length}** total available player(s) | Showing ${start + 1}-${Math.min(end, allPlayers.length)}`;
 
-  return interaction.editReply({ content: message, components });
+  // Use editReply if this is after an update, otherwise use update
+  if (isEdit) {
+    return interaction.editReply({ content: message, components });
+  } else {
+    return interaction.update({ content: message, components });
+  }
 }
 
 module.exports = { handlePartyManageButtons };

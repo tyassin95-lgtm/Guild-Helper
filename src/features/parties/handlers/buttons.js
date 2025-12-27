@@ -288,6 +288,48 @@ async function handlePartyButtons({ interaction, collections }) {
 
     return interaction.reply({ content: '⚠️ Select a party to delete:', components: [row], flags: [64] });
   }
+
+  // NEW: Set party leaders button
+  if (interaction.customId === 'party_set_leaders') {
+    if (!interaction.guildId) {
+      return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
+    }
+
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
+    }
+
+    const allParties = await parties.find({ guildId: interaction.guildId })
+      .sort({ isReserve: 1, partyNumber: 1 })
+      .toArray();
+
+    if (allParties.length === 0) {
+      return interaction.reply({ content: '❌ No parties exist. Create one first!', flags: [64] });
+    }
+
+    const options = allParties.map(p => {
+      if (p.isReserve) {
+        return {
+          label: `Reserve Party (${p.members?.length || 0}/${RESERVE_PARTY_SIZE})`,
+          value: 'reserve',
+          emoji: '📦'
+        };
+      }
+      return {
+        label: `Party ${p.partyNumber} (${p.members?.length || 0}/6)`,
+        value: p.partyNumber.toString()
+      };
+    });
+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('party_select_for_leader')
+        .setPlaceholder('Select a party to set leader')
+        .addOptions(options)
+    );
+
+    return interaction.reply({ content: 'Select a party to set its leader:', components: [row], flags: [64] });
+  }
 }
 
 module.exports = { handlePartyButtons };
