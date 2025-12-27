@@ -8,38 +8,39 @@ const {
 } = require('discord.js');
 const { PARTY_SIZE, RESERVE_PARTY_SIZE } = require('../constants');
 const { getRoleEmoji } = require('../roleDetection');
+const { updatePlayerRole } = require('../roleDetection');
 
 async function handlePartyManageButtons({ interaction, collections }) {
-  console.log('[MANAGE BUTTONS] Handler called for:', interaction.customId);
-
   const { partyPlayers, parties } = collections;
 
+  // Permission check
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
   }
 
   // =========================
-  // ADD MEMBERS (initial open)
+  // ADD MEMBERS
   // =========================
   if (interaction.customId.startsWith('party_add_member:')) {
     await interaction.deferReply({ flags: [64] });
 
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
-    const partyNumber = isReserve ? null : parseInt(partyIdentifier);
 
     const party = isReserve
       ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
-      : await parties.findOne({ guildId: interaction.guildId, partyNumber });
+      : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
 
     const maxSize = isReserve ? RESERVE_PARTY_SIZE : PARTY_SIZE;
+    const currentSize = party?.members?.length || 0;
 
-    if ((party?.members?.length || 0) >= maxSize) {
+    if (currentSize >= maxSize) {
       return interaction.editReply({
-        content: `❌ ${isReserve ? 'Reserve' : `Party ${partyNumber}`} is full!`
+        content: `❌ ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`} is full!`
       });
     }
 
+    // Get available players
     const allPlayers = await partyPlayers.find({
       guildId: interaction.guildId,
       weapon1: { $exists: true },
@@ -48,17 +49,145 @@ async function handlePartyManageButtons({ interaction, collections }) {
       inReserve: { $ne: true }
     }).toArray();
 
+    if (allPlayers.length === 0) {
+      return interaction.editReply({
+        content: '❌ No available players to add. All players are already assigned to parties.'
+      });
+    }
+
     allPlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
-    return showMultiSelectUI(
-      interaction,
-      allPlayers,
-      0,
-      partyIdentifier,
-      party,
-      collections,
-      true // editReply is correct here
+    return showAddMembersUI(interaction, allPlayers, 0, partyIdentifier, party, collections, true);
+  }
+
+  // =========================
+  // REMOVE MEMBERS
+  // =========================
+  if (interaction.customId.startsWith('party_remove_member:')) {
+    await interaction.deferReply({ flags: [64] });
+
+    const partyIdentifier = interaction.customId.split(':')[1];
+    const isReserve = partyIdentifier === 'reserve';
+
+    const party = isReserve
+      ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
+      : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
+
+    if (!party || !party.members || party.members.length === 0) {
+      return interaction.editReply({
+        content: `❌ ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`} has no members to remove.`
+      });
+    }
+
+    // Build member options
+    const options = await Promise.all(party.members.map(async m => {
+      const member = await interaction.guild.members.fetch(m.userId).catch(() => null);
+      return {
+        label: `${member?.displayName || 'Unknown'} - ${m.weapon1}/${m.weapon2}`,
+        value: m.userId,
+        description: `${getRoleEmoji(m.role)} ${(m.cp || 0).toLocaleString()} CP`,
+        emoji: getRoleEmoji(m.role)
+      };
+    }));
+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`party_remove_player:${partyIdentifier}`)
+        .setPlaceholder('Select members to remove')
+        .setMinValues(1)
+        .setMaxValues(Math.min(options.length, 25))
+        .addOptions(options)
     );
+
+    return interaction.editReply({
+      content: `**Removing members from ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`}**\n\nSelect members to remove:`,
+      components: [row]
+    });
+  }
+
+  // =========================
+  // MOVE MEMBER
+  // =========================
+  if (interaction.customId.startsWith('party_move_member:')) {
+    await interaction.deferReply({ flags: [64] });
+
+    const partyIdentifier = interaction.customId.split(':')[1];
+    const isReserve = partyIdentifier === 'reserve';
+
+    const party = isReserve
+      ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
+      : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
+
+    if (!party || !party.members || party.members.length === 0) {
+      return interaction.editReply({
+        content: `❌ ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`} has no members to move.`
+      });
+    }
+
+    // Build member options
+    const options = await Promise.all(party.members.map(async m => {
+      const member = await interaction.guild.members.fetch(m.userId).catch(() => null);
+      return {
+        label: `${member?.displayName || 'Unknown'} - ${m.weapon1}/${m.weapon2}`,
+        value: m.userId,
+        description: `${getRoleEmoji(m.role)} ${(m.cp || 0).toLocaleString()} CP`,
+        emoji: getRoleEmoji(m.role)
+      };
+    }));
+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`party_move_player:${partyIdentifier}`)
+        .setPlaceholder('Select member to move')
+        .addOptions(options)
+    );
+
+    return interaction.editReply({
+      content: `**Moving member from ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`}**\n\nSelect a member:`,
+      components: [row]
+    });
+  }
+
+  // =========================
+  // SET LEADER
+  // =========================
+  if (interaction.customId.startsWith('party_set_leader:')) {
+    await interaction.deferReply({ flags: [64] });
+
+    const partyIdentifier = interaction.customId.split(':')[1];
+    const isReserve = partyIdentifier === 'reserve';
+
+    const party = isReserve
+      ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
+      : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
+
+    if (!party || !party.members || party.members.length === 0) {
+      return interaction.editReply({
+        content: `❌ ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`} has no members.`
+      });
+    }
+
+    // Build member options
+    const options = await Promise.all(party.members.map(async m => {
+      const member = await interaction.guild.members.fetch(m.userId).catch(() => null);
+      return {
+        label: `${m.isLeader ? '👑 ' : ''}${member?.displayName || 'Unknown'}`,
+        value: m.userId,
+        description: `${m.weapon1}/${m.weapon2} • ${(m.cp || 0).toLocaleString()} CP`
+      };
+    }));
+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`party_select_leader:${partyIdentifier}`)
+        .setPlaceholder('Select new party leader')
+        .addOptions(options)
+    );
+
+    return interaction.editReply({
+      content: `**Setting party leader for ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`}**\n\nSelect the new leader:`,
+      components: [row]
+    });
   }
 
   // =========================
@@ -85,72 +214,27 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
     allPlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
-    return showMultiSelectUI(
-      interaction,
-      allPlayers,
-      page,
-      partyIdentifier,
-      party,
-      collections,
-      false
-    );
+    return showAddMembersUI(interaction, allPlayers, page, partyIdentifier, party, collections, false);
   }
 
   // =========================
-  // SET PARTY LEADER - FIXED
+  // DONE MANAGING
   // =========================
-  if (interaction.customId.startsWith('party_set_leader:')) {
+  if (interaction.customId.startsWith('party_done_managing:')) {
     await interaction.deferUpdate();
 
-    const partyIdentifier = interaction.customId.split(':')[1];
-    const isReserve = partyIdentifier === 'reserve';
-
-    const party = isReserve
-      ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
-      : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
-
-    if (!party?.members?.length) {
-      return interaction.editReply({
-        content: '❌ Party is empty!',
-        components: []
-      });
-    }
-
-    const options = await Promise.all(party.members.map(async m => {
-      const member = await interaction.guild.members.fetch(m.userId).catch(() => null);
-      return {
-        label: `${m.isLeader ? '👑 ' : ''}${member?.displayName || 'Unknown'}`,
-        value: m.userId,
-        description: `${m.weapon1}/${m.weapon2} • ${(m.cp || 0).toLocaleString()} CP`
-      };
-    }));
-
-    const row = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId(`party_select_leader:${partyIdentifier}`)
-        .setPlaceholder('Select new party leader')
-        .addOptions(options)
-    );
-
     return interaction.editReply({
-      content: `**Setting party leader for ${isReserve ? 'Reserve' : `Party ${partyIdentifier}`}**`,
-      components: [row]
+      content: '✅ Party management complete!',
+      embeds: [],
+      components: []
     });
   }
 }
 
 /**
- * MULTI-SELECT UI RENDERER
+ * Show the add members UI with pagination
  */
-async function showMultiSelectUI(
-  interaction,
-  allPlayers,
-  page,
-  partyIdentifier,
-  party,
-  collections,
-  useEditReply
-) {
+async function showAddMembersUI(interaction, allPlayers, page, partyIdentifier, party, collections, useEditReply) {
   const pageSize = 25;
   const totalPages = Math.ceil(allPlayers.length / pageSize);
   const start = page * pageSize;
@@ -180,17 +264,19 @@ async function showMultiSelectUI(
 
   const components = [];
 
+  // Multi-select menu
   components.push(
     new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId(`party_add_selected:${partyIdentifier}`)
-        .setPlaceholder(`Select players to add (max ${availableSlots})`)
+        .setPlaceholder(`Select players to add (max ${Math.min(availableSlots, 25)})`)
         .setMinValues(0)
         .setMaxValues(Math.min(availableSlots, options.length, 25))
         .addOptions(options)
     )
   );
 
+  // Pagination buttons
   if (totalPages > 1) {
     components.push(
       new ActionRowBuilder().addComponents(
@@ -213,8 +299,34 @@ async function showMultiSelectUI(
     );
   }
 
+  // Action buttons
+  components.push(
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`party_remove_member:${partyIdentifier}`)
+        .setLabel('Remove Members')
+        .setStyle(ButtonStyle.Danger)
+        .setEmoji('➖'),
+      new ButtonBuilder()
+        .setCustomId(`party_move_member:${partyIdentifier}`)
+        .setLabel('Move Member')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(`party_set_leader:${partyIdentifier}`)
+        .setLabel('Set Leader')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('👑'),
+      new ButtonBuilder()
+        .setCustomId(`party_done_managing:${partyIdentifier}`)
+        .setLabel('Done')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('✅')
+    )
+  );
+
   const payload = {
-    content: `📊 Showing ${start + 1}-${Math.min(end, allPlayers.length)} of ${allPlayers.length} players`,
+    content: `📊 Showing ${start + 1}-${Math.min(end, allPlayers.length)} of ${allPlayers.length} available players`,
     embeds: [embed],
     components
   };
