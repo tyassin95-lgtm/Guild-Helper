@@ -11,6 +11,9 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
   // Add member to party - NEW: Show persistent multi-select UI
   if (interaction.customId.startsWith('party_add_member:')) {
+    // CRITICAL: Defer immediately to prevent timeout
+    await interaction.deferReply();
+
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
     const partyNumber = isReserve ? null : parseInt(partyIdentifier);
@@ -23,9 +26,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
     const partyLabel = isReserve ? 'Reserve' : `Party ${partyNumber}`;
 
     if ((party?.members?.length || 0) >= maxSize) {
-      return interaction.reply({ 
-        content: `❌ ${partyLabel} is full (${maxSize}/${maxSize})!`, 
-        flags: [64]
+      return interaction.editReply({ 
+        content: `❌ ${partyLabel} is full (${maxSize}/${maxSize})!`
       });
     }
 
@@ -39,9 +41,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
     }).toArray();
 
     if (allPlayers.length === 0) {
-      return interaction.reply({ 
-        content: '❌ No available players to add! All players with party info are already assigned.', 
-        flags: [64]
+      return interaction.editReply({ 
+        content: '❌ No available players to add! All players with party info are already assigned.'
       });
     }
 
@@ -391,7 +392,7 @@ async function showMultiSelectUI(interaction, allPlayers, page, partyIdentifier,
 
   if (isReply) {
     // Non-ephemeral so admin can see their work
-    return interaction.reply(message);
+    return interaction.editReply(message);
   } else {
     return interaction.update(message);
   }
