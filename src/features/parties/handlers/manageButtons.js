@@ -344,9 +344,8 @@ async function showAddMembersUI(interaction, allPlayers, page, partyIdentifier, 
     components
   };
 
-  return useEditReply
-    ? interaction.editReply(payload)
-    : interaction.update(payload);
+  // Always use editReply since interactions are always deferred before calling this function
+  return interaction.editReply(payload);
 }
 
 module.exports = { handlePartyManageButtons };
