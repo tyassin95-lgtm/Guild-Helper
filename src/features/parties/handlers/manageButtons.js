@@ -108,8 +108,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
     console.log('[MANAGE BUTTONS] Found', allPlayers.length, 'players, showing page', page);
 
-    // Show the requested page (use false since we deferred update)
-    await showMultiSelectUI(interaction, allPlayers, page, partyIdentifier, party, collections, false);
+    // Show the requested page (use true since we deferred update and need editReply)
+    await showMultiSelectUI(interaction, allPlayers, page, partyIdentifier, party, collections, true);
     console.log('[MANAGE BUTTONS] Page navigation complete');
   }
 
