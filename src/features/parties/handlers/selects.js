@@ -751,7 +751,8 @@ async function showAddMembersUI(interaction, allPlayers, page, partyIdentifier, 
     content = `${previousMessage}\n\n${content}`;
   }
 
-  return interaction.update({
+  // Use editReply since this is called after deferUpdate
+  return interaction.editReply({
     content,
     components
   });
