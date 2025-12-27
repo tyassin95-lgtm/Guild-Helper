@@ -11,8 +11,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
   // Add member to party - NEW: Show persistent multi-select UI
   if (interaction.customId.startsWith('party_add_member:')) {
-    // CRITICAL: Defer immediately to prevent timeout
-    await interaction.deferReply();
+    // CRITICAL: Defer immediately to prevent timeout - use reply for new message
+    await interaction.deferReply({ flags: [64] });
 
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
@@ -55,7 +55,7 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
   // Handle page navigation for multi-select
   if (interaction.customId.startsWith('party_add_page:')) {
-    // CRITICAL: Defer immediately to prevent timeout
+    // CRITICAL: Use deferUpdate for button interactions to update the existing message
     await interaction.deferUpdate();
 
     const [, partyIdentifier, pageStr] = interaction.customId.split(':');
@@ -78,8 +78,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
     allPlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
-    // Show the requested page (use editReply since we deferred)
-    await showMultiSelectUI(interaction, allPlayers, page, partyIdentifier, party, collections, true);
+    // Show the requested page (use false since we deferred update)
+    await showMultiSelectUI(interaction, allPlayers, page, partyIdentifier, party, collections, false);
   }
 
   // Handle "Add Selected" button
@@ -197,8 +197,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
   // Set party leader
   if (interaction.customId.startsWith('party_set_leader:')) {
-    // CRITICAL: Defer immediately to prevent timeout
-    await interaction.deferReply({ flags: [64] }); // Ephemeral for this action
+    // CRITICAL: Use deferUpdate instead of deferReply to update the existing message
+    await interaction.deferUpdate();
 
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
@@ -211,7 +211,8 @@ async function handlePartyManageButtons({ interaction, collections }) {
 
     if (!party?.members || party.members.length === 0) {
       return interaction.editReply({ 
-        content: `❌ ${partyLabel} is empty!`
+        content: `❌ ${partyLabel} is empty!`,
+        components: []
       });
     }
 

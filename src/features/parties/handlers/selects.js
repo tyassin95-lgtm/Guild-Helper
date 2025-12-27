@@ -343,24 +343,25 @@ async function handlePartySelects({ interaction, collections }) {
     return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
   }
 
-  // NEW: Multi-select add players
+  // NEW: Multi-select add players - CRITICAL FIX: Defer immediately
   if (interaction.customId.startsWith('party_add_selected:')) {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
+
+    // CRITICAL: Defer IMMEDIATELY before any processing
+    await interaction.deferUpdate();
 
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
     const userIds = interaction.values; // Array of selected user IDs
 
     if (userIds.length === 0) {
-      return interaction.reply({
+      return interaction.editReply({
         content: '⚠️ No players selected. Please select at least one player from the menu.',
-        flags: [64]
+        components: []
       });
     }
-
-    await interaction.deferUpdate();
 
     const party = isReserve
       ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
