@@ -1,13 +1,14 @@
-const { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { createPlayerInfoEmbed, createPartiesOverviewEmbed } = require('../embed');
 const { PARTY_SIZE, RESERVE_PARTY_SIZE } = require('../constants');
 const { updatePlayerRole } = require('../roleDetection');
 const { updateGuildRoster } = require('../commands/guildroster');
+const { getRoleEmoji } = require('../roleDetection');
 
 async function handlePartySelects({ interaction, collections }) {
   const { partyPlayers, parties } = collections;
 
-  // Select weapon 1
+  // Set weapon 1
   if (interaction.customId === 'party_select_weapon1') {
     await interaction.deferUpdate();
 
@@ -172,7 +173,7 @@ async function handlePartySelects({ interaction, collections }) {
     }
   }
 
-  // Select weapon 2
+  // Set weapon 2
   if (interaction.customId === 'party_select_weapon2') {
     await interaction.deferUpdate();
 
@@ -342,7 +343,264 @@ async function handlePartySelects({ interaction, collections }) {
     return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
   }
 
-  // NEW: Select party for leader assignment
+  // NEW: Multi-select add players
+  if (interaction.customId.startsWith('party_add_selected:')) {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
+    }
+
+    const partyIdentifier = interaction.customId.split(':')[1];
+    const isReserve = partyIdentifier === 'reserve';
+    const userIds = interaction.values; // Array of selected user IDs
+
+    if (userIds.length === 0) {
+      return interaction.reply({
+        content: '⚠️ No players selected. Please select at least one player from the menu.',
+        flags: [64]
+      });
+    }
+
+    await interaction.deferUpdate();
+
+    const party = isReserve
+      ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
+      : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
+
+    const maxSize = isReserve ? RESERVE_PARTY_SIZE : PARTY_SIZE;
+    const partyLabel = isReserve ? 'Reserve' : `Party ${partyIdentifier}`;
+    const currentSize = party?.members?.length || 0;
+    const availableSlots = maxSize - currentSize;
+
+    if (userIds.length > availableSlots) {
+      return interaction.editReply({
+        content: `❌ Cannot add ${userIds.length} players! Only ${availableSlots} slot(s) available in ${partyLabel}.`,
+        components: []
+      });
+    }
+
+    // Process all selected players
+    const addedPlayers = [];
+    const failedPlayers = [];
+
+    for (const userId of userIds) {
+      const playerInfo = await partyPlayers.findOne({ userId, guildId: interaction.guildId });
+
+      if (!playerInfo || !playerInfo.weapon1 || !playerInfo.weapon2) {
+        const member = await interaction.guild.members.fetch(userId).catch(() => null);
+        failedPlayers.push(member?.displayName || userId);
+        continue;
+      }
+
+      // Ensure player has role
+      if (!playerInfo.role) {
+        await updatePlayerRole(userId, interaction.guildId, playerInfo.weapon1, playerInfo.weapon2, collections);
+        const updatedPlayer = await partyPlayers.findOne({ userId, guildId: interaction.guildId });
+        playerInfo.role = updatedPlayer.role;
+      }
+
+      const updateQuery = isReserve
+        ? { guildId: interaction.guildId, isReserve: true }
+        : { guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) };
+
+      await parties.updateOne(
+        updateQuery,
+        { 
+          $push: { 
+            members: {
+              userId: playerInfo.userId,
+              weapon1: playerInfo.weapon1,
+              weapon2: playerInfo.weapon2,
+              cp: playerInfo.cp || 0,
+              role: playerInfo.role,
+              addedAt: new Date()
+            }
+          },
+          $inc: {
+            totalCP: (playerInfo.cp || 0),
+            [`roleComposition.${playerInfo.role}`]: 1
+          }
+        }
+      );
+
+      const playerUpdate = isReserve
+        ? { $set: { inReserve: true }, $unset: { partyNumber: '' } }
+        : { $set: { partyNumber: parseInt(partyIdentifier) }, $unset: { inReserve: '' } };
+
+      await partyPlayers.updateOne(
+        { userId, guildId: interaction.guildId },
+        playerUpdate
+      );
+
+      const member = await interaction.guild.members.fetch(userId).catch(() => null);
+      addedPlayers.push(member?.displayName || userId);
+    }
+
+    // Get updated party info
+    const updatedParty = isReserve
+      ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
+      : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
+
+    // Get all available players for the UI
+    const allPlayers = await partyPlayers.find({ 
+      guildId: interaction.guildId,
+      weapon1: { $exists: true },
+      weapon2: { $exists: true },
+      partyNumber: { $exists: false },
+      inReserve: { $ne: true }
+    }).toArray();
+
+    allPlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
+
+    // Build updated embed
+    const embed = new EmbedBuilder()
+      .setColor('#10B981')
+      .setTitle(`✅ Added ${addedPlayers.length} player(s) to ${partyLabel}`)
+      .setTimestamp();
+
+    if (addedPlayers.length > 0) {
+      embed.addFields({
+        name: 'Successfully Added',
+        value: addedPlayers.map(name => `• ${name}`).join('\n'),
+        inline: false
+      });
+    }
+
+    if (failedPlayers.length > 0) {
+      embed.addFields({
+        name: 'Failed to Add (No Party Info)',
+        value: failedPlayers.map(name => `• ${name}`).join('\n'),
+        inline: false
+      });
+    }
+
+    const newCurrentSize = updatedParty?.members?.length || 0;
+    const newAvailableSlots = maxSize - newCurrentSize;
+
+    embed.addFields({
+      name: 'Party Status',
+      value: `**${newCurrentSize}/${maxSize}** members | **${newAvailableSlots}** slots available`,
+      inline: false
+    });
+
+    // Show updated roster in embed
+    if (updatedParty?.members && updatedParty.members.length > 0) {
+      const memberList = await Promise.all(updatedParty.members.map(async (m, index) => {
+        const member = await interaction.guild.members.fetch(m.userId).catch(() => null);
+        const displayName = member ? member.displayName : 'Unknown';
+        const roleEmoji = getRoleEmoji(m.role);
+        const cp = (m.cp || 0).toLocaleString();
+        const leaderBadge = m.isLeader ? '👑 ' : '';
+
+        return `${index + 1}. ${leaderBadge}${displayName} ${roleEmoji} ${m.weapon1}/${m.weapon2} • ${cp} CP`;
+      }));
+
+      embed.addFields({
+        name: `Current Members (${updatedParty.members.length})`,
+        value: memberList.slice(0, 10).join('\n') + (memberList.length > 10 ? `\n*...and ${memberList.length - 10} more*` : ''),
+        inline: false
+      });
+    }
+
+    // If no more slots available or no more players, show completion
+    if (newAvailableSlots === 0 || allPlayers.length === 0) {
+      return interaction.editReply({
+        content: newAvailableSlots === 0 
+          ? `🎉 **${partyLabel} is now full!**`
+          : `✅ **All available players assigned!**`,
+        embeds: [embed],
+        components: []
+      });
+    }
+
+    // Continue showing the UI for more additions
+    const pageSize = 25;
+    const playersOnPage = allPlayers.slice(0, pageSize);
+
+    const options = await Promise.all(playersOnPage.map(async p => {
+      const member = await interaction.guild.members.fetch(p.userId).catch(() => null);
+      const displayName = member ? member.displayName : 'Unknown';
+      const roleEmoji = getRoleEmoji(p.role);
+      const role = `${p.weapon1}/${p.weapon2}`;
+      const cp = (p.cp || 0).toLocaleString();
+
+      return {
+        label: `${displayName} - ${role}`,
+        value: p.userId,
+        description: `${roleEmoji} ${cp} CP`,
+        emoji: roleEmoji
+      };
+    }));
+
+    const components = [];
+
+    // Multi-select menu
+    const selectRow = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`party_add_selected:${partyIdentifier}`)
+        .setPlaceholder(`Select more players to add (max ${Math.min(newAvailableSlots, 25)})`)
+        .setMinValues(0)
+        .setMaxValues(Math.min(options.length, newAvailableSlots, 25))
+        .addOptions(options)
+    );
+    components.push(selectRow);
+
+    // Pagination if needed
+    const totalPages = Math.ceil(allPlayers.length / pageSize);
+    if (totalPages > 1) {
+      const buttonRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`party_add_page:${partyIdentifier}:0`)
+          .setLabel('◀ Previous')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId('page_indicator')
+          .setLabel(`Page 1/${totalPages}`)
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId(`party_add_page:${partyIdentifier}:1`)
+          .setLabel('Next ▶')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(totalPages === 1)
+      );
+      components.push(buttonRow);
+    }
+
+    // Action buttons
+    const actionRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`party_remove_member:${partyIdentifier}`)
+        .setLabel('Remove Members')
+        .setStyle(ButtonStyle.Danger)
+        .setEmoji('➖'),
+      new ButtonBuilder()
+        .setCustomId(`party_move_member:${partyIdentifier}`)
+        .setLabel('Move Member')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🔄'),
+      new ButtonBuilder()
+        .setCustomId(`party_set_leader:${partyIdentifier}`)
+        .setLabel('Set Leader')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('👑'),
+      new ButtonBuilder()
+        .setCustomId(`party_done_managing:${partyIdentifier}`)
+        .setLabel('Done')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('✅')
+    );
+    components.push(actionRow);
+
+    return interaction.editReply({
+      content: `📊 Showing 1-${Math.min(pageSize, allPlayers.length)} of ${allPlayers.length} available players\n` +
+               `💡 Select more players to continue adding, or use the buttons below for other actions.`,
+      embeds: [embed],
+      components
+    });
+  }
+
+  // Select party for leader assignment
   if (interaction.customId === 'party_select_for_leader') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
@@ -378,12 +636,12 @@ async function handlePartySelects({ interaction, collections }) {
     const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`party_add_member:${partyIdentifier}`)
-        .setLabel('Add Member')
+        .setLabel('Add Members')
         .setStyle(ButtonStyle.Success)
         .setEmoji('➕'),
       new ButtonBuilder()
         .setCustomId(`party_remove_member:${partyIdentifier}`)
-        .setLabel('Remove Member')
+        .setLabel('Remove Members')
         .setStyle(ButtonStyle.Danger)
         .setEmoji('➖')
     );
@@ -402,89 +660,7 @@ async function handlePartySelects({ interaction, collections }) {
     });
   }
 
-  if (interaction.customId.startsWith('party_add_player:')) {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
-    }
-
-    const partyIdentifier = interaction.customId.split(':')[1];
-    const isReserve = partyIdentifier === 'reserve';
-    const userId = interaction.values[0];
-
-    const party = isReserve
-      ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
-      : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
-
-    const maxSize = isReserve ? RESERVE_PARTY_SIZE : PARTY_SIZE;
-    const partyLabel = isReserve ? 'Reserve' : `Party ${partyIdentifier}`;
-
-    if ((party.members?.length || 0) >= maxSize) {
-      return interaction.update({ 
-        content: `❌ ${partyLabel} is full (${maxSize}/${maxSize})!`, 
-        components: [] 
-      });
-    }
-
-    const playerInfo = await partyPlayers.findOne({ userId, guildId: interaction.guildId });
-
-    if (!playerInfo || !playerInfo.weapon1 || !playerInfo.weapon2) {
-      return interaction.update({ 
-        content: '❌ This player hasn\'t set up their party info yet!', 
-        components: [] 
-      });
-    }
-
-    if (!playerInfo.role) {
-      await updatePlayerRole(userId, interaction.guildId, playerInfo.weapon1, playerInfo.weapon2, collections);
-      playerInfo.role = (await partyPlayers.findOne({ userId, guildId: interaction.guildId })).role;
-    }
-
-    const updateQuery = isReserve
-      ? { guildId: interaction.guildId, isReserve: true }
-      : { guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) };
-
-    await parties.updateOne(
-      updateQuery,
-      { 
-        $push: { 
-          members: {
-            userId: playerInfo.userId,
-            weapon1: playerInfo.weapon1,
-            weapon2: playerInfo.weapon2,
-            cp: playerInfo.cp || 0,
-            role: playerInfo.role,
-            addedAt: new Date()
-          }
-        },
-        $inc: {
-          totalCP: (playerInfo.cp || 0),
-          [`roleComposition.${playerInfo.role}`]: 1
-        }
-      }
-    );
-
-    const playerUpdate = isReserve
-      ? { $set: { inReserve: true }, $unset: { partyNumber: '' } }
-      : { $set: { partyNumber: parseInt(partyIdentifier) }, $unset: { inReserve: '' } };
-
-    await partyPlayers.updateOne(
-      { userId, guildId: interaction.guildId },
-      playerUpdate
-    );
-
-    const allParties = await parties.find({ guildId: interaction.guildId })
-      .sort({ isReserve: 1, partyNumber: 1 })
-      .toArray();
-
-    const embed = createPartiesOverviewEmbed(allParties, interaction.guild);
-
-    return interaction.update({ 
-      content: `✅ Added <@${userId}> to ${partyLabel}!`, 
-      embeds: [embed], 
-      components: [] 
-    });
-  }
-
+  // Remove player(s) - NOW SUPPORTS MULTI-SELECT
   if (interaction.customId.startsWith('party_remove_player:')) {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
@@ -492,36 +668,46 @@ async function handlePartySelects({ interaction, collections }) {
 
     const partyIdentifier = interaction.customId.split(':')[1];
     const isReserve = partyIdentifier === 'reserve';
-    const userId = interaction.values[0];
+    const userIds = interaction.values; // Array of selected user IDs
+
+    await interaction.deferUpdate();
 
     const party = isReserve
       ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
       : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
 
-    const member = party.members?.find(m => m.userId === userId);
     const partyLabel = isReserve ? 'Reserve' : `Party ${partyIdentifier}`;
+    const removedPlayers = [];
 
-    if (member) {
-      const updateQuery = isReserve
-        ? { guildId: interaction.guildId, isReserve: true }
-        : { guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) };
+    // Remove all selected players
+    for (const userId of userIds) {
+      const member = party.members?.find(m => m.userId === userId);
 
-      await parties.updateOne(
-        updateQuery,
-        { 
-          $pull: { members: { userId } },
-          $inc: {
-            totalCP: -(member.cp || 0),
-            [`roleComposition.${member.role}`]: -1
+      if (member) {
+        const updateQuery = isReserve
+          ? { guildId: interaction.guildId, isReserve: true }
+          : { guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) };
+
+        await parties.updateOne(
+          updateQuery,
+          { 
+            $pull: { members: { userId } },
+            $inc: {
+              totalCP: -(member.cp || 0),
+              [`roleComposition.${member.role}`]: -1
+            }
           }
-        }
-      );
-    }
+        );
 
-    await partyPlayers.updateOne(
-      { userId, guildId: interaction.guildId },
-      { $unset: { partyNumber: '', inReserve: '' } }
-    );
+        await partyPlayers.updateOne(
+          { userId, guildId: interaction.guildId },
+          { $unset: { partyNumber: '', inReserve: '' } }
+        );
+
+        const guildMember = await interaction.guild.members.fetch(userId).catch(() => null);
+        removedPlayers.push(guildMember?.displayName || userId);
+      }
+    }
 
     const allParties = await parties.find({ guildId: interaction.guildId })
       .sort({ isReserve: 1, partyNumber: 1 })
@@ -529,8 +715,8 @@ async function handlePartySelects({ interaction, collections }) {
 
     const embed = createPartiesOverviewEmbed(allParties, interaction.guild);
 
-    return interaction.update({ 
-      content: `✅ Removed <@${userId}> from ${partyLabel}!`, 
+    return interaction.editReply({ 
+      content: `✅ Removed **${removedPlayers.length}** player(s) from ${partyLabel}:\n${removedPlayers.map(n => `• ${n}`).join('\n')}`, 
       embeds: [embed], 
       components: [] 
     });
@@ -716,7 +902,7 @@ async function handlePartySelects({ interaction, collections }) {
     });
   }
 
-  // NEW: Select party leader
+  // Select party leader
   if (interaction.customId.startsWith('party_select_leader:')) {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
