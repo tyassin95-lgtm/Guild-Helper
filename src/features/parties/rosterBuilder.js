@@ -65,7 +65,7 @@ class RosterBuilder {
     messageHeader += `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithData.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n`;
     messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
     messageHeader += '```\n';
-    messageHeader += 'Name            Role      Weapons                        CP     Total Events   Weekly Bonus\n';
+    messageHeader += 'Name            Role      Weapons              CP         Total Events   Weekly Bonus\n';
     messageHeader += '─────────────────────────────────────────────────────────────────────────────────────────────\n';
     messageHeader += '```\n';
 
@@ -85,8 +85,8 @@ class RosterBuilder {
       const weapon2 = player.weapon2 || 'Unknown';
       const weaponsShort = `${weapon1.substring(0, 10)}/${weapon2.substring(0, 10)}`.substring(0, 20).padEnd(20);
 
-      // CP column - padded to 6 characters
-      const cpFormatted = this.formatCombatPower(player.cp || 0).padEnd(6);
+      // CP column - padded to 10 characters
+      const cpFormatted = this.formatCombatPower(player.cp || 0).padEnd(10);
 
       // Total Events column - padded to 14 characters (centered under "Total Events")
       const eventsFormatted = player.pvpEvents.toString().padEnd(14);
