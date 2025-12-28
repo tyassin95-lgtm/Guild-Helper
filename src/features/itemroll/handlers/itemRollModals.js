@@ -26,12 +26,12 @@ async function handleItemRollModals({ interaction, collections }) {
       // Clean up temp data
       delete global.tempItemRollData[tempId];
       return interaction.editReply({
-        content: '❌ Invalid duration. Please enter a number between 1 and 999 minutes.'
+        content: '❌ Invalid duration. Please enter a number between 1 and 999 hours.'
       });
     }
 
     // Calculate end time
-    const endsAt = new Date(Date.now() + duration * 60 * 1000);
+    const endsAt = new Date(Date.now() + duration * 60 * 60 * 1000);
 
     // Update temp data with trait and duration
     global.tempItemRollData[tempId] = {
@@ -62,7 +62,7 @@ async function handleItemRollModals({ interaction, collections }) {
       content: '**Step 4: Select Eligible Participants**\n\n' +
                `**Item:** ${tempData.itemName}\n` +
                `**Trait:** ${trait}\n` +
-               `**Duration:** ${duration} minute(s)\n\n` +
+               `**Duration:** ${duration} hour(s)\n\n` +
                'Choose who can roll for this item:\n' +
                '• Click "Allow Everyone" to let all members roll, OR\n' +
                '• Use the dropdown below to select specific users',
