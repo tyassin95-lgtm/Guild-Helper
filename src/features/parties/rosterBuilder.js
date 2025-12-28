@@ -83,7 +83,7 @@ class RosterBuilder {
       // Weapons column
       const weapon1 = player.weapon1 || 'Unknown';
       const weapon2 = player.weapon2 || 'Unknown';
-      const weaponsShort = `${weapon1.substring(0, 10)}/${weapon2.substring(0, 10)}`.substring(0, 20).padEnd(20);
+      const weaponsShort = `${weapon1.substring(0, 14)}/${weapon2.substring(0, 10)}`.substring(0, 26).padEnd(30);
 
       // CP column - padded to 6 characters
       const cpFormatted = this.formatCombatPower(player.cp || 0).padEnd(6);
