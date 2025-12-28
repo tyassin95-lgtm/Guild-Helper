@@ -83,16 +83,16 @@ class RosterBuilder {
       // Weapons column
       const weapon1 = player.weapon1 || 'Unknown';
       const weapon2 = player.weapon2 || 'Unknown';
-      const weaponsShort = `${weapon1.substring(0, 9)}/${weapon2.substring(0, 9)}`.substring(0, 20).padEnd(20);
+      const weaponsShort = `${weapon1.substring(0, 10)}/${weapon2.substring(0, 10)}`.substring(0, 20).padEnd(20);
 
       // CP column - padded to 6 characters
-      const cpFormatted = this.formatCombatPower(player.cp || 0).padStart(6);
+      const cpFormatted = this.formatCombatPower(player.cp || 0).padEnd(6);
 
-      // Total Events column - padded to 13 characters (centered under "Total Events")
-      const eventsFormatted = player.pvpEvents.toString().padStart(14);
+      // Total Events column - padded to 14 characters (centered under "Total Events")
+      const eventsFormatted = player.pvpEvents.toString().padEnd(14);
 
-      // Weekly Bonus column - padded to 13 characters (centered under "Weekly Bonus")
-      const bonusFormatted = `+${player.rollBonus}`.padStart(16);
+      // Weekly Bonus column - padded to 16 characters (centered under "Weekly Bonus")
+      const bonusFormatted = `+${player.rollBonus}`.padEnd(16);
 
       // Discord mention with gear link on same line
       let gearLink;
