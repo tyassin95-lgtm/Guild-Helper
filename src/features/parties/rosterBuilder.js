@@ -63,10 +63,10 @@ class RosterBuilder {
     // Build message header (only for first message)
     let messageHeader = '**🏰 GUILD ROSTER**\n';
     messageHeader += `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithData.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n`;
-    messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
     messageHeader += '```\n';
-    messageHeader += 'Name            Role      Weapons                        CP      Total Events    Weekly Bonus\n';
-    messageHeader += '───────────────────────────────────────────────────────────────────────────────────────────────────────\n';
+    messageHeader += 'Name            Role      Weapons                        CP     Total Events   Weekly Bonus\n';
+    messageHeader += '──────────────────────────────────────────────────────────────────────────────────────────────\n';
     messageHeader += '```\n';
 
     let membersList = '';
@@ -91,8 +91,8 @@ class RosterBuilder {
       // Total Events column - padded to 14 characters (centered under "Total Events")
       const eventsFormatted = player.pvpEvents.toString().padEnd(14);
 
-      // Weekly Bonus column - padded to 16 characters (centered under "Weekly Bonus")
-      const bonusFormatted = `+${player.rollBonus}`.padEnd(16);
+      // Weekly Bonus column - padded to 4 characters (centered under "Weekly Bonus")
+      const bonusFormatted = `+${player.rollBonus}`.padEnd(4);
 
       // Discord mention with gear link on same line
       let gearLink;
@@ -125,7 +125,7 @@ class RosterBuilder {
 
     // Finalize last message with legend
     currentMessage += membersList;
-    currentMessage += '─────────────────────────────────────────────────────────────────────────────────────────────\n';
+    currentMessage += '───────────────────────────────────────────────────────────────────────────────────q ─\n';
     currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS\n📸 Gear links appear next to each player mention';
 
     messages.push({ content: currentMessage });
