@@ -15,8 +15,8 @@ function getRoleFromWeapons(weapon1, weapon2) {
   const w2 = weapon2.toLowerCase().trim();
 
   // Tank: Sword & Shield with anything
-  if (w1.includes('sword') && w1.includes('shield')) return 'tank';
-  if (w2.includes('sword') && w2.includes('shield')) return 'tank';
+  if (w1.includes('sns')) return 'tank';
+  if (w2.includes('sns')) return 'tank';
 
   // Healer: Orb/Wand or Wand/Bow (any order)
   const hasOrb = w1.includes('orb') || w2.includes('orb');

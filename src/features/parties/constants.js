@@ -2,7 +2,7 @@
 const WEAPONS = [
   { name: 'Orb', emoji: '🔮' },
   { name: 'Wand', emoji: '🪄' },
-  { name: 'Sword & Shield', emoji: '🛡️' },
+  { name: 'SnS', emoji: '🛡️' },
   { name: 'Greatsword', emoji: '⚔️' },
   { name: 'Staff', emoji: '🪶' },
   { name: 'Bow', emoji: '🏹' },
