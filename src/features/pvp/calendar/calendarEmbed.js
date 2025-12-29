@@ -1,6 +1,7 @@
 /**
  * Generate the PvP calendar as formatted text (not embed)
  * Shows today + next 6 days (rolling 7-day window)
+ * Updates daily at midnight UK time
  */
 async function createCalendarMessage(guildId, client, collections) {
   const { pvpEvents } = collections;
@@ -49,8 +50,8 @@ async function createCalendarMessage(guildId, client, collections) {
   // Group events by day
   const eventsByDay = groupEventsByDay(events, startDate);
 
-  // Build the timetable layout
-  const timetableText = buildTimetable(eventsByDay, startDate, guildId);
+  // Build the calendar content
+  const calendarContent = buildCalendarContent(eventsByDay, startDate, guildId);
 
   // Calculate date range for title
   const endDisplayDate = new Date(startDate);
@@ -71,11 +72,11 @@ async function createCalendarMessage(guildId, client, collections) {
   // Build formatted text message
   const message = 
     `# 🗓️ PvP Weekly Schedule\n` +
-    `**${startDateStr} - ${endDateStr}**\n` +
-    `\`\`\`\n` +
-    timetableText +
-    `\`\`\`\n` +
-    `📊 **${events.length}** event${events.length !== 1 ? 's' : ''} scheduled • 🔄 Updates every 5 minutes • <t:${timestamp}:R>`;
+    `**${startDateStr} - ${endDateStr}**\n\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    calendarContent +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `📊 **${events.length}** event${events.length !== 1 ? 's' : ''} scheduled • 🔄 Updates every 5 minutes • Last updated <t:${timestamp}:R>`;
 
   return message;
 }
@@ -115,9 +116,9 @@ function groupEventsByDay(events, startDate) {
 }
 
 /**
- * Build the timetable text layout (all 7 days horizontally)
+ * Build the calendar content (vertical layout with full event details)
  */
-function buildTimetable(eventsByDay, startDate, guildId) {
+function buildCalendarContent(eventsByDay, startDate, guildId) {
   const eventTypeEmojis = {
     siege: '🏰',
     riftstone: '💎',
@@ -128,77 +129,62 @@ function buildTimetable(eventsByDay, startDate, guildId) {
 
   const eventTypeNames = {
     siege: 'Siege',
-    riftstone: 'Riftstone',
-    boonstone: 'Boonstone',
+    riftstone: 'Riftstone Fight',
+    boonstone: 'Boonstone Fight',
     wargames: 'Wargames',
     guildevent: 'Guild Event'
   };
 
-  const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+  const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
-  let timetable = '';
+  let content = '';
 
-  // Build header row with all 7 days
-  const headers = [];
+  // Build each day vertically
   for (let i = 0; i < 7; i++) {
     const date = new Date(startDate);
     date.setDate(date.getDate() + i);
     const dayNum = date.getDate();
+    const monthName = monthNames[date.getMonth()];
     const actualDayIdx = date.getDay();
     const dayName = dayNames[actualDayIdx];
 
-    // Fixed width for each column (18 chars)
-    const header = `${dayName} ${dayNum}`.padEnd(18);
-    headers.push(header);
-  }
-  timetable += headers.join('') + '\n';
+    // Day header
+    content += `**📅 ${dayName}, ${monthName} ${dayNum}**\n`;
 
-  // Build separator
-  timetable += '═'.repeat(126) + '\n';
+    const dayEvents = eventsByDay[i];
 
-  // Find max events in any single day
-  let maxEvents = 0;
-  for (let i = 0; i < 7; i++) {
-    maxEvents = Math.max(maxEvents, eventsByDay[i].length);
-  }
-
-  // If no events at all
-  if (maxEvents === 0) {
-    timetable += '\n' + ' '.repeat(45) + 'No events scheduled\n';
-    return timetable;
-  }
-
-  // Build event rows (one row per event slot across all days)
-  for (let eventIdx = 0; eventIdx < maxEvents; eventIdx++) {
-    const eventRow = [];
-
-    for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
-      const dayEvents = eventsByDay[dayIdx];
-
-      if (eventIdx < dayEvents.length) {
-        const event = dayEvents[eventIdx];
+    if (dayEvents.length === 0) {
+      // No events for this day
+      content += `*No events scheduled*\n\n`;
+    } else {
+      // List all events for this day
+      for (const event of dayEvents) {
         const emoji = eventTypeEmojis[event.eventType] || '📅';
+        const typeName = eventTypeNames[event.eventType] || event.eventType;
 
         // Create masked link to event
         const eventLink = `https://discord.com/channels/${guildId}/${event.channelId}/${event.messageId}`;
+
+        // Format time using Discord timestamp
         const timestamp = Math.floor(event.eventTime.getTime() / 1000);
+        const timeDisplay = `<t:${timestamp}:t>`;
 
-        // Format as: "emoji Time"
-        const timeLink = `${emoji} <t:${timestamp}:t>`;
+        // Event line: emoji + time + type
+        content += `${emoji} **${timeDisplay}** • ${typeName}\n`;
 
-        // Pad to fixed width
-        const cell = timeLink.padEnd(18);
-        eventRow.push(cell);
-      } else {
-        // Empty cell
-        eventRow.push(' '.repeat(18));
+        // Add location if it exists (for riftstone, boonstone, guild events)
+        if (event.location) {
+          content += `└─ Location: ${event.location}\n`;
+        }
+
+        // Add "Go to Event" link
+        content += `└─ [Go to Event](${eventLink})\n\n`;
       }
     }
-
-    timetable += eventRow.join('') + '\n';
   }
 
-  return timetable;
+  return content;
 }
 
 module.exports = { createCalendarMessage };
