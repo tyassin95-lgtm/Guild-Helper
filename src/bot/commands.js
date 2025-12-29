@@ -67,6 +67,11 @@ async function registerSlashCommands(client) {
       description: 'Admins: Send a DM to users who haven\'t set up their party info.',
       default_member_permissions: ADMIN
     },
+    {
+      name: 'guildroster',
+      description: 'Admins: Create/update an auto-updating guild roster in this channel.',
+      default_member_permissions: ADMIN
+    },
     // NEW: Screenshot storage command
     {
       name: 'screenshot',
@@ -496,11 +501,6 @@ async function registerSlashCommands(client) {
     {
       name: 'viewparties',
       description: 'View all static parties.'
-    },
-    {
-      name: 'guildroster',
-      description: 'Admins: Create/update an auto-updating guild roster in this channel.',
-      default_member_permissions: ADMIN
     },
     // Wishlist Commands (Everyone)
     {
