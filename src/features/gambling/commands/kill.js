@@ -71,9 +71,27 @@ async function handleKill({ interaction, collections }) {
   // Determine amount transferred (ALL money from loser)
   const amount = success ? targetBalance.balance : killerBalance.balance;
 
-  // Get appropriate scenario
+  // Get server display names (nicknames or usernames) BEFORE formatting scenario
+  let killerDisplayName = interaction.user.username;
+  let targetDisplayName = targetUser.username;
+
+  try {
+    const killerMember = await interaction.guild.members.fetch(killerId);
+    killerDisplayName = killerMember.displayName || killerMember.user.username;
+  } catch (err) {
+    console.warn(`Could not fetch killer member ${killerId}`);
+  }
+
+  try {
+    const targetMember = await interaction.guild.members.fetch(targetId);
+    targetDisplayName = targetMember.displayName || targetMember.user.username;
+  } catch (err) {
+    console.warn(`Could not fetch target member ${targetId}`);
+  }
+
+  // Get appropriate scenario (using server nickname for target)
   const rawScenario = success ? getSuccessScenario() : getFailureScenario();
-  const scenario = formatScenario(rawScenario, targetUser.username, amount);
+  const scenario = formatScenario(rawScenario, targetDisplayName, amount);
 
   // Process the kill attempt
   await processKillAttempt({
@@ -93,24 +111,6 @@ async function handleKill({ interaction, collections }) {
 
   // Calculate cooldown timestamp (12 hours from now)
   const cooldownTimestamp = Math.floor((Date.now() + 12 * 60 * 60 * 1000) / 1000);
-
-  // Get server display names (nicknames or usernames)
-  let killerDisplayName = interaction.user.username;
-  let targetDisplayName = targetUser.username;
-
-  try {
-    const killerMember = await interaction.guild.members.fetch(killerId);
-    killerDisplayName = killerMember.displayName || killerMember.user.username;
-  } catch (err) {
-    console.warn(`Could not fetch killer member ${killerId}`);
-  }
-
-  try {
-    const targetMember = await interaction.guild.members.fetch(targetId);
-    targetDisplayName = targetMember.displayName || targetMember.user.username;
-  } catch (err) {
-    console.warn(`Could not fetch target member ${targetId}`);
-  }
 
   // Create public embed (everyone sees)
   const publicEmbed = createKillResultEmbed(
