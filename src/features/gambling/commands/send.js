@@ -54,9 +54,33 @@ async function handleSend({ interaction, collections }) {
     });
   }
 
+  // Get server display names (nicknames or usernames)
+  let senderDisplayName = interaction.user.username;
+  let targetDisplayName = targetUser.username;
+
+  try {
+    const senderMember = await interaction.guild.members.fetch(senderId);
+    senderDisplayName = senderMember.displayName || senderMember.user.username;
+  } catch (err) {
+    console.warn(`Could not fetch sender member ${senderId}`);
+  }
+
+  try {
+    const targetMember = await interaction.guild.members.fetch(targetId);
+    targetDisplayName = targetMember.displayName || targetMember.user.username;
+  } catch (err) {
+    console.warn(`Could not fetch target member ${targetId}`);
+  }
+
   // If amount is large, require confirmation
   if (amount >= CONFIRM_THRESHOLD) {
-    const confirmEmbed = createTransferConfirmEmbed(interaction.user, targetUser, amount);
+    const confirmEmbed = createTransferConfirmEmbed(
+      interaction.user, 
+      targetUser, 
+      amount, 
+      senderDisplayName, 
+      targetDisplayName
+    );
 
     const confirmButton = new ButtonBuilder()
       .setCustomId(`send_confirm:${targetId}:${amount}`)
@@ -84,7 +108,9 @@ async function handleSend({ interaction, collections }) {
     targetUser,
     amount,
     guildId,
-    isEdit: true
+    isEdit: true,
+    senderDisplayName,
+    targetDisplayName
   });
 }
 
@@ -134,6 +160,24 @@ async function handleSendConfirmation({ interaction, collections }) {
     });
   }
 
+  // Get server display names
+  let senderDisplayName = interaction.user.username;
+  let targetDisplayName = targetUser.username;
+
+  try {
+    const senderMember = await interaction.guild.members.fetch(senderId);
+    senderDisplayName = senderMember.displayName || senderMember.user.username;
+  } catch (err) {
+    console.warn(`Could not fetch sender member ${senderId}`);
+  }
+
+  try {
+    const targetMember = await interaction.guild.members.fetch(targetId);
+    targetDisplayName = targetMember.displayName || targetMember.user.username;
+  } catch (err) {
+    console.warn(`Could not fetch target member ${targetId}`);
+  }
+
   await processTransfer({
     interaction,
     collections,
@@ -141,11 +185,13 @@ async function handleSendConfirmation({ interaction, collections }) {
     targetUser,
     amount,
     guildId,
-    isEdit: true
+    isEdit: true,
+    senderDisplayName,
+    targetDisplayName
   });
 }
 
-async function processTransfer({ interaction, collections, senderId, targetUser, amount, guildId, isEdit }) {
+async function processTransfer({ interaction, collections, senderId, targetUser, amount, guildId, isEdit, senderDisplayName, targetDisplayName }) {
   const targetId = targetUser.id;
 
   // Execute transfer (atomic operations)
@@ -172,7 +218,9 @@ async function processTransfer({ interaction, collections, senderId, targetUser,
     targetUser,
     amount,
     senderBalance.balance,
-    targetBalance.balance
+    targetBalance.balance,
+    senderDisplayName,
+    targetDisplayName
   );
 
   // Send to sender (always use editReply since we always defer now)
@@ -183,7 +231,12 @@ async function processTransfer({ interaction, collections, senderId, targetUser,
 
   // Notify recipient via DM
   try {
-    const notificationEmbed = createTransferEmbed(interaction.user, amount, targetBalance.balance);
+    const notificationEmbed = createTransferEmbed(
+      interaction.user, 
+      amount, 
+      targetBalance.balance,
+      senderDisplayName
+    );
     await targetUser.send({
       embeds: [notificationEmbed]
     });

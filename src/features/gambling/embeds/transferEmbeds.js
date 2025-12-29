@@ -3,12 +3,12 @@ const { EmbedBuilder } = require('discord.js');
 /**
  * Create transfer notification embed (for recipient)
  */
-function createTransferEmbed(sender, amount, newBalance) {
+function createTransferEmbed(sender, amount, newBalance, senderDisplayName) {
   const embed = new EmbedBuilder()
     .setColor(0x00FF00) // Green
     .setTitle('💸 COINS RECEIVED!')
     .setDescription(
-      `${sender} sent you **${amount.toLocaleString()} coins**!\n\n` +
+      `**${senderDisplayName}** sent you **${amount.toLocaleString()} coins**!\n\n` +
       `**Your New Balance:** ${newBalance.toLocaleString()} coins`
     )
     .setTimestamp();
@@ -19,17 +19,17 @@ function createTransferEmbed(sender, amount, newBalance) {
 /**
  * Create transfer confirmation embed
  */
-function createTransferConfirmEmbed(sender, recipient, amount) {
+function createTransferConfirmEmbed(sender, recipient, amount, senderDisplayName, recipientDisplayName) {
   const embed = new EmbedBuilder()
     .setColor(0xFFD700) // Gold
     .setTitle('⚠️ CONFIRM TRANSFER')
     .setDescription(
-      `You are about to send **${amount.toLocaleString()} coins** to ${recipient}.\n\n` +
+      `You are about to send **${amount.toLocaleString()} coins** to **${recipientDisplayName}**.\n\n` +
       `This is a large transfer. Please confirm you want to proceed.`
     )
     .addFields(
-      { name: 'From', value: sender.username, inline: true },
-      { name: 'To', value: recipient.username, inline: true },
+      { name: 'From', value: senderDisplayName, inline: true },
+      { name: 'To', value: recipientDisplayName, inline: true },
       { name: 'Amount', value: `${amount.toLocaleString()} coins`, inline: true }
     )
     .setFooter({ text: '⚠️ This action cannot be undone' });
@@ -40,16 +40,16 @@ function createTransferConfirmEmbed(sender, recipient, amount) {
 /**
  * Create transfer receipt embed
  */
-function createTransferReceiptEmbed(sender, recipient, amount, senderNewBalance, recipientNewBalance) {
+function createTransferReceiptEmbed(sender, recipient, amount, senderNewBalance, recipientNewBalance, senderDisplayName, recipientDisplayName) {
   const embed = new EmbedBuilder()
     .setColor(0x00FF00) // Green
     .setTitle('✅ TRANSFER COMPLETE')
     .setDescription(
-      `Successfully sent **${amount.toLocaleString()} coins** to ${recipient}!`
+      `Successfully sent **${amount.toLocaleString()} coins** to **${recipientDisplayName}**!`
     )
     .addFields(
-      { name: `${sender.username}'s Balance`, value: `${senderNewBalance.toLocaleString()} coins`, inline: true },
-      { name: `${recipient.username}'s Balance`, value: `${recipientNewBalance.toLocaleString()} coins`, inline: true }
+      { name: `${senderDisplayName}'s Balance`, value: `${senderNewBalance.toLocaleString()} coins`, inline: true },
+      { name: `${recipientDisplayName}'s Balance`, value: `${recipientNewBalance.toLocaleString()} coins`, inline: true }
     )
     .setFooter({ text: '💡 The recipient has been notified via DM' })
     .setTimestamp();
