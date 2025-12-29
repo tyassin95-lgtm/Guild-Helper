@@ -25,6 +25,8 @@ async function ensureIndexes({
   triviaSessions,
   robCooldowns,
   robStats,
+  killCooldowns,
+  killStats,
   transferHistory,
   broadcastSessions,
   broadcastUsers,
@@ -172,6 +174,15 @@ async function ensureIndexes({
   await robStats.createIndex({ userId: 1, guildId: 1 }, { unique: true });
   await robStats.createIndex({ guildId: 1 });
   await robStats.createIndex({ guildId: 1, successfulRobs: -1 }); // Leaderboard
+
+  // Kill System Indexes
+  await killCooldowns.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await killCooldowns.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL
+
+  await killStats.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await killStats.createIndex({ guildId: 1 });
+  await killStats.createIndex({ guildId: 1, successfulKills: -1 }); // Most kills leaderboard
+  await killStats.createIndex({ guildId: 1, totalCoinsStolen: -1 }); // Most stolen leaderboard
 
   // Transfer History Indexes
   await transferHistory.createIndex({ guildId: 1, timestamp: -1 });

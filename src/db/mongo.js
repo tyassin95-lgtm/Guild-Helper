@@ -70,6 +70,10 @@ function getCollections(db = _db) {
     robCooldowns: db.collection('robCooldowns'),
     robStats: db.collection('robStats'),
 
+    // Kill system
+    killCooldowns: db.collection('killCooldowns'),
+    killStats: db.collection('killStats'),
+
     // Transfer system
     transferHistory: db.collection('transferHistory'),
 

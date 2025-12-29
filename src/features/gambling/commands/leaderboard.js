@@ -6,7 +6,7 @@ async function handleLeaderboard({ interaction, collections }) {
   await interaction.deferReply();
 
   const guildId = interaction.guildId;
-  const { gamblingBalances } = collections;
+  const { gamblingBalances, killStats } = collections;
 
   try {
     let topUsers;
@@ -50,6 +50,23 @@ async function handleLeaderboard({ interaction, collections }) {
         valueLabel = 'Games Played';
         break;
 
+      case 'kills':
+        sortField = { successfulKills: -1 };
+        title = '💀 Most Kills Leaderboard';
+        valueFormatter = (user) => {
+          const kd = user.deaths > 0 ? (user.successfulKills / user.deaths).toFixed(2) : user.successfulKills.toFixed(2);
+          return `${user.successfulKills} kills (${kd} K/D)`;
+        };
+        valueLabel = 'Kills';
+        break;
+
+      case 'stolen':
+        sortField = { totalCoinsStolen: -1 };
+        title = '🗡️ Total Stolen Leaderboard';
+        valueFormatter = (user) => `${user.totalCoinsStolen.toLocaleString()} coins`;
+        valueLabel = 'Total Stolen';
+        break;
+
       default:
         sortField = { balance: -1 };
         title = '🏆 Balance Leaderboard';
@@ -68,6 +85,13 @@ async function handleLeaderboard({ interaction, collections }) {
         }))
         .sort((a, b) => b.netProfit - a.netProfit)
         .slice(0, 10);
+    } else if (type === 'kills' || type === 'stolen') {
+      // Use killStats collection
+      topUsers = await killStats
+        .find({ guildId })
+        .sort(sortField)
+        .limit(10)
+        .toArray();
     } else {
       topUsers = await gamblingBalances
         .find({ guildId })
@@ -77,9 +101,11 @@ async function handleLeaderboard({ interaction, collections }) {
     }
 
     if (topUsers.length === 0) {
-      return interaction.editReply({
-        content: '📊 No one has started gambling yet! Be the first with `/gamblingbalance`.'
-      });
+      const message = (type === 'kills' || type === 'stolen')
+        ? '📊 No one has attempted any kills yet! Be the first with `/kill`.'
+        : '📊 No one has started gambling yet! Be the first with `/gamblingbalance`.';
+
+      return interaction.editReply({ content: message });
     }
 
     // Get guild for member lookups
@@ -114,20 +140,28 @@ async function handleLeaderboard({ interaction, collections }) {
       if (type === 'balance') {
         maxValue = topUsers[0].balance;
       } else if (type === 'profit') {
-        maxValue = Math.abs(topUsers[0].netProfit);
+        // For profit, use absolute value of the most extreme (positive or negative)
+        const maxProfit = Math.max(...topUsers.map(u => Math.abs(u.netProfit)));
+        maxValue = maxProfit > 0 ? maxProfit : 1; // Avoid division by zero
       } else if (type === 'wins') {
         maxValue = topUsers[0].totalWon;
       } else if (type === 'games') {
         maxValue = topUsers[0].gamesPlayed;
+      } else if (type === 'kills') {
+        maxValue = topUsers[0].successfulKills;
+      } else if (type === 'stolen') {
+        maxValue = topUsers[0].totalCoinsStolen;
       }
 
       const currentValue = type === 'balance' ? userData.balance :
                           type === 'profit' ? Math.abs(userData.netProfit) :
                           type === 'wins' ? userData.totalWon :
-                          userData.gamesPlayed;
+                          type === 'games' ? userData.gamesPlayed :
+                          type === 'kills' ? userData.successfulKills :
+                          userData.totalCoinsStolen;
 
       const barLength = maxValue > 0 ? Math.max(1, Math.floor((currentValue / maxValue) * 18)) : 1;
-      const bar = '█'.repeat(barLength) + '░'.repeat(18 - barLength);
+      const bar = '█'.repeat(barLength) + '░'.repeat(Math.max(0, 18 - barLength));
 
       // Build entry
       description += `${medal} **${displayName}**\n`;

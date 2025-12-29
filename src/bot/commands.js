@@ -540,6 +540,18 @@ async function registerSlashCommands(client) {
       ]
     },
     {
+      name: 'kill',
+      description: 'Attempt to eliminate a user - winner takes ALL (12h cooldown, 50% chance)',
+      options: [
+        {
+          type: 6, // USER
+          name: 'target',
+          description: 'User to eliminate',
+          required: true
+        }
+      ]
+    },
+    {
       name: 'send',
       description: 'Send coins to another user',
       options: [
@@ -572,7 +584,9 @@ async function registerSlashCommands(client) {
             { name: '💰 Balance (Current Coins)', value: 'balance' },
             { name: '📈 Net Profit (Total Won - Lost)', value: 'profit' },
             { name: '✅ Total Winnings', value: 'wins' },
-            { name: '🎰 Games Played', value: 'games' }
+            { name: '🎰 Games Played', value: 'games' },
+            { name: '💀 Most Kills', value: 'kills' },
+            { name: '🗡️ Total Stolen (Kills)', value: 'stolen' }
           ]
         }
       ]
