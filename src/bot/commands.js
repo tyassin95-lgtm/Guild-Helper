@@ -67,6 +67,45 @@ async function registerSlashCommands(client) {
       description: 'Admins: Send a DM to users who haven\'t set up their party info.',
       default_member_permissions: ADMIN
     },
+    // NEW: Screenshot storage command
+    {
+      name: 'screenshot',
+      description: 'Admins: Manage gear screenshot storage system.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'action',
+          description: 'Action to perform',
+          required: true,
+          choices: [
+            { name: 'Set Storage Channel', value: 'set_channel' },
+            { name: 'Clean Old Storage', value: 'clean_storage' },
+            { name: 'Storage Info', value: 'info' }
+          ]
+        },
+        {
+          type: 7, // CHANNEL
+          name: 'channel',
+          description: 'Channel to use for storage (for set_channel)',
+          required: false
+        },
+        {
+          type: 4, // INTEGER
+          name: 'older_than_days',
+          description: 'Delete screenshots older than X days (default: 90)',
+          required: false,
+          min_value: 1,
+          max_value: 365
+        },
+        {
+          type: 5, // BOOLEAN
+          name: 'confirm',
+          description: 'Confirm deletion (for clean_storage)',
+          required: false
+        }
+      ]
+    },
     // PvP Commands
     {
       name: 'pvpevent',
