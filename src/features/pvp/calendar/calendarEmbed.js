@@ -149,17 +149,24 @@ function buildCalendarContent(eventsByDay, startDate, guildId) {
     const actualDayIdx = date.getDay();
     const dayName = dayNames[actualDayIdx];
 
+    // Check if this is today
+    const isToday = i === 0;
+    const todayLabel = isToday ? ' (Today)' : '';
+
     // Day header
-    content += `**📅 ${dayName}, ${monthName} ${dayNum}**\n`;
+    content += `**📅 ${dayName}, ${monthName} ${dayNum}${todayLabel}**\n`;
 
     const dayEvents = eventsByDay[i];
 
     if (dayEvents.length === 0) {
       // No events for this day
-      content += `*No events scheduled*\n\n`;
+      content += `    *No events scheduled*\n`;
     } else {
-      // List all events for this day
-      for (const event of dayEvents) {
+      // List all events for this day with numbering if multiple
+      const showNumbers = dayEvents.length > 1;
+
+      for (let eventIdx = 0; eventIdx < dayEvents.length; eventIdx++) {
+        const event = dayEvents[eventIdx];
         const emoji = eventTypeEmojis[event.eventType] || '📅';
         const typeName = eventTypeNames[event.eventType] || event.eventType;
 
@@ -170,17 +177,36 @@ function buildCalendarContent(eventsByDay, startDate, guildId) {
         const timestamp = Math.floor(event.eventTime.getTime() / 1000);
         const timeDisplay = `<t:${timestamp}:t>`;
 
-        // Event line: emoji + time + type
-        content += `${emoji} **${timeDisplay}** • ${typeName}\n`;
+        // Event number if multiple events
+        const eventNumber = showNumbers ? `${eventIdx + 1}) ` : '';
+
+        // Event line: indent + number + emoji + time + type
+        content += `    ${eventNumber}${emoji} **${timeDisplay}** • ${typeName}\n`;
 
         // Add location if it exists (for riftstone, boonstone, guild events)
         if (event.location) {
-          content += `└─ Location: ${event.location}\n`;
+          content += `        └─ Location: ${event.location}\n`;
         }
 
+        // Add bonus points
+        const bonusPoints = event.bonusPoints || 10;
+        content += `        └─ Bonus: +${bonusPoints} roll points\n`;
+
         // Add "Go to Event" link
-        content += `└─ [Go to Event](${eventLink})\n\n`;
+        content += `        └─ [Go to Event](${eventLink})\n`;
+
+        // Add spacing between events on same day
+        if (eventIdx < dayEvents.length - 1) {
+          content += `\n`;
+        }
       }
+    }
+
+    // Add separator line between days (except after last day)
+    if (i < 6) {
+      content += `\n━━━━━━━━━━━━━━━━━━━\n\n`;
+    } else {
+      content += `\n`;
     }
   }
 
