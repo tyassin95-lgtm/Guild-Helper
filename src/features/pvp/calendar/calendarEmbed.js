@@ -170,6 +170,9 @@ function buildCalendarContent(eventsByDay, startDate, guildId) {
         const emoji = eventTypeEmojis[event.eventType] || '📅';
         const typeName = eventTypeNames[event.eventType] || event.eventType;
 
+        // Check if event is closed/canceled
+        const isClosed = event.closed === true;
+
         // Create masked link to event
         const eventLink = `https://discord.com/channels/${guildId}/${event.channelId}/${event.messageId}`;
 
@@ -180,20 +183,38 @@ function buildCalendarContent(eventsByDay, startDate, guildId) {
         // Event number if multiple events
         const eventNumber = showNumbers ? `${eventIdx + 1}) ` : '';
 
-        // Event line: indent + number + emoji + time + type
-        content += `    ${eventNumber}${emoji} **${timeDisplay}** • ${typeName}\n`;
+        // Apply strikethrough if event is closed
+        if (isClosed) {
+          // Event line with strikethrough
+          content += `    ${eventNumber}~~${emoji} **${timeDisplay}** • ${typeName}~~ **(CANCELED)**\n`;
 
-        // Add location if it exists (for riftstone, boonstone, guild events)
-        if (event.location) {
-          content += `        └─ Location: ${event.location}\n`;
+          // Add location if it exists (with strikethrough)
+          if (event.location) {
+            content += `        ~~└─ Location: ${event.location}~~\n`;
+          }
+
+          // Add bonus points (with strikethrough)
+          const bonusPoints = event.bonusPoints || 10;
+          content += `        ~~└─ Bonus: +${bonusPoints} roll points~~\n`;
+
+          // Add "Go to Event" link (still clickable but marked as canceled)
+          content += `        └─ [Go to Event](${eventLink}) *(Event Canceled)*\n`;
+        } else {
+          // Normal event line
+          content += `    ${eventNumber}${emoji} **${timeDisplay}** • ${typeName}\n`;
+
+          // Add location if it exists
+          if (event.location) {
+            content += `        └─ Location: ${event.location}\n`;
+          }
+
+          // Add bonus points
+          const bonusPoints = event.bonusPoints || 10;
+          content += `        └─ Bonus: +${bonusPoints} roll points\n`;
+
+          // Add "Go to Event" link
+          content += `        └─ [Go to Event](${eventLink})\n`;
         }
-
-        // Add bonus points
-        const bonusPoints = event.bonusPoints || 10;
-        content += `        └─ Bonus: +${bonusPoints} roll points\n`;
-
-        // Add "Go to Event" link
-        content += `        └─ [Go to Event](${eventLink})\n`;
 
         // Add spacing between events on same day
         if (eventIdx < dayEvents.length - 1) {
