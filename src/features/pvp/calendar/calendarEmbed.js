@@ -73,9 +73,9 @@ async function createCalendarMessage(guildId, client, collections) {
   const message = 
     `# 🗓️ PvP Weekly Schedule\n` +
     `**${startDateStr} - ${endDateStr}**\n\n` +
-    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
     calendarContent +
-    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
     `📊 **${events.length}** event${events.length !== 1 ? 's' : ''} scheduled • 🔄 Updates every 5 minutes • Last updated <t:${timestamp}:R>`;
 
   return message;
