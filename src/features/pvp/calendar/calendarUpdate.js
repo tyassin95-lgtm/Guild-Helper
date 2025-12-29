@@ -1,8 +1,8 @@
-const { createCalendarMessage } = require('./calendarEmbed');
+const { createCalendarMessages } = require('./calendarEmbed');
 
 /**
  * Update the PvP calendar for a specific guild
- * Fetches the calendar message and updates its content
+ * Fetches the calendar messages and updates their content
  */
 async function updateCalendar(client, guildId, collections) {
   const { pvpCalendars } = collections;
@@ -26,21 +26,41 @@ async function updateCalendar(client, guildId, collections) {
       return;
     }
 
-    // Fetch the message
-    const message = await channel.messages.fetch(calendar.messageId).catch(() => null);
+    // Generate updated message contents
+    const messages = await createCalendarMessages(guildId, client, collections);
 
-    if (!message) {
-      console.warn(`Calendar message ${calendar.messageId} not found in channel ${calendar.channelId}`);
-      // Message was deleted, remove calendar from database
+    // Calendar now has messageIds array (header + 7 day messages = 8 total)
+    const messageIds = calendar.messageIds || [];
+
+    // If we don't have the right number of messages, recreate the calendar
+    if (messageIds.length !== 8) {
+      console.warn(`Calendar for guild ${guildId} has wrong number of messages (${messageIds.length}), needs recreation`);
       await pvpCalendars.deleteOne({ guildId });
       return;
     }
 
-    // Generate updated message content
-    const content = await createCalendarMessage(guildId, client, collections);
+    // Update each message
+    for (let i = 0; i < messageIds.length; i++) {
+      try {
+        const message = await channel.messages.fetch(messageIds[i]).catch(() => null);
 
-    // Update the message
-    await message.edit({ content });
+        if (!message) {
+          console.warn(`Calendar message ${messageIds[i]} not found in channel ${calendar.channelId}`);
+          // Message was deleted, remove calendar from database
+          await pvpCalendars.deleteOne({ guildId });
+          return;
+        }
+
+        // Update the message content
+        await message.edit({ content: messages[i] });
+
+        // Small delay to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } catch (err) {
+        console.error(`Failed to update message ${messageIds[i]}:`, err);
+        throw err;
+      }
+    }
 
     // Update last updated timestamp
     await pvpCalendars.updateOne(

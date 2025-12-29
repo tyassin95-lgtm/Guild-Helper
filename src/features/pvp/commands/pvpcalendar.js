@@ -1,5 +1,5 @@
 const { PermissionFlagsBits } = require('discord.js');
-const { createCalendarMessage } = require('../calendar/calendarEmbed');
+const { createCalendarMessages } = require('../calendar/calendarEmbed');
 
 async function handlePvPCalendar({ interaction, collections }) {
   const { pvpCalendars } = collections;
@@ -15,35 +15,51 @@ async function handlePvPCalendar({ interaction, collections }) {
     const existingCalendar = await pvpCalendars.findOne({ guildId: interaction.guildId });
 
     if (existingCalendar) {
-      // Try to fetch the existing calendar message
+      // Try to fetch the existing calendar messages
       try {
         const channel = await interaction.client.channels.fetch(existingCalendar.channelId);
-        const message = await channel.messages.fetch(existingCalendar.messageId);
+        const messageIds = existingCalendar.messageIds || [];
 
-        return interaction.editReply({
-          content: `⚠️ **A calendar already exists for this server!**\n\n` +
-                   `📍 Location: <#${existingCalendar.channelId}>\n` +
-                   `🔗 [Jump to Calendar](${message.url})\n\n` +
-                   `If you want to move it to this channel, please delete the existing calendar message first.`
-        });
+        if (messageIds.length > 0) {
+          const firstMessage = await channel.messages.fetch(messageIds[0]);
+
+          return interaction.editReply({
+            content: `⚠️ **A calendar already exists for this server!**\n\n` +
+                     `📍 Location: <#${existingCalendar.channelId}>\n` +
+                     `🔗 [Jump to Calendar](${firstMessage.url})\n\n` +
+                     `If you want to move it to this channel, please delete the existing calendar messages first.`
+          });
+        }
       } catch (err) {
-        // Calendar message was deleted, remove from database and continue
-        console.log('Existing calendar message not found, creating new one...');
+        // Calendar messages were deleted, remove from database and continue
+        console.log('Existing calendar messages not found, creating new one...');
         await pvpCalendars.deleteOne({ guildId: interaction.guildId });
       }
     }
 
-    // Generate the calendar message content
-    const content = await createCalendarMessage(interaction.guildId, interaction.client, collections);
+    // Generate the calendar message contents (header + 7 days = 8 messages)
+    const messages = await createCalendarMessages(interaction.guildId, interaction.client, collections);
 
-    // Send the calendar to the current channel
-    const calendarMessage = await interaction.channel.send({ content });
+    // Send all messages to the current channel
+    const messageIds = [];
+    const sentMessages = [];
 
-    // Save calendar info to database
+    for (let i = 0; i < messages.length; i++) {
+      const sentMessage = await interaction.channel.send({ content: messages[i] });
+      messageIds.push(sentMessage.id);
+      sentMessages.push(sentMessage);
+
+      // Small delay between messages to avoid rate limits
+      if (i < messages.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    // Save calendar info to database with all message IDs
     await pvpCalendars.insertOne({
       guildId: interaction.guildId,
       channelId: interaction.channelId,
-      messageId: calendarMessage.id,
+      messageIds: messageIds, // Array of message IDs [header, day0, day1, ..., day6]
       createdAt: new Date(),
       lastUpdated: new Date()
     });
@@ -54,7 +70,8 @@ async function handlePvPCalendar({ interaction, collections }) {
                `🔄 Auto-updates every 5 minutes\n` +
                `⏰ Times shown in each user's local timezone\n` +
                `🔗 Click any time to jump directly to the event\n\n` +
-               `[View Calendar](${calendarMessage.url})`
+               `[View Calendar](${sentMessages[0].url})\n\n` +
+               `**Note:** The calendar is split into ${messages.length} messages (header + one per day) to avoid Discord's character limit.`
     });
   } catch (err) {
     console.error('Failed to create PvP calendar:', err);

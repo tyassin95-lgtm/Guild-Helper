@@ -1,9 +1,10 @@
 /**
  * Generate the PvP calendar as formatted text (not embed)
  * Shows today + next 6 days (rolling 7-day window)
+ * Returns an array of messages - one header message + one message per day
  * Updates daily at midnight UK time
  */
-async function createCalendarMessage(guildId, client, collections) {
+async function createCalendarMessages(guildId, client, collections) {
   const { pvpEvents } = collections;
 
   // Get UK timezone date for "today"
@@ -50,9 +51,6 @@ async function createCalendarMessage(guildId, client, collections) {
   // Group events by day
   const eventsByDay = groupEventsByDay(events, startDate);
 
-  // Build the calendar content
-  const calendarContent = buildCalendarContent(eventsByDay, startDate, guildId);
-
   // Calculate date range for title
   const endDisplayDate = new Date(startDate);
   endDisplayDate.setDate(endDisplayDate.getDate() + 6);
@@ -69,16 +67,25 @@ async function createCalendarMessage(guildId, client, collections) {
 
   const timestamp = Math.floor(Date.now() / 1000);
 
-  // Build formatted text message
-  const message = 
+  // Build array of messages
+  const messages = [];
+
+  // Header message
+  const headerMessage = 
     `# 🗓️ PvP Weekly Schedule\n` +
     `**${startDateStr} - ${endDateStr}**\n\n` +
-    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-    calendarContent +
-    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-    `📊 **${events.length}** event${events.length !== 1 ? 's' : ''} scheduled • 🔄 Updates every 5 minutes • Last updated <t:${timestamp}:R>`;
+    `📊 **${events.length}** event${events.length !== 1 ? 's' : ''} scheduled • 🔄 Updates every 5 minutes • Last updated <t:${timestamp}:R>\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
-  return message;
+  messages.push(headerMessage);
+
+  // Create one message per day
+  for (let i = 0; i < 7; i++) {
+    const dayMessage = buildDayMessage(i, eventsByDay, startDate, guildId);
+    messages.push(dayMessage);
+  }
+
+  return messages;
 }
 
 /**
@@ -116,9 +123,9 @@ function groupEventsByDay(events, startDate) {
 }
 
 /**
- * Build the calendar content (vertical layout with full event details)
+ * Build a single day's message
  */
-function buildCalendarContent(eventsByDay, startDate, guildId) {
+function buildDayMessage(dayIndex, eventsByDay, startDate, guildId) {
   const eventTypeEmojis = {
     siege: '🏰',
     riftstone: '💎',
@@ -138,100 +145,87 @@ function buildCalendarContent(eventsByDay, startDate, guildId) {
   const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
   const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
-  let content = '';
+  const date = new Date(startDate);
+  date.setDate(date.getDate() + dayIndex);
+  const dayNum = date.getDate();
+  const monthName = monthNames[date.getMonth()];
+  const actualDayIdx = date.getDay();
+  const dayName = dayNames[actualDayIdx];
 
-  // Build each day vertically
-  for (let i = 0; i < 7; i++) {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + i);
-    const dayNum = date.getDate();
-    const monthName = monthNames[date.getMonth()];
-    const actualDayIdx = date.getDay();
-    const dayName = dayNames[actualDayIdx];
+  // Check if this is today
+  const isToday = dayIndex === 0;
+  const todayLabel = isToday ? ' (Today)' : '';
 
-    // Check if this is today
-    const isToday = i === 0;
-    const todayLabel = isToday ? ' (Today)' : '';
+  let content = `**📅 ${dayName}, ${monthName} ${dayNum}${todayLabel}**\n`;
 
-    // Day header
-    content += `**📅 ${dayName}, ${monthName} ${dayNum}${todayLabel}**\n`;
+  const dayEvents = eventsByDay[dayIndex];
 
-    const dayEvents = eventsByDay[i];
+  if (dayEvents.length === 0) {
+    // No events for this day
+    content += `*No events scheduled*`;
+  } else {
+    // List all events for this day with numbering if multiple
+    const showNumbers = dayEvents.length > 1;
 
-    if (dayEvents.length === 0) {
-      // No events for this day
-      content += `    *No events scheduled*\n`;
-    } else {
-      // List all events for this day with numbering if multiple
-      const showNumbers = dayEvents.length > 1;
+    for (let eventIdx = 0; eventIdx < dayEvents.length; eventIdx++) {
+      const event = dayEvents[eventIdx];
+      const emoji = eventTypeEmojis[event.eventType] || '📅';
+      const typeName = eventTypeNames[event.eventType] || event.eventType;
 
-      for (let eventIdx = 0; eventIdx < dayEvents.length; eventIdx++) {
-        const event = dayEvents[eventIdx];
-        const emoji = eventTypeEmojis[event.eventType] || '📅';
-        const typeName = eventTypeNames[event.eventType] || event.eventType;
+      // Check if event is closed/canceled
+      const isClosed = event.closed === true;
 
-        // Check if event is closed/canceled
-        const isClosed = event.closed === true;
+      // Create masked link to event
+      const eventLink = `https://discord.com/channels/${guildId}/${event.channelId}/${event.messageId}`;
 
-        // Create masked link to event
-        const eventLink = `https://discord.com/channels/${guildId}/${event.channelId}/${event.messageId}`;
+      // Format time using Discord timestamp
+      const timestamp = Math.floor(event.eventTime.getTime() / 1000);
+      const timeDisplay = `<t:${timestamp}:t>`;
 
-        // Format time using Discord timestamp
-        const timestamp = Math.floor(event.eventTime.getTime() / 1000);
-        const timeDisplay = `<t:${timestamp}:t>`;
+      // Event number if multiple events
+      const eventNumber = showNumbers ? `${eventIdx + 1}) ` : '';
 
-        // Event number if multiple events
-        const eventNumber = showNumbers ? `${eventIdx + 1}) ` : '';
+      // Apply strikethrough if event is closed
+      if (isClosed) {
+        // Event line with strikethrough
+        content += `${eventNumber}~~${emoji} **${timeDisplay}** • ${typeName}~~ **(CANCELED)**\n`;
 
-        // Apply strikethrough if event is closed
-        if (isClosed) {
-          // Event line with strikethrough
-          content += `    ${eventNumber}~~${emoji} **${timeDisplay}** • ${typeName}~~ **(CANCELED)**\n`;
-
-          // Add location if it exists (with strikethrough)
-          if (event.location) {
-            content += `        ~~└─ Location: ${event.location}~~\n`;
-          }
-
-          // Add bonus points (with strikethrough)
-          const bonusPoints = event.bonusPoints || 10;
-          content += `        ~~└─ Bonus: +${bonusPoints} roll points~~\n`;
-
-          // Add "Go to Event" link (still clickable but marked as canceled)
-          content += `        └─ [Go to Event](${eventLink}) *(Event Canceled)*\n`;
-        } else {
-          // Normal event line
-          content += `    ${eventNumber}${emoji} **${timeDisplay}** • ${typeName}\n`;
-
-          // Add location if it exists
-          if (event.location) {
-            content += `        └─ Location: ${event.location}\n`;
-          }
-
-          // Add bonus points
-          const bonusPoints = event.bonusPoints || 10;
-          content += `        └─ Bonus: +${bonusPoints} roll points\n`;
-
-          // Add "Go to Event" link
-          content += `        └─ [Go to Event](${eventLink})\n`;
+        // Add location if it exists (with strikethrough)
+        if (event.location) {
+          content += `  ~~└─ Location: ${event.location}~~\n`;
         }
 
-        // Add spacing between events on same day
-        if (eventIdx < dayEvents.length - 1) {
-          content += `\n`;
+        // Add bonus points (with strikethrough)
+        const bonusPoints = event.bonusPoints || 10;
+        content += `  ~~└─ Bonus: +${bonusPoints} roll points~~\n`;
+
+        // Add "Go to Event" link (still clickable but marked as canceled)
+        content += `  └─ [Go to Event](${eventLink}) *(Event Canceled)*\n`;
+      } else {
+        // Normal event line
+        content += `${eventNumber}${emoji} **${timeDisplay}** • ${typeName}\n`;
+
+        // Add location if it exists
+        if (event.location) {
+          content += `  └─ Location: ${event.location}\n`;
         }
+
+        // Add bonus points
+        const bonusPoints = event.bonusPoints || 10;
+        content += `  └─ Bonus: +${bonusPoints} roll points\n`;
+
+        // Add "Go to Event" link
+        content += `  └─ [Go to Event](${eventLink})\n`;
       }
-    }
 
-    // Add separator line between days (except after last day)
-    if (i < 6) {
-      content += `\n━━━━━━━━━━━━━━━━━━━\n\n`;
-    } else {
-      content += `\n`;
+      // Add spacing between events on same day
+      if (eventIdx < dayEvents.length - 1) {
+        content += `\n`;
+      }
     }
   }
 
   return content;
 }
 
-module.exports = { createCalendarMessage };
+module.exports = { createCalendarMessages };
