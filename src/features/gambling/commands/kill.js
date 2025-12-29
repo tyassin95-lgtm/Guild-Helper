@@ -94,6 +94,24 @@ async function handleKill({ interaction, collections }) {
   // Calculate cooldown timestamp (12 hours from now)
   const cooldownTimestamp = Math.floor((Date.now() + 12 * 60 * 60 * 1000) / 1000);
 
+  // Get server display names (nicknames or usernames)
+  let killerDisplayName = interaction.user.username;
+  let targetDisplayName = targetUser.username;
+
+  try {
+    const killerMember = await interaction.guild.members.fetch(killerId);
+    killerDisplayName = killerMember.displayName || killerMember.user.username;
+  } catch (err) {
+    console.warn(`Could not fetch killer member ${killerId}`);
+  }
+
+  try {
+    const targetMember = await interaction.guild.members.fetch(targetId);
+    targetDisplayName = targetMember.displayName || targetMember.user.username;
+  } catch (err) {
+    console.warn(`Could not fetch target member ${targetId}`);
+  }
+
   // Create public embed (everyone sees)
   const publicEmbed = createKillResultEmbed(
     success,
@@ -104,7 +122,9 @@ async function handleKill({ interaction, collections }) {
     killerStats,
     killerNewBalance.balance,
     targetNewBalance.balance,
-    cooldownTimestamp
+    cooldownTimestamp,
+    killerDisplayName,
+    targetDisplayName
   );
 
   // Post to channel
