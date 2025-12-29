@@ -72,7 +72,7 @@ async function registerSlashCommands(client) {
       description: 'Admins: Create/update an auto-updating guild roster in this channel.',
       default_member_permissions: ADMIN
     },
-    // NEW: Screenshot storage command
+    // Screenshot storage command
     {
       name: 'screenshot',
       description: 'Admins: Manage gear screenshot storage system.',
@@ -632,7 +632,43 @@ async function registerSlashCommands(client) {
     }
   ];
 
-  await client.application.commands.set(commands);
+  console.log('📋 Preparing to register commands...');
+  console.log(`   Total commands: ${commands.length}`);
+  console.log(`   Commands: ${commands.map(c => c.name).join(', ')}`);
+
+  // Register globally (takes up to 1 hour to propagate)
+  const globalCommands = await client.application.commands.set(commands);
+  console.log('✅ Global commands registered:', globalCommands.size);
+
+  // Register to specific guild(s) for instant updates (optional but recommended for development)
+  const GUILD_IDS = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',') : [];
+
+  if (GUILD_IDS.length > 0) {
+    console.log(`🔧 Registering commands to ${GUILD_IDS.length} guild(s) for instant updates...`);
+
+    for (const guildId of GUILD_IDS) {
+      try {
+        const guild = await client.guilds.fetch(guildId.trim());
+        const guildCommands = await guild.commands.set(commands);
+        console.log(`   ✅ ${guild.name}: ${guildCommands.size} commands registered`);
+      } catch (error) {
+        console.error(`   ❌ Failed to register commands for guild ${guildId}:`, error.message);
+      }
+    }
+  } else {
+    console.log('ℹ️  No GUILD_IDS found in .env - commands will propagate globally in ~1 hour');
+    console.log('   To enable instant updates, add: GUILD_IDS=your_guild_id_here');
+  }
+
+  // Verify screenshot command was registered
+  const screenshotCmd = globalCommands.find(c => c.name === 'screenshot');
+  if (screenshotCmd) {
+    console.log('✅ Screenshot command verified:', screenshotCmd.id);
+  } else {
+    console.error('❌ WARNING: Screenshot command not found in registered commands!');
+  }
+
+  console.log('✅ Command registration complete!');
 }
 
 module.exports = { registerSlashCommands };
