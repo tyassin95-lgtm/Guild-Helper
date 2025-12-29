@@ -67,8 +67,10 @@ async function handlePollButtons({ interaction, collections }) {
       });
     }
 
-    const username = interaction.user.username;
     const userId = interaction.user.id;
+    // Get server nickname (falls back to global username if no nickname set)
+    const member = await interaction.guild.members.fetch(userId);
+    const username = member.displayName || interaction.user.username;
 
     // Check if user has already voted
     let hasVotedBefore = false;
