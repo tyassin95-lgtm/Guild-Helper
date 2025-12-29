@@ -20,6 +20,13 @@ async function handleScreenshot({ interaction, collections }) {
   if (action === 'set_channel') {
     const channel = interaction.options.getChannel('channel');
 
+    if (!channel) {
+      return interaction.reply({
+        content: '❌ Please specify a channel.',
+        flags: [64]
+      });
+    }
+
     // Validate channel type
     if (channel.type !== 0) { // 0 = GuildText
       return interaction.reply({
@@ -44,7 +51,7 @@ async function handleScreenshot({ interaction, collections }) {
       return interaction.reply({
         content: '❌ I don\'t have the required permissions in that channel!\n\n' +
                  '**Missing permissions:**\n' +
-                 missingPermissions.map(p => `• ${new PermissionFlagsBits(p).toArray()[0]}`).join('\n'),
+                 missingPermissions.map(p => `• ${Object.keys(PermissionFlagsBits).find(key => PermissionFlagsBits[key] === p)}`).join('\n'),
         flags: [64]
       });
     }
@@ -120,39 +127,38 @@ async function handleScreenshot({ interaction, collections }) {
         });
       }
 
-      // Show confirmation
-      const embed = new EmbedBuilder()
-        .setColor('#F59E0B')
-        .setTitle('⚠️ Confirm Storage Cleanup')
-        .setDescription(
-          `This will delete **${oldPlayers.length}** gear screenshots older than **${ageOptions} days**.\n\n` +
-          '**What will happen:**\n' +
-          '• Old gear screenshot messages will be deleted\n' +
-          '• Gear links will be removed from the database\n' +
-          '• Users will need to re-upload their gear\n\n' +
-          '**This action cannot be undone!**'
-        )
-        .addFields(
-          {
-            name: '📊 Storage Info',
-            value: 
-              `**Total stored:** ${playersWithGear.length} screenshots\n` +
-              `**To be deleted:** ${oldPlayers.length} screenshots\n` +
-              `**Will remain:** ${playersWithGear.length - oldPlayers.length} screenshots`,
-            inline: false
-          }
-        )
-        .setTimestamp();
-
-      await interaction.editReply({ 
-        embeds: [embed],
-        content: '⚠️ Please confirm by running this command again within 30 seconds and adding `confirm:true` as a parameter.'
-      });
-
       // Check if confirm parameter is set
       const confirm = interaction.options.getBoolean('confirm');
+
       if (!confirm) {
-        return; // Just show the preview
+        // Show confirmation preview
+        const embed = new EmbedBuilder()
+          .setColor('#F59E0B')
+          .setTitle('⚠️ Confirm Storage Cleanup')
+          .setDescription(
+            `This will delete **${oldPlayers.length}** gear screenshots older than **${ageOptions} days**.\n\n` +
+            '**What will happen:**\n' +
+            '• Old gear screenshot messages will be deleted\n' +
+            '• Gear links will be removed from the database\n' +
+            '• Users will need to re-upload their gear\n\n' +
+            '**This action cannot be undone!**'
+          )
+          .addFields(
+            {
+              name: '📊 Storage Info',
+              value: 
+                `**Total stored:** ${playersWithGear.length} screenshots\n` +
+                `**To be deleted:** ${oldPlayers.length} screenshots\n` +
+                `**Will remain:** ${playersWithGear.length - oldPlayers.length} screenshots`,
+              inline: false
+            }
+          )
+          .setTimestamp();
+
+        return interaction.editReply({ 
+          embeds: [embed],
+          content: '⚠️ **Preview mode** - Add `confirm:True` to actually delete these screenshots.'
+        });
       }
 
       // Proceed with deletion
@@ -261,16 +267,16 @@ async function handleScreenshot({ interaction, collections }) {
         embed.setDescription(
           '✅ Storage system is active and working!\n\n' +
           '**Available Commands:**\n' +
-          '• `/screenshot set_channel` - Set custom storage channel\n' +
-          '• `/screenshot clean_storage` - Remove old screenshots\n' +
-          '• `/screenshot info` - View this information'
+          '• `/screenshot action:Set Storage Channel` - Set custom storage channel\n' +
+          '• `/screenshot action:Clean Old Storage` - Remove old screenshots\n' +
+          '• `/screenshot action:Storage Info` - View this information'
         );
       } else {
         embed.setDescription(
           '⚠️ No storage channel found yet.\n\n' +
           'The storage channel will be created automatically when a user uploads their first gear screenshot.\n\n' +
           'Alternatively, you can set a custom channel with:\n' +
-          '`/screenshot set_channel`'
+          '`/screenshot action:Set Storage Channel`'
         );
       }
 
