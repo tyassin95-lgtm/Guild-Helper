@@ -3,7 +3,7 @@ const { EmbedBuilder } = require('discord.js');
 /**
  * Create the public kill result embed that everyone in the channel sees
  */
-function createKillResultEmbed(success, killer, target, amount, scenario, killerStats, killerNewBalance, targetNewBalance, cooldownTimestamp) {
+function createKillResultEmbed(success, killer, target, amount, scenario, killerStats, killerNewBalance, targetNewBalance, cooldownTimestamp, killerDisplayName, targetDisplayName) {
   const color = success ? 0x00FF00 : 0xFF0000; // Green for success, Red for failure
   const resultText = success ? '✅ KILL SUCCESSFUL' : '❌ KILL FAILED';
 
@@ -13,21 +13,16 @@ function createKillResultEmbed(success, killer, target, amount, scenario, killer
     .setDescription(
       `${scenario.emoji} ${scenario.text}\n\n` +
       `═══════════════════════════════════════\n\n` +
-      `⚔️ **ATTACKER:** ${killer.username}\n` +
-      `🎯 **TARGET:** ${target.username}\n` +
+      `⚔️ **ATTACKER:** ${killerDisplayName}\n` +
+      `🎯 **TARGET:** ${targetDisplayName}\n` +
       `💰 **STAKES:** ${amount.toLocaleString()} coins\n\n` +
       `${resultText}\n\n` +
       `═══════════════════════════════════════\n\n` +
       `📊 **NEW BALANCES:**\n` +
       (success 
-        ? `${killer.username}: ${(killerNewBalance - amount).toLocaleString()} → **${killerNewBalance.toLocaleString()}** coins (+${amount.toLocaleString()})\n${target.username}: ${amount.toLocaleString()} → **${targetNewBalance.toLocaleString()}** coins (-${amount.toLocaleString()})`
-        : `${killer.username}: ${amount.toLocaleString()} → **${killerNewBalance.toLocaleString()}** coins (-${amount.toLocaleString()})\n${target.username}: ${(targetNewBalance - amount).toLocaleString()} → **${targetNewBalance.toLocaleString()}** coins (+${amount.toLocaleString()})`) +
-      `\n\n═══════════════════════════════════════\n\n` +
-      `📈 **${success ? 'KILLER' : 'SURVIVOR'} STATS:**\n` +
-      `Successful Kills: **${killerStats.successfulKills}** | Deaths: **${killerStats.deaths}**\n` +
-      `Total Stolen: **${killerStats.totalCoinsStolen.toLocaleString()}** coins\n` +
-      `Kill/Death Ratio: **${killerStats.deaths > 0 ? (killerStats.successfulKills / killerStats.deaths).toFixed(2) : killerStats.successfulKills.toFixed(2)}**\n\n` +
-      `⏰ Next kill attempt available <t:${cooldownTimestamp}:R>`
+        ? `${killerDisplayName}: ${(killerNewBalance - amount).toLocaleString()} → **${killerNewBalance.toLocaleString()}** coins (+${amount.toLocaleString()})\n${targetDisplayName}: ${amount.toLocaleString()} → **${targetNewBalance.toLocaleString()}** coins (-${amount.toLocaleString()})`
+        : `${killerDisplayName}: ${amount.toLocaleString()} → **${killerNewBalance.toLocaleString()}** coins (-${amount.toLocaleString()})\n${targetDisplayName}: ${(targetNewBalance - amount).toLocaleString()} → **${targetNewBalance.toLocaleString()}** coins (+${amount.toLocaleString()})`) +
+      `\n\n⏰ Next kill attempt available <t:${cooldownTimestamp}:R>`
     )
     .setTimestamp();
 
