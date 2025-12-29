@@ -1,8 +1,8 @@
-const { createCalendarEmbed } = require('./calendarEmbed');
+const { createCalendarMessage } = require('./calendarEmbed');
 
 /**
  * Update the PvP calendar for a specific guild
- * Fetches the calendar message and updates its embed
+ * Fetches the calendar message and updates its content
  */
 async function updateCalendar(client, guildId, collections) {
   const { pvpCalendars } = collections;
@@ -36,11 +36,11 @@ async function updateCalendar(client, guildId, collections) {
       return;
     }
 
-    // Generate updated embed
-    const embed = await createCalendarEmbed(guildId, client, collections);
+    // Generate updated message content
+    const content = await createCalendarMessage(guildId, client, collections);
 
     // Update the message
-    await message.edit({ embeds: [embed] });
+    await message.edit({ content });
 
     // Update last updated timestamp
     await pvpCalendars.updateOne(

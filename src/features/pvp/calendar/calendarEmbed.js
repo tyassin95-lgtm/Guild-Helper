@@ -1,10 +1,8 @@
-const { EmbedBuilder } = require('discord.js');
-
 /**
- * Generate the PvP calendar embed in school timetable style
+ * Generate the PvP calendar as formatted text (not embed)
  * Shows today + next 6 days (rolling 7-day window)
  */
-async function createCalendarEmbed(guildId, client, collections) {
+async function createCalendarMessage(guildId, client, collections) {
   const { pvpEvents } = collections;
 
   // Get UK timezone date for "today"
@@ -68,20 +66,18 @@ async function createCalendarEmbed(guildId, client, collections) {
   const startDateStr = dateRangeFormatter.format(startDate);
   const endDateStr = dateRangeFormatter.format(endDisplayDate);
 
-  const embed = new EmbedBuilder()
-    .setColor('#e74c3c')
-    .setTitle('🗓️ PvP Weekly Schedule')
-    .setDescription(
-      `**${startDateStr} - ${endDateStr}**\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-      timetableText
-    )
-    .setFooter({
-      text: `📊 ${events.length} event${events.length !== 1 ? 's' : ''} scheduled this week • 🔄 Updates every 5 minutes`
-    })
-    .setTimestamp();
+  const timestamp = Math.floor(Date.now() / 1000);
 
-  return embed;
+  // Build formatted text message
+  const message = 
+    `# 🗓️ PvP Weekly Schedule\n` +
+    `**${startDateStr} - ${endDateStr}**\n` +
+    `\`\`\`\n` +
+    timetableText +
+    `\`\`\`\n` +
+    `📊 **${events.length}** event${events.length !== 1 ? 's' : ''} scheduled • 🔄 Updates every 5 minutes • <t:${timestamp}:R>`;
+
+  return message;
 }
 
 /**
@@ -119,7 +115,7 @@ function groupEventsByDay(events, startDate) {
 }
 
 /**
- * Build the timetable text layout
+ * Build the timetable text layout (all 7 days horizontally)
  */
 function buildTimetable(eventsByDay, startDate, guildId) {
   const eventTypeEmojis = {
@@ -138,105 +134,71 @@ function buildTimetable(eventsByDay, startDate, guildId) {
     guildevent: 'Guild Event'
   };
 
-  const dayNames = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
-  // Build Week 1 (Mon-Thu) and Week 2 (Fri-Sun)
   let timetable = '';
 
-  // First row: Mon-Thu
-  timetable += buildWeekRow(eventsByDay, startDate, 0, 4, dayNames, eventTypeEmojis, eventTypeNames, guildId);
-
-  timetable += '\n\n';
-
-  // Second row: Fri-Sun
-  timetable += buildWeekRow(eventsByDay, startDate, 4, 7, dayNames, eventTypeEmojis, eventTypeNames, guildId);
-
-  return timetable;
-}
-
-/**
- * Build a row of days (for splitting Mon-Thu and Fri-Sun)
- */
-function buildWeekRow(eventsByDay, startDate, startIdx, endIdx, dayNames, eventTypeEmojis, eventTypeNames, guildId) {
-  let row = '';
-
-  // Build headers
+  // Build header row with all 7 days
   const headers = [];
-  for (let i = startIdx; i < endIdx; i++) {
+  for (let i = 0; i < 7; i++) {
     const date = new Date(startDate);
     date.setDate(date.getDate() + i);
     const dayNum = date.getDate();
+    const actualDayIdx = date.getDay();
+    const dayName = dayNames[actualDayIdx];
 
-    // Adjust day name based on actual day of week
-    const actualDayIdx = date.getDay(); // 0 = Sun, 1 = Mon, etc.
-    const dayName = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][actualDayIdx];
-
-    headers.push(`**${dayName} ${dayNum}**`);
+    // Fixed width for each column (18 chars)
+    const header = `${dayName} ${dayNum}`.padEnd(18);
+    headers.push(header);
   }
-  row += headers.join('          ') + '\n';
+  timetable += headers.join('') + '\n';
 
   // Build separator
-  const separators = [];
-  for (let i = startIdx; i < endIdx; i++) {
-    separators.push('═══════');
-  }
-  row += separators.join('     ') + '\n\n';
+  timetable += '═'.repeat(126) + '\n';
 
-  // Find max events in any day for this row
+  // Find max events in any single day
   let maxEvents = 0;
-  for (let i = startIdx; i < endIdx; i++) {
+  for (let i = 0; i < 7; i++) {
     maxEvents = Math.max(maxEvents, eventsByDay[i].length);
   }
 
-  // Build event rows
-  for (let eventIdx = 0; eventIdx < Math.max(maxEvents, 1); eventIdx++) {
-    const eventLine = [];
+  // If no events at all
+  if (maxEvents === 0) {
+    timetable += '\n' + ' '.repeat(45) + 'No events scheduled\n';
+    return timetable;
+  }
 
-    for (let dayIdx = startIdx; dayIdx < endIdx; dayIdx++) {
+  // Build event rows (one row per event slot across all days)
+  for (let eventIdx = 0; eventIdx < maxEvents; eventIdx++) {
+    const eventRow = [];
+
+    for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
       const dayEvents = eventsByDay[dayIdx];
 
-      if (eventIdx === 0 && dayEvents.length === 0) {
-        // Show "No Events" on first line if day is empty
-        eventLine.push('No Events');
-      } else if (eventIdx < dayEvents.length) {
+      if (eventIdx < dayEvents.length) {
         const event = dayEvents[eventIdx];
         const emoji = eventTypeEmojis[event.eventType] || '📅';
-        const typeName = eventTypeNames[event.eventType] || event.eventType;
 
         // Create masked link to event
         const eventLink = `https://discord.com/channels/${guildId}/${event.channelId}/${event.messageId}`;
         const timestamp = Math.floor(event.eventTime.getTime() / 1000);
-        const timeLink = `[<t:${timestamp}:t>](${eventLink})`;
 
-        // Format: emoji + clickable time + newline + name + location (if applicable)
-        let eventText = `${emoji} ${timeLink}`;
+        // Format as: "emoji Time"
+        const timeLink = `${emoji} <t:${timestamp}:t>`;
 
-        // Add event type name
-        eventText += `\n${typeName}`;
-
-        // Add location for events that have it
-        if (event.location) {
-          // Truncate location if too long
-          const loc = event.location.length > 12 ? event.location.substring(0, 12) + '...' : event.location;
-          eventText += `\n*${loc}*`;
-        }
-
-        eventLine.push(eventText);
+        // Pad to fixed width
+        const cell = timeLink.padEnd(18);
+        eventRow.push(cell);
       } else {
-        // Empty space for alignment
-        eventLine.push('');
+        // Empty cell
+        eventRow.push(' '.repeat(18));
       }
     }
 
-    row += eventLine.join('     ') + '\n';
-
-    // Add extra spacing between events
-    if (eventIdx < maxEvents - 1) {
-      row += '\n';
-    }
+    timetable += eventRow.join('') + '\n';
   }
 
-  return row;
+  return timetable;
 }
 
-module.exports = { createCalendarEmbed };
+module.exports = { createCalendarMessage };

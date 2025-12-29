@@ -1,5 +1,5 @@
 const { PermissionFlagsBits } = require('discord.js');
-const { createCalendarEmbed } = require('../calendar/calendarEmbed');
+const { createCalendarMessage } = require('../calendar/calendarEmbed');
 
 async function handlePvPCalendar({ interaction, collections }) {
   const { pvpCalendars } = collections;
@@ -33,13 +33,11 @@ async function handlePvPCalendar({ interaction, collections }) {
       }
     }
 
-    // Generate the calendar embed
-    const embed = await createCalendarEmbed(interaction.guildId, interaction.client, collections);
+    // Generate the calendar message content
+    const content = await createCalendarMessage(interaction.guildId, interaction.client, collections);
 
     // Send the calendar to the current channel
-    const calendarMessage = await interaction.channel.send({
-      embeds: [embed]
-    });
+    const calendarMessage = await interaction.channel.send({ content });
 
     // Save calendar info to database
     await pvpCalendars.insertOne({
