@@ -225,6 +225,9 @@ function buildDayMessage(dayIndex, eventsByDay, startDate, guildId) {
     }
   }
 
+  // Add separator line at the end of each day
+  content += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
   return content;
 }
 
