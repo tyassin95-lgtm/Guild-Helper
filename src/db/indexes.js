@@ -31,6 +31,7 @@ async function ensureIndexes({
   wishlistPanels,
   wishlistSettings,
   wishlistGivenItems,
+  guildPolls,
   automodSettings,
   automodLogs
 }) {
@@ -195,6 +196,15 @@ async function ensureIndexes({
   await wishlistGivenItems.createIndex({ userId: 1 });
   await wishlistGivenItems.createIndex({ itemId: 1 });
   await wishlistGivenItems.createIndex({ givenAt: -1 }); // Sort by given date
+
+  // Poll System Indexes
+  await guildPolls.createIndex({ guildId: 1 });
+  await guildPolls.createIndex({ guildId: 1, active: 1 });
+  await guildPolls.createIndex({ guildId: 1, closed: 1 });
+  await guildPolls.createIndex({ messageId: 1 });
+  await guildPolls.createIndex({ endsAt: 1 }); // For auto-close queries
+  await guildPolls.createIndex({ createdAt: -1 }); // Sort by creation date
+  await guildPolls.createIndex({ 'options.voters.userId': 1 }); // For voter lookups
 
   // AutoMod System Indexes
   await automodSettings.createIndex({ guildId: 1 }, { unique: true });

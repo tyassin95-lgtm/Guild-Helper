@@ -326,6 +326,12 @@ async function registerSlashCommands(client) {
       description: 'Admins: Mark wishlisted items as given/distributed.',
       default_member_permissions: ADMIN
     },
+    // Poll Commands
+    {
+      name: 'guildpoll',
+      description: 'Admins: Create a guild-wide poll with voting options.',
+      default_member_permissions: ADMIN
+    },
     // AutoMod Commands
     {
       name: 'automod',

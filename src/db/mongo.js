@@ -82,6 +82,9 @@ function getCollections(db = _db) {
     wishlistSettings: db.collection('wishlistSettings'),
     wishlistGivenItems: db.collection('wishlistGivenItems'),
 
+    // Poll system
+    guildPolls: db.collection('guildPolls'),
+
     // AutoMod system
     automodSettings: db.collection('automodSettings'),
     automodLogs: db.collection('automodLogs')

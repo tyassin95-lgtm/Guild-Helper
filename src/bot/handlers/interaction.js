@@ -103,6 +103,11 @@ const {
 const { handleWishlistButtons } = require('../../features/wishlist/handlers/wishlistButtons');
 const { handleWishlistSelects } = require('../../features/wishlist/handlers/wishlistSelects');
 
+// Poll system imports
+const { handleGuildPoll } = require('../../features/polls/commands/guildpoll');
+const { handlePollButtons } = require('../../features/polls/handlers/buttons');
+const { handlePollModal } = require('../../features/polls/handlers/modals');
+
 // AutoMod system imports
 const { handleAutoMod } = require('../../features/automod/commands/automod');
 
@@ -177,10 +182,18 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'freezewishlists')     return handleFreezeWishlists({ interaction, collections, client });
       if (name === 'wishlistreminder')    return handleWishlistReminder({ interaction, collections });
       if (name === 'giveitem')            return handleGiveItem({ interaction, collections, client });
+
+      // Poll commands
+      if (name === 'guildpoll')           return handleGuildPoll({ interaction, collections });
     }
 
     // Button Interactions
     if (interaction.isButton()) {
+      // Poll system buttons
+      if (interaction.customId.startsWith('poll_vote:')) {
+        return handlePollButtons({ interaction, collections });
+      }
+
       // Handle reset parties confirmation buttons
       if (interaction.customId.startsWith('confirm_reset_parties_')) {
         return handleResetPartiesConfirmation({ interaction, collections });
@@ -389,6 +402,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
     // Modal Submit Interactions
     if (interaction.isModalSubmit()) {
+      // Poll system modals
+      if (interaction.customId === 'poll_create_modal') {
+        return handlePollModal({ interaction, collections });
+      }
+
       // Item Roll trait and duration modal
       if (interaction.customId.startsWith('itemroll_trait_duration_modal:')) {
         return handleItemRollModals({ interaction, collections });
