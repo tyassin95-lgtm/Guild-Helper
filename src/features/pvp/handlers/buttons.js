@@ -1,6 +1,7 @@
 const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, UserSelectMenuBuilder } = require('discord.js');
 const { ObjectId } = require('mongodb');
 const { updateEventEmbed } = require('../embed');
+const { updateCalendar } = require('../calendar/calendarUpdate');
 
 async function handlePvPButtons({ interaction, collections }) {
   const { pvpEvents, pvpBonuses } = collections;
@@ -130,6 +131,9 @@ async function handlePvPButtons({ interaction, collections }) {
     );
 
     const event = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
+
+    // Update calendar if it exists
+    await updateCalendar(interaction.client, interaction.guildId, collections);
 
     // Update the embed
     await updateEventEmbed(interaction, event, collections);

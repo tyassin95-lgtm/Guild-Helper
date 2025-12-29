@@ -74,6 +74,11 @@ async function registerSlashCommands(client) {
       default_member_permissions: ADMIN
     },
     {
+      name: 'pvpcalendar',
+      description: 'Admins: Create a PvP calendar showing upcoming events.',
+      default_member_permissions: ADMIN
+    },
+    {
       name: 'resetbonuses',
       description: 'Admins: Reset all PvP bonuses (DANGEROUS!).',
       default_member_permissions: ADMIN

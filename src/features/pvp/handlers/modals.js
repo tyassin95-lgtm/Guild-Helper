@@ -1,6 +1,7 @@
 const { ObjectId } = require('mongodb');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { updateEventEmbed } = require('../embed');
+const { updateCalendar } = require('../calendar/calendarUpdate');
 
 // Default event images
 const DEFAULT_EVENT_IMAGES = {
@@ -357,6 +358,9 @@ async function handlePvPModals({ interaction, collections }) {
       { _id: event._id },
       { $set: { messageId: eventMessage.id } }
     );
+
+    // Update calendar if it exists
+    await updateCalendar(interaction.client, interaction.guildId, collections);
 
     return interaction.editReply({
       content: '✅ **PvP Event created successfully!**\n\n' +

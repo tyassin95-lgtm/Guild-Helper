@@ -43,6 +43,7 @@ function getCollections(db = _db) {
     pvpEvents: db.collection('pvpEvents'),
     pvpBonuses: db.collection('pvpBonuses'),
     pvpActivityRanking: db.collection('pvpActivityRanking'),
+    pvpCalendars: db.collection('pvpCalendars'),
 
     // Item Roll system
     itemRolls: db.collection('itemRolls'),

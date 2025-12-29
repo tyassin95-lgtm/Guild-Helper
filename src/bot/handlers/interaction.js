@@ -15,6 +15,7 @@ const { handlePartyManageButtons } = require('../../features/parties/handlers/ma
 
 // PvP system imports
 const { handlePvPEvent } = require('../../features/pvp/commands/pvpevent');
+const { handlePvPCalendar } = require('../../features/pvp/commands/pvpcalendar');
 const { handleResetBonuses, handleResetBonusesConfirmation } = require('../../features/pvp/commands/resetbonuses');
 const { handlePvPButtons } = require('../../features/pvp/handlers/buttons');
 const { handlePvPSelects } = require('../../features/pvp/handlers/selects');
@@ -139,6 +140,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
       // PvP commands
       if (name === 'pvpevent')    return handlePvPEvent({ interaction, collections });
+      if (name === 'pvpcalendar') return handlePvPCalendar({ interaction, collections });
       if (name === 'resetbonuses') return handleResetBonuses({ interaction, collections });
       if (name === 'itemroll')    return handleItemRoll({ interaction, collections });
 
