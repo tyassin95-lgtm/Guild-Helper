@@ -10,7 +10,7 @@ async function handleKillBias({ interaction, collections }) {
     });
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [64] }); // 64 = Ephemeral
 
   const action = interaction.options.getString('action');
   const guildId = interaction.guildId;
