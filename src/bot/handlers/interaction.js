@@ -8,7 +8,7 @@ const { handlePartiesPanel } = require('../../features/parties/commands/partiesp
 const { handleResetParties, handleResetPartiesConfirmation } = require('../../features/parties/commands/resetparties');
 const { handleRemindParty } = require('../../features/parties/commands/remindparty');
 const { handleGuildRoster } = require('../../features/parties/commands/guildroster');
-const { handleScreenshot } = require('../../features/parties/commands/screenshot'); // NEW
+const { handleScreenshot } = require('../../features/parties/commands/screenshot');
 const { handlePartyButtons } = require('../../features/parties/handlers/buttons');
 const { handlePartySelects } = require('../../features/parties/handlers/selects');
 const { handlePartyModals } = require('../../features/parties/handlers/modals');
@@ -74,6 +74,7 @@ const { handleRob } = require('../../features/gambling/commands/rob');
 const { handleKill } = require('../../features/gambling/commands/kill');
 const { handleSend, handleSendConfirmation } = require('../../features/gambling/commands/send');
 const { handleLeaderboard } = require('../../features/gambling/commands/leaderboard');
+const { handleKillBias } = require('../../features/gambling/commands/killbias'); // NEW
 const { handleBlackjackButtons } = require('../../features/gambling/handlers/blackjackButtons');
 const { handleTriviaButtons } = require('../../features/gambling/handlers/triviaButtons');
 
@@ -139,7 +140,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'resetparties') return handleResetParties({ interaction, collections });
       if (name === 'remindparty') return handleRemindParty({ interaction, collections });
       if (name === 'guildroster') return handleGuildRoster({ interaction, collections });
-      if (name === 'screenshot')  return handleScreenshot({ interaction, collections }); // NEW
+      if (name === 'screenshot')  return handleScreenshot({ interaction, collections });
 
       // PvP commands
       if (name === 'pvpevent')    return handlePvPEvent({ interaction, collections });
@@ -172,6 +173,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'kill')                return handleKill({ interaction, collections });
       if (name === 'send')                return handleSend({ interaction, collections });
       if (name === 'leaderboard')         return handleLeaderboard({ interaction, collections });
+      if (name === 'killbias')            return handleKillBias({ interaction, collections }); // NEW
 
       // Broadcast commands
       if (name === 'startbroadcast')      return handleStartBroadcast({ interaction, collections, client });

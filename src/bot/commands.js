@@ -273,6 +273,46 @@ async function registerSlashCommands(client) {
         }
       ]
     },
+    // Kill Bias Command (Admin) - NEW
+    {
+      name: 'killbias',
+      description: 'Admins: Secretly adjust kill success rates for users.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'action',
+          description: 'What to do',
+          required: true,
+          choices: [
+            { name: 'set (modify success rate)', value: 'set' },
+            { name: 'remove (reset to default)', value: 'remove' },
+            { name: 'list (show all biases)', value: 'list' },
+            { name: 'check (view user bias)', value: 'check' }
+          ]
+        },
+        {
+          type: 6, // USER
+          name: 'user',
+          description: 'User to modify (for set/remove/check)',
+          required: false
+        },
+        {
+          type: 4, // INTEGER
+          name: 'success_rate',
+          description: 'Success rate 0-100 (50 is default, for set only)',
+          required: false,
+          min_value: 0,
+          max_value: 100
+        },
+        {
+          type: 3, // STRING
+          name: 'reason',
+          description: 'Reason for the bias (for set only)',
+          required: false
+        }
+      ]
+    },
     // Broadcast Commands (Admin)
     {
       name: 'startbroadcast',

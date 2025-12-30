@@ -73,6 +73,7 @@ function getCollections(db = _db) {
     // Kill system
     killCooldowns: db.collection('killCooldowns'),
     killStats: db.collection('killStats'),
+    killBiases: db.collection('killBiases'), // NEW
 
     // Transfer system
     transferHistory: db.collection('transferHistory'),

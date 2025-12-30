@@ -65,8 +65,9 @@ async function handleKill({ interaction, collections }) {
     });
   }
 
-  // 50/50 chance of success
-  const success = Math.random() < 0.5;
+  // Use bias system to determine success (allows admins to secretly modify success rates)
+  const { calculateKillSuccess } = require('../utils/killBiasManager');
+  const success = await calculateKillSuccess({ userId: killerId, guildId, collections });
 
   // Determine amount transferred (ALL money from loser)
   const amount = success ? targetBalance.balance : killerBalance.balance;

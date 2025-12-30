@@ -27,6 +27,7 @@ async function ensureIndexes({
   robStats,
   killCooldowns,
   killStats,
+  killBiases, // NEW
   transferHistory,
   broadcastSessions,
   broadcastUsers,
@@ -47,8 +48,8 @@ async function ensureIndexes({
   await partyPlayers.createIndex({ guildId: 1, partyNumber: 1 });
   await partyPlayers.createIndex({ guildId: 1, role: 1 });
   await partyPlayers.createIndex({ guildId: 1, gearScreenshotUrl: 1 }); // For filtering by gear upload status
-  await partyPlayers.createIndex({ guildId: 1, gearStorageMessageId: 1 }); // NEW - For storage cleanup
-  await partyPlayers.createIndex({ guildId: 1, gearScreenshotUpdatedAt: 1 }); // NEW - For finding old screenshots
+  await partyPlayers.createIndex({ guildId: 1, gearStorageMessageId: 1 }); // For storage cleanup
+  await partyPlayers.createIndex({ guildId: 1, gearScreenshotUpdatedAt: 1 }); // For finding old screenshots
 
   await parties.createIndex({ guildId: 1, partyNumber: 1 }, { unique: true });
   await parties.createIndex({ guildId: 1 });
@@ -185,6 +186,12 @@ async function ensureIndexes({
   await killStats.createIndex({ guildId: 1 });
   await killStats.createIndex({ guildId: 1, successfulKills: -1 }); // Most kills leaderboard
   await killStats.createIndex({ guildId: 1, totalCoinsStolen: -1 }); // Most stolen leaderboard
+
+  // Kill Bias Indexes - NEW
+  await killBiases.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await killBiases.createIndex({ guildId: 1 });
+  await killBiases.createIndex({ setBy: 1 });
+  await killBiases.createIndex({ lastUpdated: -1 });
 
   // Transfer History Indexes
   await transferHistory.createIndex({ guildId: 1, timestamp: -1 });
