@@ -110,8 +110,8 @@ async function handleKill({ interaction, collections }) {
   const killerStats = await getKillStats({ userId: killerId, guildId, collections });
   const targetStats = await getKillStats({ userId: targetId, guildId, collections });
 
-  // Calculate cooldown timestamp (12 hours from now)
-  const cooldownTimestamp = Math.floor((Date.now() + 12 * 60 * 60 * 1000) / 1000);
+  // Calculate cooldown timestamp (2 hours from now)
+  const cooldownTimestamp = Math.floor((Date.now() + 2 * 60 * 60 * 1000) / 1000);
 
   // Create public embed (everyone sees)
   const publicEmbed = createKillResultEmbed(

@@ -1,9 +1,9 @@
 const { getBalance, subtractBalance, addBalance } = require('../utils/balanceManager');
 const { createRobEmbed } = require('../embeds/robEmbeds');
 
-const ROB_COOLDOWN_HOURS = 8;
+const ROB_COOLDOWN_HOURS = 1;
 const MIN_BALANCE_TO_ROB = 0;
-const MIN_BALANCE_TO_BE_ROBBED = 100;
+const MIN_BALANCE_TO_BE_ROBBED = 500;
 
 async function handleRob({ interaction, collections }) {
   const robberId = interaction.user.id;

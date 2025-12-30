@@ -28,7 +28,7 @@ function createRobEmbed(success, robber, target, amount, robberNewBalance, targe
     .setColor(color)
     .setTitle(title)
     .setDescription(description)
-    .setFooter({ text: success ? '⏰ 8 hour cooldown before you can rob again' : '⏰ 8 hour cooldown | Better luck next time!' })
+    .setFooter({ text: success ? '⏰ 1 hour cooldown before you can rob again' : '⏰ 1 hour cooldown | Better luck next time!' })
     .setTimestamp();
 
   return embed;
