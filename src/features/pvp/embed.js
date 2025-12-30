@@ -1,4 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ObjectId } = require('mongodb');
 
 async function createEventEmbed(event, client, collections) {
   const eventTypeEmojis = {
@@ -193,23 +194,83 @@ async function fetchUserNames(client, guildId, userIds) {
   return names;
 }
 
+/**
+ * Clean up orphaned event from database
+ * Called when the event message no longer exists in Discord
+ */
+async function cleanupOrphanedEvent(eventId, collections) {
+  const { pvpEvents } = collections;
+
+  try {
+    const result = await pvpEvents.deleteOne({ _id: new ObjectId(eventId) });
+    if (result.deletedCount > 0) {
+      console.log(`✅ Cleaned up orphaned PvP event ${eventId} from database`);
+      return true;
+    } else {
+      console.warn(`Event ${eventId} not found in database during cleanup`);
+      return false;
+    }
+  } catch (err) {
+    console.error(`Failed to cleanup orphaned event ${eventId}:`, err);
+    return false;
+  }
+}
+
+/**
+ * Update event embed with automatic cleanup if message is deleted
+ */
 async function updateEventEmbed(interaction, event, collections) {
   try {
-    const channel = await interaction.client.channels.fetch(event.channelId);
-    if (!channel) return;
+    // Try to fetch the channel
+    const channel = await interaction.client.channels.fetch(event.channelId).catch(() => null);
 
-    const message = await channel.messages.fetch(event.messageId);
-    if (!message) return;
+    if (!channel) {
+      console.warn(`Channel ${event.channelId} not found for event ${event._id} - cleaning up`);
+      await cleanupOrphanedEvent(event._id, collections);
+      return;
+    }
 
+    // Try to fetch the message
+    const message = await channel.messages.fetch(event.messageId).catch(() => null);
+
+    if (!message) {
+      console.warn(`Message ${event.messageId} not found for event ${event._id} - cleaning up`);
+      await cleanupOrphanedEvent(event._id, collections);
+      return;
+    }
+
+    // Message exists, update it
     const { embed, components } = await createEventEmbed(event, interaction.client, collections);
 
     await message.edit({
       embeds: [embed],
       components
     });
+
+    console.log(`✅ Updated PvP event embed ${event._id}`);
   } catch (err) {
-    console.error('Failed to update event embed:', err);
+    // Handle specific Discord API errors
+    if (err.code === 10008) {
+      // Unknown Message - message was deleted
+      console.warn(`Event message ${event.messageId} was deleted - cleaning up event ${event._id}`);
+      await cleanupOrphanedEvent(event._id, collections);
+    } else if (err.code === 10003) {
+      // Unknown Channel - channel was deleted
+      console.warn(`Event channel ${event.channelId} was deleted - cleaning up event ${event._id}`);
+      await cleanupOrphanedEvent(event._id, collections);
+    } else if (err.code === 50001) {
+      // Missing Access - bot can't access the channel
+      console.warn(`Bot lacks access to channel ${event.channelId} - cleaning up event ${event._id}`);
+      await cleanupOrphanedEvent(event._id, collections);
+    } else if (err.code === 50013) {
+      // Missing Permissions - bot can't edit the message
+      console.error(`Bot lacks permissions to edit message ${event.messageId} in channel ${event.channelId}`);
+      // Don't cleanup in this case - permission issue might be temporary
+    } else {
+      // Unknown error
+      console.error('Failed to update event embed:', err);
+    }
   }
 }
 
-module.exports = { createEventEmbed, updateEventEmbed };
+module.exports = { createEventEmbed, updateEventEmbed, cleanupOrphanedEvent };

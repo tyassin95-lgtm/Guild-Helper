@@ -1,6 +1,6 @@
 const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, UserSelectMenuBuilder } = require('discord.js');
 const { ObjectId } = require('mongodb');
-const { updateEventEmbed } = require('../embed');
+const { updateEventEmbed, cleanupOrphanedEvent } = require('../embed');
 const { updateCalendar } = require('../calendar/calendarUpdate');
 
 async function handlePvPButtons({ interaction, collections }) {
@@ -83,7 +83,10 @@ async function handlePvPButtons({ interaction, collections }) {
     const event = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
 
     if (!event) {
-      return interaction.reply({ content: '❌ Event not found.', flags: [64] });
+      return interaction.reply({ 
+        content: '❌ Event not found. It may have been deleted.', 
+        flags: [64] 
+      });
     }
 
     if (event.closed) {
@@ -125,18 +128,28 @@ async function handlePvPButtons({ interaction, collections }) {
 
     await interaction.deferUpdate();
 
+    // Check if event exists
+    const event = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
+
+    if (!event) {
+      return interaction.followUp({
+        content: '❌ Event not found. It may have been deleted.',
+        flags: [64]
+      });
+    }
+
     await pvpEvents.updateOne(
       { _id: new ObjectId(eventId) },
       { $set: { closed: true } }
     );
 
-    const event = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
+    const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
 
     // Update calendar if it exists
     await updateCalendar(interaction.client, interaction.guildId, collections);
 
     // Update the embed
-    await updateEventEmbed(interaction, event, collections);
+    await updateEventEmbed(interaction, updatedEvent, collections);
 
     return interaction.followUp({
       content: '✅ Event has been closed.',
@@ -155,7 +168,10 @@ async function handlePvPButtons({ interaction, collections }) {
     const event = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
 
     if (!event) {
-      return interaction.reply({ content: '❌ Event not found.', flags: [64] });
+      return interaction.reply({ 
+        content: '❌ Event not found. It may have been deleted.', 
+        flags: [64] 
+      });
     }
 
     if (!event.closed) {
@@ -182,7 +198,7 @@ async function handlePvPButtons({ interaction, collections }) {
 }
 
 /**
- * Handle RSVP button clicks
+ * Handle RSVP button clicks with automatic cleanup
  */
 async function handleRSVP(interaction, eventId, rsvpType, collections) {
   const { pvpEvents } = collections;
@@ -193,7 +209,7 @@ async function handleRSVP(interaction, eventId, rsvpType, collections) {
 
   if (!event) {
     return interaction.followUp({ 
-      content: '❌ Event not found.', 
+      content: '❌ Event not found. It may have been deleted.', 
       flags: [64] 
     });
   }
