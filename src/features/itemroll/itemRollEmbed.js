@@ -28,9 +28,20 @@ async function createItemRollEmbed(itemRoll, client, collections) {
   }
 
   // Add end time field
-  const endTimestamp = Math.floor(itemRoll.endsAt.getTime() / 1000);
+  // If roll is closed, show when it actually closed; otherwise show scheduled end time
+  let endTimestamp;
+  let endLabel;
+
+  if (itemRoll.closed && itemRoll.closedAt) {
+    endTimestamp = Math.floor(itemRoll.closedAt.getTime() / 1000);
+    endLabel = earlyClose ? '⏰ Closed Early At' : '⏰ Closed At';
+  } else {
+    endTimestamp = Math.floor(itemRoll.endsAt.getTime() / 1000);
+    endLabel = '⏰ Roll Ends';
+  }
+
   embed.addFields({
-    name: '⏰ Roll Ends',
+    name: endLabel,
     value: `<t:${endTimestamp}:F>\n<t:${endTimestamp}:R>`,
     inline: true
   });
@@ -169,7 +180,7 @@ async function createItemRollEmbed(itemRoll, client, collections) {
     if (tieDetected && !itemRoll.winnerId) {
       statusText = '⚔️ **Tie - Tiebreaker Created**';
     } else if (earlyClose) {
-      statusText = '🔒 **Closed Early - All Eligible Players Rolled**';
+      statusText = '🔒 **Closed Early - All Eligible Players Rolled Already!**';
     } else {
       statusText = '🔒 **Rolling Closed**';
     }
