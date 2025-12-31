@@ -145,8 +145,10 @@ async function handlePvPButtons({ interaction, collections }) {
 
     const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
 
-    // Update calendar if it exists
-    await updateCalendar(interaction.client, interaction.guildId, collections);
+    // Update calendar asynchronously (don't block the response - auto-update will handle it)
+    updateCalendar(interaction.client, interaction.guildId, collections).catch(err => 
+      console.error('Failed to update calendar after closing event:', err)
+    );
 
     // Update the embed
     await updateEventEmbed(interaction, updatedEvent, collections);

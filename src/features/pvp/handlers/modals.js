@@ -359,8 +359,10 @@ async function handlePvPModals({ interaction, collections }) {
       { $set: { messageId: eventMessage.id } }
     );
 
-    // Update calendar if it exists
-    await updateCalendar(interaction.client, interaction.guildId, collections);
+    // Update calendar asynchronously (don't block the response - auto-update will handle it)
+    updateCalendar(interaction.client, interaction.guildId, collections).catch(err => 
+      console.error('Failed to update calendar after creating event:', err)
+    );
 
     return interaction.editReply({
       content: '✅ **PvP Event created successfully!**\n\n' +
