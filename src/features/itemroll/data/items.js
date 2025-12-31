@@ -100,7 +100,7 @@ const ITEMS = {
       },
       {
         name: "Grand Aelon's Longbow of Blight",
-        imageUrl: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Weapon/IT_P_Dagger_00035.webp'
+        imageUrl: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Weapon/IT_P_Bow_00034A.webp'
       }
     ],
     'Crossbow': [
