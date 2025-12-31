@@ -10,6 +10,7 @@ const { startItemRollAutoUpdate, stopItemRollAutoUpdate } = require('./features/
 const { resumeActivePolls } = require('./features/polls/utils/pollResume');
 const { startPollAutoUpdate, stopPollAutoUpdate } = require('./features/polls/utils/pollAutoUpdate');
 const { startCalendarAutoUpdate, stopCalendarAutoUpdate } = require('./features/pvp/calendar/calendarAutoUpdate');
+const { startRosterAutoUpdate, stopRosterAutoUpdate } = require('./features/parties/rosterAutoUpdate');
 const { streamServer } = require('./features/broadcast/server/streamServer');
 const { broadcastManager } = require('./features/broadcast/utils/broadcastManager');
 const { handleGearUpload } = require('./features/parties/handlers/gearUploadHandler');
@@ -52,8 +53,11 @@ const client = new Client({
       // Start auto-updating poll system (checks every 60 seconds)
       startPollAutoUpdate(client, collections);
 
-      // Start PvP calendar auto-update (every 5 minutes)
+      // Start PvP calendar auto-update (every 15 minutes)
       startCalendarAutoUpdate(client, collections);
+
+      // Start guild roster auto-update (every hour)
+      startRosterAutoUpdate(client, collections);
     });
 
     client.on('interactionCreate', async (interaction) => {
@@ -102,6 +106,9 @@ const client = new Client({
       // Stop calendar auto-updates
       stopCalendarAutoUpdate();
 
+      // Stop roster auto-updates
+      stopRosterAutoUpdate();
+
       // Stop all broadcasts
       broadcastManager.stopAll();
       streamServer.stop();
@@ -124,6 +131,9 @@ const client = new Client({
 
       // Stop calendar auto-updates
       stopCalendarAutoUpdate();
+
+      // Stop roster auto-updates
+      stopRosterAutoUpdate();
 
       // Stop all broadcasts
       broadcastManager.stopAll();

@@ -67,7 +67,7 @@ async function handlePvPCalendar({ interaction, collections }) {
     return interaction.editReply({
       content: `✅ **PvP Calendar created successfully!**\n\n` +
                `📍 The calendar will display events for the next 7 days\n` +
-               `🔄 Auto-updates every 5 minutes\n` +
+               `🔄 Auto-updates every 15 minutes\n` +
                `⏰ Times shown in each user's local timezone\n` +
                `🔗 Click any time to jump directly to the event\n\n` +
                `[View Calendar](${sentMessages[0].url})\n\n` +
