@@ -5,6 +5,7 @@ async function createItemRollEmbed(itemRoll, client, collections) {
 
   const isTiebreaker = itemRoll.isTiebreaker || false;
   const tieDetected = itemRoll.tieDetected || false;
+  const earlyClose = itemRoll.earlyClose || false;
 
   const embed = new EmbedBuilder()
     .setColor(itemRoll.closed ? '#95a5a6' : (isTiebreaker ? '#e74c3c' : '#f39c12'))
@@ -52,38 +53,79 @@ async function createItemRollEmbed(itemRoll, client, collections) {
     inline: true
   });
 
-  // Show rolls
-  if (itemRoll.rolls && itemRoll.rolls.length > 0) {
-    const rollsList = await Promise.all(
-      itemRoll.rolls
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 10)
-        .map(async (roll, index) => {
-          const member = await client.guilds.cache.get(itemRoll.guildId)?.members.fetch(roll.userId).catch(() => null);
-          const displayName = member ? member.displayName : 'Unknown User';
-          const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-          return `${medal} **${displayName}**: ${roll.total} (${roll.baseRoll} + ${roll.bonus} bonus)`;
-        })
+  // Show rolls and passes combined
+  const rolls = itemRoll.rolls || [];
+  const passes = itemRoll.passes || [];
+  const totalParticipants = rolls.length + passes.length;
+
+  if (totalParticipants > 0) {
+    // Combine rolls and passes into a single sorted list
+    const rollEntries = await Promise.all(
+      rolls.map(async (roll) => {
+        const member = await client.guilds.cache.get(itemRoll.guildId)?.members.fetch(roll.userId).catch(() => null);
+        const displayName = member ? member.displayName : 'Unknown User';
+        return {
+          userId: roll.userId,
+          displayName,
+          total: roll.total,
+          baseRoll: roll.baseRoll,
+          bonus: roll.bonus,
+          isPassed: false,
+          timestamp: roll.timestamp
+        };
+      })
     );
 
-    const rollsText = rollsList.join('\n');
+    const passEntries = await Promise.all(
+      passes.map(async (pass) => {
+        const member = await client.guilds.cache.get(itemRoll.guildId)?.members.fetch(pass.userId).catch(() => null);
+        const displayName = member ? member.displayName : 'Unknown User';
+        return {
+          userId: pass.userId,
+          displayName,
+          total: -1, // Passes go to bottom
+          isPassed: true,
+          timestamp: pass.timestamp
+        };
+      })
+    );
+
+    // Combine and sort (rolls by total descending, passes at bottom)
+    const allEntries = [...rollEntries, ...passEntries].sort((a, b) => {
+      if (a.isPassed && !b.isPassed) return 1;
+      if (!a.isPassed && b.isPassed) return -1;
+      return b.total - a.total;
+    });
+
+    // Format display (show top 10)
+    const displayEntries = allEntries.slice(0, 10);
+    const participantsList = displayEntries.map((entry, index) => {
+      if (entry.isPassed) {
+        return `❌ **${entry.displayName}**: Passed`;
+      } else {
+        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+        return `${medal} **${entry.displayName}**: ${entry.total} (${entry.baseRoll} + ${entry.bonus} bonus)`;
+      }
+    });
+
+    const participantsText = participantsList.join('\n');
     embed.addFields({
-      name: `🎯 Current Rolls (${itemRoll.rolls.length})`,
-      value: rollsText || '*No rolls yet*',
+      name: `🎯 Participants (${totalParticipants})`,
+      value: participantsText || '*No activity yet*',
       inline: false
     });
 
-    if (itemRoll.rolls.length > 10) {
+    if (totalParticipants > 10) {
       embed.addFields({
         name: '\u200b',
-        value: `*...and ${itemRoll.rolls.length - 10} more rolls*`,
+        value: `*...and ${totalParticipants - 10} more participants*`,
         inline: false
       });
     }
   } else {
     embed.addFields({
-      name: '🎯 Current Rolls',
-      value: '*No one has rolled yet*',
+      name: '🎯 Participants',
+      value: '*No one has rolled or passed yet*',
       inline: false
     });
   }
@@ -126,6 +168,8 @@ async function createItemRollEmbed(itemRoll, client, collections) {
   if (itemRoll.closed) {
     if (tieDetected && !itemRoll.winnerId) {
       statusText = '⚔️ **Tie - Tiebreaker Created**';
+    } else if (earlyClose) {
+      statusText = '🔒 **Closed Early - All Eligible Players Acted**';
     } else {
       statusText = '🔒 **Rolling Closed**';
     }
@@ -143,14 +187,19 @@ async function createItemRollEmbed(itemRoll, client, collections) {
   const components = [];
 
   if (!itemRoll.closed) {
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`itemroll_roll:${itemRoll._id}`)
-        .setLabel(isTiebreaker ? 'Roll Again' : 'Roll')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('🎲')
-    );
+    const rollButton = new ButtonBuilder()
+      .setCustomId(`itemroll_roll:${itemRoll._id}`)
+      .setLabel(isTiebreaker ? 'Roll Again' : 'Roll')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('🎲');
 
+    const passButton = new ButtonBuilder()
+      .setCustomId(`itemroll_pass:${itemRoll._id}`)
+      .setLabel('Pass')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('👋');
+
+    const row = new ActionRowBuilder().addComponents(rollButton, passButton);
     components.push(row);
   }
 

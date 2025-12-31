@@ -191,6 +191,7 @@ async function handleItemRollSelects({ interaction, collections }) {
         ...tempData,
         eligibleUsers: selectedUsers,
         rolls: [],
+        passes: [],
         closed: false,
         createdAt: new Date(),
       };

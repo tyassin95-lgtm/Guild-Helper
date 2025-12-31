@@ -42,6 +42,14 @@ async function handleItemRollButtons({ interaction, collections }) {
       });
     }
 
+    // Check if user already passed
+    const passes = itemRoll.passes || [];
+    if (passes.some((p) => p.userId === interaction.user.id)) {
+      return interaction.editReply({
+        content: "❌ You have already passed on this item.",
+      });
+    }
+
     // Get user's PvP bonus
     const bonusData = await pvpBonuses.findOne({
       userId: interaction.user.id,
@@ -70,9 +78,17 @@ async function handleItemRollButtons({ interaction, collections }) {
       },
     );
 
-    // Update the embed
+    // Get updated roll data
     const updatedRoll = await itemRolls.findOne({ _id: new ObjectId(rollId) });
-    await updateItemRollEmbed(interaction, updatedRoll, collections);
+
+    // Check if all eligible users have acted (rolled or passed)
+    if (await checkIfAllEligibleActed(updatedRoll)) {
+      console.log(`All eligible users have acted for roll ${rollId}, closing early...`);
+      await closeItemRoll(rollId, interaction.client, collections, true);
+    } else {
+      // Just update the embed
+      await updateItemRollEmbed(interaction, updatedRoll, collections);
+    }
 
     return interaction.editReply({
       content:
@@ -80,6 +96,162 @@ async function handleItemRollButtons({ interaction, collections }) {
         `**Base Roll:** ${baseRoll}\n` +
         `**PvP Bonus:** +${bonus}\n` +
         `**Total:** ${total}`,
+    });
+  }
+
+  // Pass button
+  if (interaction.customId.startsWith("itemroll_pass:")) {
+    const rollId = interaction.customId.split(":")[1];
+
+    const itemRoll = await itemRolls.findOne({ _id: new ObjectId(rollId) });
+
+    if (!itemRoll) {
+      return interaction.reply({ 
+        content: "❌ Item roll not found.",
+        flags: [64]
+      });
+    }
+
+    if (itemRoll.closed) {
+      return interaction.reply({ 
+        content: "❌ This item roll has ended.",
+        flags: [64]
+      });
+    }
+
+    // Check if roll has expired
+    if (new Date() > itemRoll.endsAt) {
+      return interaction.reply({ 
+        content: "❌ This item roll has ended.",
+        flags: [64]
+      });
+    }
+
+    // Check if user is eligible
+    if (
+      itemRoll.eligibleUsers.length > 0 &&
+      !itemRoll.eligibleUsers.includes(interaction.user.id)
+    ) {
+      return interaction.reply({
+        content: "❌ You are not eligible for this item roll.",
+        flags: [64]
+      });
+    }
+
+    // Check if user already rolled
+    if (itemRoll.rolls.some((r) => r.userId === interaction.user.id)) {
+      return interaction.reply({
+        content: "❌ You have already rolled for this item.",
+        flags: [64]
+      });
+    }
+
+    // Check if user already passed
+    const passes = itemRoll.passes || [];
+    if (passes.some((p) => p.userId === interaction.user.id)) {
+      return interaction.reply({
+        content: "❌ You have already passed on this item.",
+        flags: [64]
+      });
+    }
+
+    // Show confirmation
+    const { ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
+
+    const confirmButton = new ButtonBuilder()
+      .setCustomId(`itemroll_pass_confirm:${rollId}`)
+      .setLabel('Confirm Pass')
+      .setStyle(ButtonStyle.Danger);
+
+    const cancelButton = new ButtonBuilder()
+      .setCustomId(`itemroll_pass_cancel:${rollId}`)
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder().addComponents(confirmButton, cancelButton);
+
+    return interaction.reply({
+      content: '⚠️ **Are you sure you want to pass on this item?**\n\n' +
+               'This action **cannot be undone**. You will not be able to roll for this item.',
+      components: [row],
+      flags: [64]
+    });
+  }
+
+  // Pass confirmation
+  if (interaction.customId.startsWith("itemroll_pass_confirm:")) {
+    const rollId = interaction.customId.split(":")[1];
+
+    await interaction.deferUpdate();
+
+    const itemRoll = await itemRolls.findOne({ _id: new ObjectId(rollId) });
+
+    if (!itemRoll) {
+      return interaction.editReply({ 
+        content: "❌ Item roll not found.",
+        components: []
+      });
+    }
+
+    if (itemRoll.closed) {
+      return interaction.editReply({ 
+        content: "❌ This item roll has ended.",
+        components: []
+      });
+    }
+
+    // Double-check user hasn't acted since showing confirmation
+    const passes = itemRoll.passes || [];
+    if (passes.some((p) => p.userId === interaction.user.id)) {
+      return interaction.editReply({
+        content: "❌ You have already passed on this item.",
+        components: []
+      });
+    }
+
+    if (itemRoll.rolls.some((r) => r.userId === interaction.user.id)) {
+      return interaction.editReply({
+        content: "❌ You have already rolled for this item.",
+        components: []
+      });
+    }
+
+    // Add pass to database
+    await itemRolls.updateOne(
+      { _id: new ObjectId(rollId) },
+      {
+        $push: {
+          passes: {
+            userId: interaction.user.id,
+            timestamp: new Date(),
+          },
+        },
+      },
+    );
+
+    // Get updated roll data
+    const updatedRoll = await itemRolls.findOne({ _id: new ObjectId(rollId) });
+
+    // Check if all eligible users have acted
+    if (await checkIfAllEligibleActed(updatedRoll)) {
+      console.log(`All eligible users have acted for roll ${rollId}, closing early...`);
+      await closeItemRoll(rollId, interaction.client, collections, true);
+    } else {
+      // Just update the embed
+      await updateItemRollEmbed(interaction, updatedRoll, collections);
+    }
+
+    return interaction.editReply({
+      content: '✅ **You have passed on this item.**\n\nYou will not be able to roll for this item.',
+      components: []
+    });
+  }
+
+  // Pass cancel
+  if (interaction.customId.startsWith("itemroll_pass_cancel:")) {
+    return interaction.update({
+      content: '❌ Pass cancelled.',
+      components: []
     });
   }
 
@@ -102,6 +274,7 @@ async function handleItemRollButtons({ interaction, collections }) {
       ...tempData,
       eligibleUsers: [],
       rolls: [],
+      passes: [],
       closed: false,
       createdAt: new Date(),
     };
@@ -147,6 +320,31 @@ async function handleItemRollButtons({ interaction, collections }) {
 }
 
 /**
+ * Check if all eligible users have acted (rolled or passed)
+ * Returns false for @everyone rolls
+ */
+async function checkIfAllEligibleActed(itemRoll) {
+  // @everyone rolls never early-close
+  if (!itemRoll.eligibleUsers || itemRoll.eligibleUsers.length === 0) {
+    return false;
+  }
+
+  const rolls = itemRoll.rolls || [];
+  const passes = itemRoll.passes || [];
+
+  // Get unique user IDs who have acted
+  const actedUserIds = new Set([
+    ...rolls.map(r => r.userId),
+    ...passes.map(p => p.userId)
+  ]);
+
+  // Check if all eligible users have acted
+  const allActed = itemRoll.eligibleUsers.every(userId => actedUserIds.has(userId));
+
+  return allActed;
+}
+
+/**
  * Schedule automatic closing of item roll when time expires
  */
 function scheduleItemRollClose(itemRoll, client, collections) {
@@ -154,19 +352,23 @@ function scheduleItemRollClose(itemRoll, client, collections) {
 
   if (timeUntilClose <= 0) {
     // Already expired, close immediately
-    closeItemRoll(itemRoll._id, client, collections);
+    closeItemRoll(itemRoll._id, client, collections, false);
     return;
   }
 
   setTimeout(() => {
-    closeItemRoll(itemRoll._id, client, collections);
+    closeItemRoll(itemRoll._id, client, collections, false);
   }, timeUntilClose);
 }
 
 /**
  * Close an item roll and determine winner (or create tiebreaker)
+ * @param {ObjectId} rollId - Item roll ID
+ * @param {Client} client - Discord client
+ * @param {Object} collections - Database collections
+ * @param {boolean} earlyClose - Whether this is an early close
  */
-async function closeItemRoll(rollId, client, collections) {
+async function closeItemRoll(rollId, client, collections, earlyClose = false) {
   const { itemRolls } = collections;
 
   try {
@@ -185,6 +387,7 @@ async function closeItemRoll(rollId, client, collections) {
             closed: true,
             winnerId: null,
             closedAt: new Date(),
+            earlyClose,
           },
         },
       );
@@ -230,6 +433,7 @@ async function closeItemRoll(rollId, client, collections) {
             isTiebreaker: false,
             tieDetected: true,
             closedAt: new Date(),
+            earlyClose,
           },
         },
       );
@@ -256,6 +460,7 @@ async function closeItemRoll(rollId, client, collections) {
           closed: true,
           winnerId,
           closedAt: new Date(),
+          earlyClose,
         },
       },
     );
@@ -293,6 +498,7 @@ async function closeItemRoll(rollId, client, collections) {
 
 /**
  * Create a tiebreaker roll for tied participants
+ * Excludes users who passed in the original roll
  */
 async function createTiebreakerRoll(
   originalRoll,
@@ -303,6 +509,54 @@ async function createTiebreakerRoll(
   const { itemRolls } = collections;
 
   try {
+    // Get users who passed in the original roll
+    const passes = originalRoll.passes || [];
+    const passedUserIds = new Set(passes.map(p => p.userId));
+
+    // Filter out users who passed (they forfeit tiebreaker eligibility)
+    const eligibleForTiebreaker = tiedUsers
+      .map(u => u.userId)
+      .filter(userId => !passedUserIds.has(userId));
+
+    // If all tied users passed, no tiebreaker needed
+    if (eligibleForTiebreaker.length === 0) {
+      console.log('All tied users had passed, no tiebreaker created');
+      return;
+    }
+
+    // If only one user didn't pass, they win by default
+    if (eligibleForTiebreaker.length === 1) {
+      const winnerId = eligibleForTiebreaker[0];
+
+      await itemRolls.updateOne(
+        { _id: originalRoll._id },
+        {
+          $set: {
+            winnerId,
+            tieDetected: false,
+          },
+        },
+      );
+
+      const updatedRoll = await itemRolls.findOne({ _id: originalRoll._id });
+      await updateItemRollEmbedOnClose(client, updatedRoll, collections);
+
+      const channel = await client.channels.fetch(originalRoll.channelId);
+      if (channel) {
+        const winner = await client.guilds.cache
+          .get(originalRoll.guildId)
+          ?.members.fetch(winnerId)
+          .catch(() => null);
+        if (winner) {
+          await channel.send({
+            content: `🎉 **Winner by Default!**\n\n` +
+                    `${winner} wins **${originalRoll.itemName}** as other tied players passed!`,
+          });
+        }
+      }
+      return;
+    }
+
     // Create tiebreaker that lasts 6 hours
     const tiebreakerEndsAt = new Date(Date.now() + 6 * 60 * 60 * 1000);
 
@@ -315,8 +569,9 @@ async function createTiebreakerRoll(
       duration: 360, // 6 hours
       endsAt: tiebreakerEndsAt,
       createdBy: originalRoll.createdBy,
-      eligibleUsers: tiedUsers.map((u) => u.userId),
+      eligibleUsers: eligibleForTiebreaker,
       rolls: [],
+      passes: [],
       closed: false,
       isTiebreaker: true,
       originalRollId: originalRoll._id,
@@ -340,8 +595,8 @@ async function createTiebreakerRoll(
       return;
     }
 
-    // Mention tied users
-    const mentions = tiedUsers.map((u) => `<@${u.userId}>`).join(" ");
+    // Mention tied users who are eligible for tiebreaker
+    const mentions = eligibleForTiebreaker.map((id) => `<@${id}>`).join(" ");
 
     const tiebreakerMessage = await channel.send({
       content:

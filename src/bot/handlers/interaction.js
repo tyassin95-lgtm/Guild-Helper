@@ -227,7 +227,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         return handleSendConfirmation({ interaction, collections });
       }
 
-      // Item Roll buttons
+      // Item Roll buttons (including pass, pass_confirm, pass_cancel)
       if (interaction.customId.startsWith('itemroll_')) {
         return handleItemRollButtons({ interaction, collections });
       }
