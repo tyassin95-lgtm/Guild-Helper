@@ -1,4 +1,4 @@
-const { updateGuildRoster } = require('../commands/guildroster');
+const { updateGuildRoster } = require('./commands/guildroster');
 
 let autoUpdateInterval = null;
 
