@@ -169,7 +169,7 @@ async function createItemRollEmbed(itemRoll, client, collections) {
     if (tieDetected && !itemRoll.winnerId) {
       statusText = '⚔️ **Tie - Tiebreaker Created**';
     } else if (earlyClose) {
-      statusText = '🔒 **Closed Early - All Eligible Players Acted**';
+      statusText = '🔒 **Closed Early - All Eligible Players Rolled**';
     } else {
       statusText = '🔒 **Rolling Closed**';
     }
