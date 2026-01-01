@@ -4,6 +4,9 @@ const { createGame } = require('../utils/blackjackLogic');
 const { createBlackjackEmbed } = require('../embeds/gameEmbeds');
 const { isBlackjack, calculateHandValue } = require('../utils/cardDeck');
 
+// Store timeout references so we can cancel them
+const gameTimeouts = new Map();
+
 async function handleBlackjack({ interaction, collections }) {
   // REPLY IMMEDIATELY FIRST - before any logic or validation
   await interaction.reply({
@@ -35,8 +38,18 @@ async function handleBlackjack({ interaction, collections }) {
     const existingGame = await blackjackGames.findOne({ userId, guildId });
 
     if (existingGame) {
+      // Cancel any existing timeout for this user
+      const timeoutKey = `${guildId}-${userId}`;
+      if (gameTimeouts.has(timeoutKey)) {
+        clearTimeout(gameTimeouts.get(timeoutKey));
+        gameTimeouts.delete(timeoutKey);
+      }
+
+      // Clean up the stale game
+      await blackjackGames.deleteOne({ userId, guildId });
+
       return interaction.editReply({
-        content: '❌ You already have an active blackjack game! Finish it first.',
+        content: '⚠️ Your previous game was cleaned up. Please try `/blackjack` again.',
         components: []
       });
     }
@@ -100,11 +113,15 @@ async function handleBlackjack({ interaction, collections }) {
     });
 
     // Set initial 60-second timeout
-    setTimeout(async () => {
+    const timeoutKey = `${guildId}-${userId}`;
+    const timeoutId = setTimeout(async () => {
       console.log(`⏱️ Auto-standing for user ${userId} due to initial timeout`);
 
       const game = await blackjackGames.findOne({ userId, guildId });
-      if (!game) return;
+      if (!game) {
+        gameTimeouts.delete(timeoutKey);
+        return;
+      }
 
       const { stand, dealerPlay, determineWinner } = require('../utils/blackjackLogic');
       const { handleGameEnd } = require('../handlers/blackjackButtons');
@@ -123,9 +140,20 @@ async function handleBlackjack({ interaction, collections }) {
       }
 
       await blackjackGames.deleteOne({ userId, guildId });
+      gameTimeouts.delete(timeoutKey);
     }, 60000);
 
+    // Store timeout reference
+    gameTimeouts.set(timeoutKey, timeoutId);
+
   } catch (error) {
+    // Clean up timeout on error
+    const timeoutKey = `${guildId}-${userId}`;
+    if (gameTimeouts.has(timeoutKey)) {
+      clearTimeout(gameTimeouts.get(timeoutKey));
+      gameTimeouts.delete(timeoutKey);
+    }
+
     await interaction.editReply({
       content: '❌ Failed to start game. Please try again.',
       components: []
@@ -179,7 +207,9 @@ function createGameButtons(gameState) {
   return row;
 }
 
+// Export the timeout map for cleanup in button handler
 module.exports = { 
   handleBlackjack,
-  createGameButtons
+  createGameButtons,
+  gameTimeouts
 };

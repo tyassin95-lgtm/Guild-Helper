@@ -1,4 +1,4 @@
-const { createGameButtons } = require('../commands/blackjack');
+const { createGameButtons, gameTimeouts } = require('../commands/blackjack');
 const { hit, stand, doubleDown, split, dealerPlay, determineWinner, determineSplitWinner } = require('../utils/blackjackLogic');
 const { createBlackjackEmbed, createBlackjackResultEmbed } = require('../embeds/gameEmbeds');
 const { addBalance, processWin, processLoss, processPush, getBalance, subtractBalance } = require('../utils/balanceManager');
@@ -21,11 +21,18 @@ async function handleBlackjackButtons({ interaction, collections }) {
   }
 
   const gameState = gameDoc.gameState;
-
   const action = interaction.customId.split('_')[1];
+
+  // CRITICAL: Cancel the existing timeout whenever user takes an action
+  const timeoutKey = `${guildId}-${userId}`;
+  if (gameTimeouts.has(timeoutKey)) {
+    clearTimeout(gameTimeouts.get(timeoutKey));
+    gameTimeouts.delete(timeoutKey);
+  }
 
   try {
     let statusMessage = '';
+    let newTimeoutId = null;
 
     switch (action) {
       case 'hit':
@@ -56,6 +63,13 @@ async function handleBlackjackButtons({ interaction, collections }) {
 
           const buttons = createGameButtons(gameState);
           await interaction.update({ embeds: [embed], components: [buttons] });
+
+          // Set new 60-second timeout for next action
+          newTimeoutId = setTimeout(async () => {
+            console.log(`⏱️ Auto-standing for user ${userId} due to timeout after hit`);
+            await autoStand(userId, guildId, interaction, collections);
+            gameTimeouts.delete(timeoutKey);
+          }, 60000);
         }
         break;
 
@@ -97,6 +111,13 @@ async function handleBlackjackButtons({ interaction, collections }) {
 
           const buttons = createGameButtons(gameState);
           await interaction.update({ embeds: [embed], components: [buttons] });
+
+          // Set new timeout for split hand
+          newTimeoutId = setTimeout(async () => {
+            console.log(`⏱️ Auto-standing for user ${userId} on split hand due to timeout`);
+            await autoStand(userId, guildId, interaction, collections);
+            gameTimeouts.delete(timeoutKey);
+          }, 60000);
         }
         break;
 
@@ -115,7 +136,17 @@ async function handleBlackjackButtons({ interaction, collections }) {
           errorEmbed.setFooter({ text: '⏱️ 60 seconds to make your next move' });
 
           const buttons = createGameButtons(gameState);
-          return interaction.update({ embeds: [errorEmbed], components: [buttons] });
+
+          await interaction.update({ embeds: [errorEmbed], components: [buttons] });
+
+          // Reset timeout since game is still active
+          newTimeoutId = setTimeout(async () => {
+            console.log(`⏱️ Auto-standing for user ${userId} after failed double down`);
+            await autoStand(userId, guildId, interaction, collections);
+            gameTimeouts.delete(timeoutKey);
+          }, 60000);
+
+          break;
         }
 
         await subtractBalance({ userId, guildId, amount: gameState.betAmount, collections });
@@ -166,7 +197,17 @@ async function handleBlackjackButtons({ interaction, collections }) {
           errorEmbed.setFooter({ text: '⏱️ 60 seconds to make your next move' });
 
           const buttons = createGameButtons(gameState);
-          return interaction.update({ embeds: [errorEmbed], components: [buttons] });
+
+          await interaction.update({ embeds: [errorEmbed], components: [buttons] });
+
+          // Reset timeout since game is still active
+          newTimeoutId = setTimeout(async () => {
+            console.log(`⏱️ Auto-standing for user ${userId} after failed split`);
+            await autoStand(userId, guildId, interaction, collections);
+            gameTimeouts.delete(timeoutKey);
+          }, 60000);
+
+          break;
         }
 
         await subtractBalance({ userId, guildId, amount: gameState.betAmount, collections });
@@ -187,10 +228,29 @@ async function handleBlackjackButtons({ interaction, collections }) {
 
         const buttonsAfterSplit = createGameButtons(gameState);
         await interaction.update({ embeds: [embedAfterSplit], components: [buttonsAfterSplit] });
+
+        // Set new timeout after split
+        newTimeoutId = setTimeout(async () => {
+          console.log(`⏱️ Auto-standing for user ${userId} on first hand after split`);
+          await autoStand(userId, guildId, interaction, collections);
+          gameTimeouts.delete(timeoutKey);
+        }, 60000);
         break;
     }
+
+    // Store new timeout if one was created
+    if (newTimeoutId) {
+      gameTimeouts.set(timeoutKey, newTimeoutId);
+    }
+
   } catch (error) {
     console.error('Blackjack button error:', error);
+
+    // Clean up timeout and game on error
+    if (gameTimeouts.has(timeoutKey)) {
+      clearTimeout(gameTimeouts.get(timeoutKey));
+      gameTimeouts.delete(timeoutKey);
+    }
 
     await blackjackGames.deleteOne({ userId, guildId });
 
@@ -206,9 +266,43 @@ async function handleBlackjackButtons({ interaction, collections }) {
   }
 }
 
+/**
+ * Auto-stand helper function to avoid code duplication
+ */
+async function autoStand(userId, guildId, interaction, collections) {
+  const { blackjackGames } = collections;
+
+  const game = await blackjackGames.findOne({ userId, guildId });
+  if (!game) return;
+
+  const { stand, dealerPlay, determineWinner } = require('../utils/blackjackLogic');
+
+  stand(game.gameState);
+
+  if (game.gameState.status === 'dealerTurn') {
+    dealerPlay(game.gameState);
+    determineWinner(game.gameState);
+
+    try {
+      await handleGameEnd(interaction, game.gameState, collections, false, true, true);
+    } catch (error) {
+      console.error('Error in auto-stand:', error);
+    }
+  }
+
+  await blackjackGames.deleteOne({ userId, guildId });
+}
+
 async function handleGameEnd(interaction, gameState, collections, isUpdate = false, isEdit = false, isTimeout = false) {
   const userId = gameState.userId;
   const guildId = interaction.guildId;
+
+  // Clean up timeout reference
+  const timeoutKey = `${guildId}-${userId}`;
+  if (gameTimeouts.has(timeoutKey)) {
+    clearTimeout(gameTimeouts.get(timeoutKey));
+    gameTimeouts.delete(timeoutKey);
+  }
 
   // If split hand exists, process BOTH results
   if (gameState.splitHand && gameState.splitResult) {
