@@ -4,10 +4,11 @@ const { updateEventEmbed } = require('../embed');
 const { updateCalendar } = require('../calendar/calendarUpdate');
 
 // Default event images
+// Note: If an image URL is broken, you can update it here
 const DEFAULT_EVENT_IMAGES = {
   siege: 'https://i.imgur.com/GVJjTpu.jpeg',
   riftstone: 'https://i.imgur.com/3izMckr.jpeg',
-  boonstone: 'https://i.imgur.com/ELjWJeF.jpeg',
+  boonstone: 'https://i.imgur.com/ELjWJeF.jpeg', // If this is broken, replace with a new URL
   wargames: 'https://i.imgur.com/qtY18tv.jpeg',
   guildevent: 'https://i.imgur.com/RLVX4iT.jpeg'
 };
@@ -295,10 +296,21 @@ async function handlePvPModals({ interaction, collections }) {
       });
     }
 
-    // Determine image URL - use custom if provided, otherwise use default for event type
-    const imageUrl = (imageUrlInput && imageUrlInput.length > 0) 
-      ? imageUrlInput 
-      : DEFAULT_EVENT_IMAGES[eventType];
+    // Determine image URL with better defensive handling
+    let imageUrl = '';
+
+    if (imageUrlInput && imageUrlInput.length > 0) {
+      // User provided a custom image URL
+      imageUrl = imageUrlInput;
+    } else {
+      // Use default image for event type
+      const defaultImage = DEFAULT_EVENT_IMAGES[eventType];
+      if (defaultImage && defaultImage.trim().length > 0) {
+        imageUrl = defaultImage;
+      }
+      // If no default image exists, imageUrl stays empty string
+      // The embed will handle empty string gracefully (no image displayed)
+    }
 
     // Generate 4-digit password
     const password = Math.floor(1000 + Math.random() * 9000).toString();
@@ -311,7 +323,7 @@ async function handlePvPModals({ interaction, collections }) {
       location: location !== 'none' ? location : null,
       eventTime: eventDate,
       bonusPoints,
-      imageUrl,
+      imageUrl, // Will be empty string if no image (embed handles this)
       message,
       password,
       attendees: [],
