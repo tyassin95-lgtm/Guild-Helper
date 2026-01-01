@@ -9,11 +9,29 @@ async function handleBlackjackButtons({ interaction, collections }) {
   const guildId = interaction.guildId;
   const { blackjackGames } = collections;
 
-  // Get active game from database
+  // CRITICAL FIX: Cancel timeout FIRST before any async operations
+  const timeoutKey = `${guildId}-${userId}`;
+  if (gameTimeouts.has(timeoutKey)) {
+    clearTimeout(gameTimeouts.get(timeoutKey));
+    gameTimeouts.delete(timeoutKey);
+  }
+
+  // CRITICAL FIX: Defer update immediately to prevent interaction timeout
+  try {
+    await interaction.deferUpdate();
+  } catch (err) {
+    console.error('Failed to defer update:', err);
+    // If defer fails, the interaction is probably already expired
+    // Clean up the game state
+    await blackjackGames.deleteOne({ userId, guildId });
+    return;
+  }
+
+  // Get active game from database AFTER canceling timeout and deferring
   const gameDoc = await blackjackGames.findOne({ userId, guildId });
 
   if (!gameDoc) {
-    return interaction.update({
+    return interaction.editReply({
       content: '❌ No active game found. Start a new game with `/blackjack`.',
       embeds: [],
       components: []
@@ -22,13 +40,6 @@ async function handleBlackjackButtons({ interaction, collections }) {
 
   const gameState = gameDoc.gameState;
   const action = interaction.customId.split('_')[1];
-
-  // CRITICAL: Cancel the existing timeout whenever user takes an action
-  const timeoutKey = `${guildId}-${userId}`;
-  if (gameTimeouts.has(timeoutKey)) {
-    clearTimeout(gameTimeouts.get(timeoutKey));
-    gameTimeouts.delete(timeoutKey);
-  }
 
   try {
     let statusMessage = '';
@@ -48,13 +59,18 @@ async function handleBlackjackButtons({ interaction, collections }) {
           const { determineWinner } = require('../utils/blackjackLogic');
           determineWinner(gameState);
 
-          await handleGameEnd(interaction, gameState, collections, true);
+          await handleGameEnd(interaction, gameState, collections, false, true);
           await blackjackGames.deleteOne({ userId, guildId });
         } else {
           // Update game in database
           await blackjackGames.updateOne(
             { userId, guildId },
-            { $set: { gameState } }
+            { 
+              $set: { 
+                gameState,
+                expiresAt: new Date(Date.now() + 5 * 60 * 1000) // Reset expiry
+              } 
+            }
           );
 
           const embed = createBlackjackEmbed(gameState, true);
@@ -62,7 +78,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
           embed.setFooter({ text: '⏱️ 60 seconds to make your next move' });
 
           const buttons = createGameButtons(gameState);
-          await interaction.update({ embeds: [embed], components: [buttons] });
+          await interaction.editReply({ embeds: [embed], components: [buttons] });
 
           // Set new 60-second timeout for next action
           newTimeoutId = setTimeout(async () => {
@@ -81,7 +97,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
 
           const standEmbed = createBlackjackEmbed(gameState, true);
           standEmbed.setDescription(`${standEmbed.data.description}\n\n${statusMessage}`);
-          await interaction.update({ embeds: [standEmbed], components: [] });
+          await interaction.editReply({ embeds: [standEmbed], components: [] });
 
           await new Promise(resolve => setTimeout(resolve, 1500));
 
@@ -102,7 +118,12 @@ async function handleBlackjackButtons({ interaction, collections }) {
           // Update game in database
           await blackjackGames.updateOne(
             { userId, guildId },
-            { $set: { gameState } }
+            { 
+              $set: { 
+                gameState,
+                expiresAt: new Date(Date.now() + 5 * 60 * 1000) // Reset expiry
+              } 
+            }
           );
 
           const embed = createBlackjackEmbed(gameState, true);
@@ -110,7 +131,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
           embed.setFooter({ text: '⏱️ 60 seconds to make your next move' });
 
           const buttons = createGameButtons(gameState);
-          await interaction.update({ embeds: [embed], components: [buttons] });
+          await interaction.editReply({ embeds: [embed], components: [buttons] });
 
           // Set new timeout for split hand
           newTimeoutId = setTimeout(async () => {
@@ -137,7 +158,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
 
           const buttons = createGameButtons(gameState);
 
-          await interaction.update({ embeds: [errorEmbed], components: [buttons] });
+          await interaction.editReply({ embeds: [errorEmbed], components: [buttons] });
 
           // Reset timeout since game is still active
           newTimeoutId = setTimeout(async () => {
@@ -165,12 +186,12 @@ async function handleBlackjackButtons({ interaction, collections }) {
           const { determineWinner } = require('../utils/blackjackLogic');
           determineWinner(gameState);
 
-          await handleGameEnd(interaction, gameState, collections, true);
+          await handleGameEnd(interaction, gameState, collections, false, true);
           await blackjackGames.deleteOne({ userId, guildId });
         } else {
           const doubleEmbed = createBlackjackEmbed(gameState, true);
           doubleEmbed.setDescription(`${doubleEmbed.data.description}\n\n${statusMessage}\n\n*Dealer reveals hidden card and plays...*`);
-          await interaction.update({ embeds: [doubleEmbed], components: [] });
+          await interaction.editReply({ embeds: [doubleEmbed], components: [] });
 
           await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -198,7 +219,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
 
           const buttons = createGameButtons(gameState);
 
-          await interaction.update({ embeds: [errorEmbed], components: [buttons] });
+          await interaction.editReply({ embeds: [errorEmbed], components: [buttons] });
 
           // Reset timeout since game is still active
           newTimeoutId = setTimeout(async () => {
@@ -219,7 +240,12 @@ async function handleBlackjackButtons({ interaction, collections }) {
         // Update game in database
         await blackjackGames.updateOne(
           { userId, guildId },
-          { $set: { gameState } }
+          { 
+            $set: { 
+              gameState,
+              expiresAt: new Date(Date.now() + 5 * 60 * 1000) // Reset expiry
+            } 
+          }
         );
 
         const embedAfterSplit = createBlackjackEmbed(gameState, true);
@@ -227,7 +253,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
         embedAfterSplit.setFooter({ text: '⏱️ 60 seconds to make your next move' });
 
         const buttonsAfterSplit = createGameButtons(gameState);
-        await interaction.update({ embeds: [embedAfterSplit], components: [buttonsAfterSplit] });
+        await interaction.editReply({ embeds: [embedAfterSplit], components: [buttonsAfterSplit] });
 
         // Set new timeout after split
         newTimeoutId = setTimeout(async () => {
@@ -255,13 +281,13 @@ async function handleBlackjackButtons({ interaction, collections }) {
     await blackjackGames.deleteOne({ userId, guildId });
 
     try {
-      await interaction.update({
-        content: `❌ Error: ${error.message}`,
+      await interaction.editReply({
+        content: `❌ An error occurred. Please start a new game with \`/blackjack\`.`,
         embeds: [],
         components: []
       });
     } catch (e) {
-      console.error('Failed to update interaction:', e);
+      console.error('Failed to update interaction after error:', e);
     }
   }
 }
@@ -323,12 +349,16 @@ async function handleGameEnd(interaction, gameState, collections, isUpdate = fal
     resultEmbed.setFooter({ text: '⏱️ Game auto-completed (no action for 60 seconds)' });
   }
 
-  if (isUpdate) {
-    await interaction.update({ embeds: [resultEmbed], components: [] });
-  } else if (isEdit) {
-    await interaction.editReply({ embeds: [resultEmbed], components: [] });
-  } else {
-    await interaction.update({ embeds: [resultEmbed], components: [] });
+  try {
+    if (isUpdate) {
+      await interaction.update({ embeds: [resultEmbed], components: [] });
+    } else if (isEdit) {
+      await interaction.editReply({ embeds: [resultEmbed], components: [] });
+    } else {
+      await interaction.update({ embeds: [resultEmbed], components: [] });
+    }
+  } catch (error) {
+    console.error('Failed to send game end message:', error);
   }
 }
 
