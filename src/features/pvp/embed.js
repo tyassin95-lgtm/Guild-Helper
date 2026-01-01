@@ -113,11 +113,11 @@ async function createEventEmbed(event, client, collections) {
     inline: false
   });
 
-  // Create buttons with better organization
+  // Create buttons
   const components = [];
 
   if (!event.closed) {
-    // Row 1: RSVP buttons
+    // RSVP buttons row
     const rsvpRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`pvp_rsvp_attending:${event._id}`)
@@ -136,30 +136,21 @@ async function createEventEmbed(event, client, collections) {
         .setEmoji('❓')
     );
 
-    // Row 2: Attendance recording button
-    const attendanceRow = new ActionRowBuilder().addComponents(
+    // Admin/Attendance row
+    const adminRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`pvp_record_attendance:${event._id}`)
         .setLabel('Record Attendance')
         .setStyle(ButtonStyle.Primary)
-        .setEmoji('🎯')
-    );
-
-    // Row 3: Admin controls
-    const adminRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`pvp_view_code:${event._id}`)
-        .setLabel('View Code')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🔐'),
+        .setEmoji('🎯'),
       new ButtonBuilder()
         .setCustomId(`pvp_close_attendance:${event._id}`)
-        .setLabel('Close Event')
+        .setLabel('Close Event (Admin)')
         .setStyle(ButtonStyle.Danger)
         .setEmoji('🔒')
     );
 
-    components.push(rsvpRow, attendanceRow, adminRow);
+    components.push(rsvpRow, adminRow);
   } else {
     // For closed events, show admin manual attendance button
     const closedAdminRow = new ActionRowBuilder().addComponents(
@@ -167,12 +158,7 @@ async function createEventEmbed(event, client, collections) {
         .setCustomId(`pvp_manual_attendance:${event._id}`)
         .setLabel('Manually Record Attendance (Admin)')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('✏️'),
-      new ButtonBuilder()
-        .setCustomId(`pvp_view_code:${event._id}`)
-        .setLabel('View Code')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🔐')
+        .setEmoji('✏️')
     );
 
     components.push(closedAdminRow);
