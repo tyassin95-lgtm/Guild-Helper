@@ -21,6 +21,7 @@ async function ensureIndexes({
   gamblingFunds,
   gamblingGames,
   blackjackGames,
+  gamblingRaids, // NEW: Gambling raid system
   triviaStats,
   triviaSessions,
   robCooldowns,
@@ -162,6 +163,12 @@ async function ensureIndexes({
   // Blackjack active games (with TTL)
   await blackjackGames.createIndex({ userId: 1, guildId: 1 }, { unique: true });
   await blackjackGames.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL
+
+  // Gambling raid system indexes (NEW)
+  await gamblingRaids.createIndex({ guildId: 1 });
+  await gamblingRaids.createIndex({ guildId: 1, status: 1 });
+  await gamblingRaids.createIndex({ messageId: 1 });
+  await gamblingRaids.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index
 
   // Trivia System Indexes
   await triviaStats.createIndex({ userId: 1, guildId: 1 }, { unique: true });

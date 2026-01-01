@@ -78,6 +78,8 @@ const { handleLeaderboard } = require('../../features/gambling/commands/leaderbo
 const { handleKillBias } = require('../../features/gambling/commands/killbias');
 const { handleBlackjackButtons } = require('../../features/gambling/handlers/blackjackButtons');
 const { handleTriviaButtons } = require('../../features/gambling/handlers/triviaButtons');
+const { handleStartGamblingRaid } = require('../../features/gambling/commands/startgamblingraid');
+const { handleRaidButtons: handleGamblingRaidButtons } = require('../../features/gambling/handlers/raidButtons');
 
 // Broadcast system imports
 const { handleStartBroadcast } = require('../../features/broadcast/commands/startbroadcast');
@@ -176,6 +178,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'send')                return handleSend({ interaction, collections });
       if (name === 'leaderboard')         return handleLeaderboard({ interaction, collections });
       if (name === 'killbias')            return handleKillBias({ interaction, collections });
+      if (name === 'startgamblingraid')   return handleStartGamblingRaid({ interaction, collections });
 
       // Broadcast commands
       if (name === 'startbroadcast')      return handleStartBroadcast({ interaction, collections, client });
@@ -237,6 +240,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       // PvP system buttons
       if (interaction.customId.startsWith('pvp_')) {
         return handlePvPButtons({ interaction, collections });
+      }
+
+      // Gambling raid buttons (BEFORE raid system buttons!)
+      if (interaction.customId === 'raid_join' || interaction.customId.startsWith('raid_vote:')) {
+        return handleGamblingRaidButtons({ interaction, collections });
       }
 
       // Raid system buttons

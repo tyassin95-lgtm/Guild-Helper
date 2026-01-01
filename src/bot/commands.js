@@ -297,6 +297,11 @@ async function registerSlashCommands(client) {
         }
       ]
     },
+    {
+      name: 'startgamblingraid',
+      description: 'Admins: Start an interactive gambling raid event (100k-1M coins prize).',
+      default_member_permissions: ADMIN
+    },
     // Kill Bias Command (Admin)
     {
       name: 'killbias',
