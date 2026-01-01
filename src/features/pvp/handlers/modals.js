@@ -8,7 +8,7 @@ const { updateCalendar } = require('../calendar/calendarUpdate');
 const DEFAULT_EVENT_IMAGES = {
   siege: 'https://i.imgur.com/GVJjTpu.jpeg',
   riftstone: 'https://i.imgur.com/3izMckr.jpeg',
-  boonstone: 'https://i.imgur.com/qtY18tv.jpeg', // If this is broken, replace with a new URL
+  boonstone: 'https://i.imgur.com/ELjWJeF.jpeg', 
   wargames: 'https://i.imgur.com/qtY18tv.jpeg',
   guildevent: 'https://i.imgur.com/RLVX4iT.jpeg'
 };
@@ -312,6 +312,19 @@ async function handlePvPModals({ interaction, collections }) {
       // The embed will handle empty string gracefully (no image displayed)
     }
 
+    // DEBUG LOGGING - REMOVE AFTER DIAGNOSIS
+    console.log('=== PVP EVENT IMAGE DEBUG ===');
+    console.log('Event Type:', eventType);
+    console.log('Event Type (JSON):', JSON.stringify(eventType));
+    console.log('Image URL Input:', imageUrlInput);
+    console.log('Image URL Input (JSON):', JSON.stringify(imageUrlInput));
+    console.log('Default Image for type:', DEFAULT_EVENT_IMAGES[eventType]);
+    console.log('Default Image (JSON):', JSON.stringify(DEFAULT_EVENT_IMAGES[eventType]));
+    console.log('Final Image URL:', imageUrl);
+    console.log('Final Image URL (JSON):', JSON.stringify(imageUrl));
+    console.log('All DEFAULT_EVENT_IMAGES:', JSON.stringify(DEFAULT_EVENT_IMAGES));
+    console.log('===========================');
+
     // Generate 4-digit password
     const password = Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -334,6 +347,9 @@ async function handlePvPModals({ interaction, collections }) {
       createdBy: interaction.user.id,
       createdAt: new Date()
     };
+
+    console.log('Event object imageUrl:', event.imageUrl);
+    console.log('Event object imageUrl (JSON):', JSON.stringify(event.imageUrl));
 
     const result = await pvpEvents.insertOne(event);
     event._id = result.insertedId;
