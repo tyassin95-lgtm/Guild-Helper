@@ -1,12 +1,12 @@
-const { canClaimDaily, claimDaily, getNextMilestone } = require('../utils/dailyManager');
-const { createDailyClaimEmbed } = require('../embeds/gameEmbeds');
+const { canClaimFund, claimFund, getNextMilestone } = require('../utils/fundManager');
+const { createFundClaimEmbed } = require('../embeds/gameEmbeds');
 
-async function handleGamblingDaily({ interaction, collections }) {
+async function handleGamblingFund({ interaction, collections }) {
   const userId = interaction.user.id;
   const guildId = interaction.guildId;
 
   // Check if user can claim
-  const checkResult = await canClaimDaily({ userId, guildId, collections });
+  const checkResult = await canClaimFund({ userId, guildId, collections });
 
   if (!checkResult.canClaim) {
     const hours = checkResult.hoursRemaining;
@@ -22,23 +22,23 @@ async function handleGamblingDaily({ interaction, collections }) {
       timeText = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
     }
 
-    const milestone = getNextMilestone(checkResult.currentStreak);
+    const milestone = getNextMilestone(checkResult.currentUses);
 
     return interaction.reply({
-      content: `⏰ You've already claimed your daily reward!\n\n` +
+      content: `⏰ You've already claimed your gambling fund!\n\n` +
                `Come back in **${timeText}** to claim again.\n\n` +
-               `🔥 Current Streak: **${checkResult.currentStreak}** days\n` +
-               `📅 Next Milestone: **${milestone.next}** days (${milestone.daysUntil} days away) - **+${milestone.bonus.toLocaleString()}** bonus coins!`,
+               `🎯 Current Uses: **${checkResult.currentUses}**\n` +
+               `🎁 Next Milestone: **${milestone.next}** uses (${milestone.usesUntil} uses away) - **+${milestone.bonus.toLocaleString()}** bonus coins!`,
       flags: [64] // MessageFlags.Ephemeral
     });
   }
 
-  // Claim the daily reward
-  const claimResult = await claimDaily({ userId, guildId, collections });
+  // Claim the fund
+  const claimResult = await claimFund({ userId, guildId, collections });
 
-  const embed = createDailyClaimEmbed(interaction.user, claimResult);
+  const embed = createFundClaimEmbed(interaction.user, claimResult);
 
   await interaction.reply({ embeds: [embed] });
 }
 
-module.exports = { handleGamblingDaily };
+module.exports = { handleGamblingFund };
