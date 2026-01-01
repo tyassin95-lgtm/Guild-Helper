@@ -79,11 +79,11 @@ async function handleRaidJoin({ interaction, collections }) {
     .setTitle('🎰 GAMBLING RAID SIGNUP')
     .setDescription(
       '**A dangerous raid is forming!**\n\n' +
-      `💰 **Prize Pool:** Unknown\n` +
+      `💰 **Prize:** Unknown\n` +
       `👥 **Participants:** ${updatedRaid.participants.length}/${MAX_PARTICIPANTS}\n` +
       `⏱️ **Signup closes:** <t:${Math.floor(updatedRaid.expiresAt.getTime() / 1000)}:R>\n\n` +
       `⚠️ **You must work TOGETHER to complete the raid!**\n` +
-      `Minimum 1 participant required to start.`
+      `Minimum 3 participant required to start.`
     )
     .addFields({
       name: '📋 Current Raiders',
@@ -208,7 +208,7 @@ async function startScenario(client, collections, raidId, scenario) {
       .setDescription(
         `**The raid begins!**\n\n` +
         `${scenario.intro}\n\n` +
-        `💰 **Prize:** ${raid.lootAmount.toLocaleString()} coins\n` +
+        `💰 **Prize:** Unknown\n` +
         `👥 **Raiders:** ${raid.participants.length}\n\n` +
         `⏱️ Starting first decision in 5 seconds...`
       )
@@ -223,7 +223,8 @@ async function startScenario(client, collections, raidId, scenario) {
     setTimeout(async () => {
       console.log(`⏰ 5 seconds elapsed, presenting first decision...`);
       try {
-        await presentDecision(client, collections, raidId, scenario, 0);
+        // CRITICAL FIX: Pass raidId instead of scenario object
+        await presentDecision(client, collections, raidId, 0);
       } catch (err) {
         console.error(`❌ Error in presentDecision:`, err);
       }
@@ -234,25 +235,40 @@ async function startScenario(client, collections, raidId, scenario) {
   }
 }
 
-async function presentDecision(client, collections, raidId, scenario, stepIndex) {
+async function presentDecision(client, collections, raidId, stepIndex) {
   const { gamblingRaids } = collections;
 
   console.log(`📊 Presenting decision ${stepIndex + 1} for raid ${raidId}`);
 
   try {
+    // CRITICAL FIX: Fetch fresh raid data every time
     const raid = await gamblingRaids.findOne({ _id: raidId });
 
-    if (!raid || raid.status !== 'active') {
-      console.error(`❌ Raid not found or not active:`, raid?.status);
+    if (!raid) {
+      console.error(`❌ Raid not found`);
+      return;
+    }
+
+    if (raid.status !== 'active') {
+      console.error(`❌ Raid not active, status is: ${raid.status}`);
+      return;
+    }
+
+    // Get the scenario
+    const { getScenarioById } = require('../utils/raidScenarios');
+    const scenario = getScenarioById(raid.scenarioId);
+
+    if (!scenario) {
+      console.error(`❌ Scenario not found: ${raid.scenarioId}`);
       return;
     }
 
     const step = scenario.steps[stepIndex];
 
     if (!step) {
-      console.log(`✅ No more steps, finishing raid...`);
+      console.log(`✅ No more steps (step ${stepIndex}), finishing raid...`);
       // No more steps - finish raid
-      await finishRaid(client, collections, raidId, scenario);
+      await finishRaid(client, collections, raidId);
       return;
     }
 
@@ -323,6 +339,7 @@ async function processVotes(client, collections, raidId) {
   console.log(`🗳️ Processing votes for raid ${raidId}`);
 
   try {
+    // CRITICAL FIX: Fetch fresh raid data
     const raid = await gamblingRaids.findOne({ _id: raidId });
 
     if (!raid || raid.status !== 'active') {
@@ -332,6 +349,22 @@ async function processVotes(client, collections, raidId) {
 
     const voteKey = `step_${raid.currentStep}`;
     const currentVotes = raid.votes[voteKey] || {};
+
+    // Get the scenario
+    const { getScenarioById } = require('../utils/raidScenarios');
+    const scenario = getScenarioById(raid.scenarioId);
+
+    if (!scenario) {
+      console.error(`❌ Scenario not found: ${raid.scenarioId}`);
+      return;
+    }
+
+    const step = scenario.steps[raid.currentStep];
+
+    if (!step) {
+      console.error(`❌ Step not found: ${raid.currentStep}`);
+      return;
+    }
 
     // Count votes
     const voteCounts = {};
@@ -358,9 +391,6 @@ async function processVotes(client, collections, raidId) {
 
     // If no votes at all, pick random
     if (Object.keys(voteCounts).length === 0) {
-      const { getScenarioById } = require('../utils/raidScenarios');
-      const scenario = getScenarioById(raid.scenarioId);
-      const step = scenario.steps[raid.currentStep];
       winningChoice = Math.floor(Math.random() * step.choices.length);
       console.log(`⚠️ No votes cast, randomly chose option ${winningChoice}`);
     }
@@ -373,21 +403,22 @@ async function processVotes(client, collections, raidId) {
 
     console.log(`✅ Winning choice: ${winningChoice} with ${maxVotes} vote(s)`);
 
-    // Record choice
-    await gamblingRaids.updateOne(
+    const chosenOption = step.choices[winningChoice];
+
+    // CRITICAL FIX: Update raid and get the NEW currentStep value
+    const updateResult = await gamblingRaids.findOneAndUpdate(
       { _id: raid._id },
       {
         $push: { choicesMade: winningChoice },
-        $set: { currentStep: raid.currentStep + 1 }
-      }
+        $inc: { currentStep: 1 }
+      },
+      { returnDocument: 'after' } // Get the updated document
     );
 
-    // Get scenario
-    const { getScenarioById } = require('../utils/raidScenarios');
-    const scenario = getScenarioById(raid.scenarioId);
+    const updatedRaid = updateResult.value;
+    const nextStepIndex = updatedRaid.currentStep; // This is now the NEW step index
 
-    const step = scenario.steps[raid.currentStep];
-    const chosenOption = step.choices[winningChoice];
+    console.log(`📝 Updated raid: currentStep is now ${nextStepIndex}`);
 
     // Show result
     const channel = await client.channels.fetch(raid.channelId);
@@ -405,13 +436,14 @@ async function processVotes(client, collections, raidId) {
 
     await message.edit({ embeds: [resultEmbed], components: [] });
 
-    console.log(`✅ Vote result shown, scheduling next decision...`);
+    console.log(`✅ Vote result shown, scheduling next decision (step ${nextStepIndex})...`);
 
     // Wait 3 seconds, then next decision
     setTimeout(async () => {
-      console.log(`⏰ Moving to next decision...`);
+      console.log(`⏰ Moving to decision ${nextStepIndex + 1}...`);
       try {
-        await presentDecision(client, collections, raidId, scenario, raid.currentStep + 1);
+        // CRITICAL FIX: Pass the correct step index (nextStepIndex, not raid.currentStep + 1)
+        await presentDecision(client, collections, raidId, nextStepIndex);
       } catch (err) {
         console.error(`❌ Error presenting next decision:`, err);
       }
@@ -422,7 +454,7 @@ async function processVotes(client, collections, raidId) {
   }
 }
 
-async function finishRaid(client, collections, raidId, scenario) {
+async function finishRaid(client, collections, raidId) {
   const { gamblingRaids } = collections;
 
   console.log(`🏁 Finishing raid ${raidId}`);
@@ -432,6 +464,15 @@ async function finishRaid(client, collections, raidId, scenario) {
 
     if (!raid) {
       console.error(`❌ Raid not found`);
+      return;
+    }
+
+    // Get the scenario
+    const { getScenarioById } = require('../utils/raidScenarios');
+    const scenario = getScenarioById(raid.scenarioId);
+
+    if (!scenario) {
+      console.error(`❌ Scenario not found: ${raid.scenarioId}`);
       return;
     }
 

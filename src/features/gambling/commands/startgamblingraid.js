@@ -1,8 +1,8 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { PermissionFlagsBits } = require('discord.js');
 
-const SIGNUP_DURATION = 5 * 60 * 1000; // 5 minutes
-const MIN_PARTICIPANTS = 1;
+const SIGNUP_DURATION = 3 * 60 * 1000; // 3 minutes
+const MIN_PARTICIPANTS = 3;
 const MAX_PARTICIPANTS = 6;
 
 async function handleStartGamblingRaid({ interaction, collections }) {
@@ -48,7 +48,7 @@ async function handleStartGamblingRaid({ interaction, collections }) {
       `💰 **Prize Pool:** Unknown\n` +
       `👥 **Participants:** 0/${MAX_PARTICIPANTS}\n` +
       `⏱️ **Signup closes:** <t:${Math.floor((Date.now() + SIGNUP_DURATION) / 1000)}:R>\n\n` +
-      `⚠️ **You need to work TOGETHER to complete the raid!**\n` +
+      `⚠️ **You must work TOGETHER to complete the raid!**\n` +
       `Minimum ${MIN_PARTICIPANTS} participants required to start.`
     )
     .addFields({
