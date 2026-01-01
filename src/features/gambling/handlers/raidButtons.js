@@ -83,7 +83,7 @@ async function handleRaidJoin({ interaction, collections }) {
       `👥 **Participants:** ${updatedRaid.participants.length}/${MAX_PARTICIPANTS}\n` +
       `⏱️ **Signup closes:** <t:${Math.floor(updatedRaid.expiresAt.getTime() / 1000)}:R>\n\n` +
       `⚠️ **You must work TOGETHER to complete the raid!**\n` +
-      `Minimum 3 participants required to start.`
+      `Minimum 1 participant required to start.`
     )
     .addFields({
       name: '📋 Current Raiders',
@@ -173,13 +173,33 @@ async function handleRaidVote({ interaction, collections }) {
 async function startScenario(client, collections, raidId, scenario) {
   const { gamblingRaids } = collections;
 
-  const raid = await gamblingRaids.findOne({ _id: raidId });
-
-  if (!raid) return;
-
   try {
-    const channel = await client.channels.fetch(raid.channelId);
-    const message = await channel.messages.fetch(raid.messageId);
+    const raid = await gamblingRaids.findOne({ _id: raidId });
+
+    if (!raid) {
+      console.error(`❌ Raid ${raidId} not found in startScenario`);
+      return;
+    }
+
+    const channel = await client.channels.fetch(raid.channelId).catch(err => {
+      console.error(`❌ Failed to fetch channel ${raid.channelId}:`, err);
+      return null;
+    });
+
+    if (!channel) {
+      console.error(`❌ Channel ${raid.channelId} not found`);
+      return;
+    }
+
+    const message = await channel.messages.fetch(raid.messageId).catch(err => {
+      console.error(`❌ Failed to fetch message ${raid.messageId}:`, err);
+      return null;
+    });
+
+    if (!message) {
+      console.error(`❌ Message ${raid.messageId} not found`);
+      return;
+    }
 
     // Create intro embed
     const introEmbed = new EmbedBuilder()
@@ -197,34 +217,64 @@ async function startScenario(client, collections, raidId, scenario) {
 
     await message.edit({ embeds: [introEmbed], components: [] });
 
+    console.log(`✅ Raid intro shown, scheduling first decision...`);
+
     // Wait 5 seconds, then start first decision
     setTimeout(async () => {
-      await presentDecision(client, collections, raidId, scenario, 0);
+      console.log(`⏰ 5 seconds elapsed, presenting first decision...`);
+      try {
+        await presentDecision(client, collections, raidId, scenario, 0);
+      } catch (err) {
+        console.error(`❌ Error in presentDecision:`, err);
+      }
     }, 5000);
 
   } catch (error) {
-    console.error('Error starting scenario:', error);
+    console.error('❌ Error starting scenario:', error);
   }
 }
 
 async function presentDecision(client, collections, raidId, scenario, stepIndex) {
   const { gamblingRaids } = collections;
 
-  const raid = await gamblingRaids.findOne({ _id: raidId });
-
-  if (!raid || raid.status !== 'active') return;
-
-  const step = scenario.steps[stepIndex];
-
-  if (!step) {
-    // No more steps - finish raid
-    await finishRaid(client, collections, raidId, scenario);
-    return;
-  }
+  console.log(`📊 Presenting decision ${stepIndex + 1} for raid ${raidId}`);
 
   try {
-    const channel = await client.channels.fetch(raid.channelId);
-    const message = await channel.messages.fetch(raid.messageId);
+    const raid = await gamblingRaids.findOne({ _id: raidId });
+
+    if (!raid || raid.status !== 'active') {
+      console.error(`❌ Raid not found or not active:`, raid?.status);
+      return;
+    }
+
+    const step = scenario.steps[stepIndex];
+
+    if (!step) {
+      console.log(`✅ No more steps, finishing raid...`);
+      // No more steps - finish raid
+      await finishRaid(client, collections, raidId, scenario);
+      return;
+    }
+
+    const channel = await client.channels.fetch(raid.channelId).catch(err => {
+      console.error(`❌ Failed to fetch channel:`, err);
+      return null;
+    });
+
+    if (!channel) {
+      console.error(`❌ Channel not found`);
+      return;
+    }
+
+    const message = await channel.messages.fetch(raid.messageId).catch(err => {
+      console.error(`❌ Failed to fetch message:`, err);
+      return null;
+    });
+
+    if (!message) {
+      console.error(`❌ Message not found`);
+      return;
+    }
 
     // Create decision embed
     const decisionEmbed = new EmbedBuilder()
@@ -250,73 +300,96 @@ async function presentDecision(client, collections, raidId, scenario, stepIndex)
     });
 
     await message.edit({ embeds: [decisionEmbed], components: [buttons] });
+    console.log(`✅ Decision ${stepIndex + 1} presented successfully`);
 
     // Set timeout for voting (60 seconds)
     setTimeout(async () => {
-      await processVotes(client, collections, raidId);
+      console.log(`⏰ Vote timeout for step ${stepIndex + 1}, processing votes...`);
+      try {
+        await processVotes(client, collections, raidId);
+      } catch (err) {
+        console.error(`❌ Error processing votes:`, err);
+      }
     }, VOTE_DURATION);
 
   } catch (error) {
-    console.error('Error presenting decision:', error);
+    console.error('❌ Error presenting decision:', error);
   }
 }
 
 async function processVotes(client, collections, raidId) {
   const { gamblingRaids } = collections;
 
-  const raid = await gamblingRaids.findOne({ _id: raidId });
+  console.log(`🗳️ Processing votes for raid ${raidId}`);
 
-  if (!raid || raid.status !== 'active') return;
-
-  const voteKey = `step_${raid.currentStep}`;
-  const currentVotes = raid.votes[voteKey] || {};
-
-  // Count votes
-  const voteCounts = {};
-  Object.values(currentVotes).forEach(choiceIndex => {
-    voteCounts[choiceIndex] = (voteCounts[choiceIndex] || 0) + 1;
-  });
-
-  // Find winning choice (or random if tie)
-  let winningChoice = 0;
-  let maxVotes = 0;
-  const tiedChoices = [];
-
-  Object.entries(voteCounts).forEach(([choice, count]) => {
-    const choiceNum = parseInt(choice, 10);
-    if (count > maxVotes) {
-      maxVotes = count;
-      winningChoice = choiceNum;
-      tiedChoices.length = 0;
-      tiedChoices.push(choiceNum);
-    } else if (count === maxVotes) {
-      tiedChoices.push(choiceNum);
-    }
-  });
-
-  // If tie, pick random
-  if (tiedChoices.length > 1) {
-    winningChoice = tiedChoices[Math.floor(Math.random() * tiedChoices.length)];
-  }
-
-  // Record choice
-  await gamblingRaids.updateOne(
-    { _id: raid._id },
-    {
-      $push: { choicesMade: winningChoice },
-      $set: { currentStep: raid.currentStep + 1 }
-    }
-  );
-
-  // Get scenario
-  const { getScenarioById } = require('../utils/raidScenarios');
-  const scenario = getScenarioById(raid.scenarioId);
-
-  const step = scenario.steps[raid.currentStep];
-  const chosenOption = step.choices[winningChoice];
-
-  // Show result
   try {
+    const raid = await gamblingRaids.findOne({ _id: raidId });
+
+    if (!raid || raid.status !== 'active') {
+      console.error(`❌ Raid not found or not active`);
+      return;
+    }
+
+    const voteKey = `step_${raid.currentStep}`;
+    const currentVotes = raid.votes[voteKey] || {};
+
+    // Count votes
+    const voteCounts = {};
+    Object.values(currentVotes).forEach(choiceIndex => {
+      voteCounts[choiceIndex] = (voteCounts[choiceIndex] || 0) + 1;
+    });
+
+    // Find winning choice (or random if tie)
+    let winningChoice = 0;
+    let maxVotes = 0;
+    const tiedChoices = [];
+
+    Object.entries(voteCounts).forEach(([choice, count]) => {
+      const choiceNum = parseInt(choice, 10);
+      if (count > maxVotes) {
+        maxVotes = count;
+        winningChoice = choiceNum;
+        tiedChoices.length = 0;
+        tiedChoices.push(choiceNum);
+      } else if (count === maxVotes) {
+        tiedChoices.push(choiceNum);
+      }
+    });
+
+    // If no votes at all, pick random
+    if (Object.keys(voteCounts).length === 0) {
+      const { getScenarioById } = require('../utils/raidScenarios');
+      const scenario = getScenarioById(raid.scenarioId);
+      const step = scenario.steps[raid.currentStep];
+      winningChoice = Math.floor(Math.random() * step.choices.length);
+      console.log(`⚠️ No votes cast, randomly chose option ${winningChoice}`);
+    }
+
+    // If tie, pick random
+    if (tiedChoices.length > 1) {
+      winningChoice = tiedChoices[Math.floor(Math.random() * tiedChoices.length)];
+      console.log(`🎲 Tie-breaker: chose option ${winningChoice}`);
+    }
+
+    console.log(`✅ Winning choice: ${winningChoice} with ${maxVotes} vote(s)`);
+
+    // Record choice
+    await gamblingRaids.updateOne(
+      { _id: raid._id },
+      {
+        $push: { choicesMade: winningChoice },
+        $set: { currentStep: raid.currentStep + 1 }
+      }
+    );
+
+    // Get scenario
+    const { getScenarioById } = require('../utils/raidScenarios');
+    const scenario = getScenarioById(raid.scenarioId);
+
+    const step = scenario.steps[raid.currentStep];
+    const chosenOption = step.choices[winningChoice];
+
+    // Show result
     const channel = await client.channels.fetch(raid.channelId);
     const message = await channel.messages.fetch(raid.messageId);
 
@@ -332,46 +405,59 @@ async function processVotes(client, collections, raidId) {
 
     await message.edit({ embeds: [resultEmbed], components: [] });
 
+    console.log(`✅ Vote result shown, scheduling next decision...`);
+
     // Wait 3 seconds, then next decision
     setTimeout(async () => {
-      await presentDecision(client, collections, raidId, scenario, raid.currentStep + 1);
+      console.log(`⏰ Moving to next decision...`);
+      try {
+        await presentDecision(client, collections, raidId, scenario, raid.currentStep + 1);
+      } catch (err) {
+        console.error(`❌ Error presenting next decision:`, err);
+      }
     }, 3000);
 
   } catch (error) {
-    console.error('Error showing vote result:', error);
+    console.error('❌ Error processing votes:', error);
   }
 }
 
 async function finishRaid(client, collections, raidId, scenario) {
   const { gamblingRaids } = collections;
 
-  const raid = await gamblingRaids.findOne({ _id: raidId });
-
-  if (!raid) return;
-
-  // Pick random winner
-  const winner = raid.participants[Math.floor(Math.random() * raid.participants.length)];
-
-  // Award coins
-  await addBalance({
-    userId: winner,
-    guildId: raid.guildId,
-    amount: raid.lootAmount,
-    collections
-  });
-
-  // Update raid
-  await gamblingRaids.updateOne(
-    { _id: raid._id },
-    {
-      $set: {
-        status: 'finished',
-        winner
-      }
-    }
-  );
+  console.log(`🏁 Finishing raid ${raidId}`);
 
   try {
+    const raid = await gamblingRaids.findOne({ _id: raidId });
+
+    if (!raid) {
+      console.error(`❌ Raid not found`);
+      return;
+    }
+
+    // Pick random winner
+    const winner = raid.participants[Math.floor(Math.random() * raid.participants.length)];
+    console.log(`🎰 Winner selected: ${winner}`);
+
+    // Award coins
+    await addBalance({
+      userId: winner,
+      guildId: raid.guildId,
+      amount: raid.lootAmount,
+      collections
+    });
+
+    // Update raid
+    await gamblingRaids.updateOne(
+      { _id: raid._id },
+      {
+        $set: {
+          status: 'finished',
+          winner
+        }
+      }
+    );
+
     const channel = await client.channels.fetch(raid.channelId);
     const message = await channel.messages.fetch(raid.messageId);
 
@@ -411,6 +497,8 @@ async function finishRaid(client, collections, raidId, scenario) {
 
     await message.edit({ embeds: [finishEmbed], components: [] });
 
+    console.log(`✅ Raid finished successfully`);
+
     // Send DM to winner
     try {
       const winnerUser = await client.users.fetch(winner);
@@ -427,11 +515,11 @@ async function finishRaid(client, collections, raidId, scenario) {
 
       await winnerUser.send({ embeds: [winnerDMEmbed] });
     } catch (err) {
-      console.warn(`Could not send DM to winner ${winner}`);
+      console.warn(`⚠️ Could not send DM to winner ${winner}`);
     }
 
   } catch (error) {
-    console.error('Error finishing raid:', error);
+    console.error('❌ Error finishing raid:', error);
   }
 }
 
