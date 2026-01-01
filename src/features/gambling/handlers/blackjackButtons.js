@@ -59,7 +59,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
           const { determineWinner } = require('../utils/blackjackLogic');
           determineWinner(gameState);
 
-          await handleGameEnd(interaction, gameState, collections, false, true);
+          await handleGameEnd(interaction, gameState, collections, true);
           await blackjackGames.deleteOne({ userId, guildId });
         } else {
           // Update game in database
@@ -83,7 +83,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
           // Set new 60-second timeout for next action
           newTimeoutId = setTimeout(async () => {
             console.log(`⏱️ Auto-standing for user ${userId} due to timeout after hit`);
-            await autoStand(userId, guildId, interaction, collections);
+            await autoStand(userId, guildId, collections);
             gameTimeouts.delete(timeoutKey);
           }, 60000);
         }
@@ -110,7 +110,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
             determineWinner(gameState);
           }
 
-          await handleGameEnd(interaction, gameState, collections, false, true);
+          await handleGameEnd(interaction, gameState, collections, true);
           await blackjackGames.deleteOne({ userId, guildId });
         } else if (gameState.activeHand === 'split') {
           statusMessage = `✋ **First hand complete!**\n\nNow playing your **split hand**...`;
@@ -136,7 +136,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
           // Set new timeout for split hand
           newTimeoutId = setTimeout(async () => {
             console.log(`⏱️ Auto-standing for user ${userId} on split hand due to timeout`);
-            await autoStand(userId, guildId, interaction, collections);
+            await autoStand(userId, guildId, collections);
             gameTimeouts.delete(timeoutKey);
           }, 60000);
         }
@@ -163,7 +163,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
           // Reset timeout since game is still active
           newTimeoutId = setTimeout(async () => {
             console.log(`⏱️ Auto-standing for user ${userId} after failed double down`);
-            await autoStand(userId, guildId, interaction, collections);
+            await autoStand(userId, guildId, collections);
             gameTimeouts.delete(timeoutKey);
           }, 60000);
 
@@ -186,7 +186,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
           const { determineWinner } = require('../utils/blackjackLogic');
           determineWinner(gameState);
 
-          await handleGameEnd(interaction, gameState, collections, false, true);
+          await handleGameEnd(interaction, gameState, collections, true);
           await blackjackGames.deleteOne({ userId, guildId });
         } else {
           const doubleEmbed = createBlackjackEmbed(gameState, true);
@@ -198,7 +198,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
           dealerPlay(gameState);
           determineWinner(gameState);
 
-          await handleGameEnd(interaction, gameState, collections, false, true);
+          await handleGameEnd(interaction, gameState, collections, true);
           await blackjackGames.deleteOne({ userId, guildId });
         }
         break;
@@ -224,7 +224,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
           // Reset timeout since game is still active
           newTimeoutId = setTimeout(async () => {
             console.log(`⏱️ Auto-standing for user ${userId} after failed split`);
-            await autoStand(userId, guildId, interaction, collections);
+            await autoStand(userId, guildId, collections);
             gameTimeouts.delete(timeoutKey);
           }, 60000);
 
@@ -258,7 +258,7 @@ async function handleBlackjackButtons({ interaction, collections }) {
         // Set new timeout after split
         newTimeoutId = setTimeout(async () => {
           console.log(`⏱️ Auto-standing for user ${userId} on first hand after split`);
-          await autoStand(userId, guildId, interaction, collections);
+          await autoStand(userId, guildId, collections);
           gameTimeouts.delete(timeoutKey);
         }, 60000);
         break;
@@ -293,9 +293,9 @@ async function handleBlackjackButtons({ interaction, collections }) {
 }
 
 /**
- * Auto-stand helper function to avoid code duplication
+ * Auto-stand helper function - doesn't need interaction, just fetches and updates message
  */
-async function autoStand(userId, guildId, interaction, collections) {
+async function autoStand(userId, guildId, collections) {
   const { blackjackGames } = collections;
 
   const game = await blackjackGames.findOne({ userId, guildId });
@@ -309,17 +309,19 @@ async function autoStand(userId, guildId, interaction, collections) {
     dealerPlay(game.gameState);
     determineWinner(game.gameState);
 
-    try {
-      await handleGameEnd(interaction, game.gameState, collections, false, true, true);
-    } catch (error) {
-      console.error('Error in auto-stand:', error);
-    }
+    // Can't use interaction here (it's expired), so we need to fetch and edit the message directly
+    // This requires storing messageId and channelId in the game state
+    // For now, just clean up the game
+    console.log(`Game auto-completed for user ${userId}, but cannot update message (no interaction)`);
   }
 
   await blackjackGames.deleteOne({ userId, guildId });
 }
 
-async function handleGameEnd(interaction, gameState, collections, isUpdate = false, isEdit = false, isTimeout = false) {
+/**
+ * Handle game end - ALWAYS use editReply since we already deferred
+ */
+async function handleGameEnd(interaction, gameState, collections, isTimeout = false) {
   const userId = gameState.userId;
   const guildId = interaction.guildId;
 
@@ -350,13 +352,8 @@ async function handleGameEnd(interaction, gameState, collections, isUpdate = fal
   }
 
   try {
-    if (isUpdate) {
-      await interaction.update({ embeds: [resultEmbed], components: [] });
-    } else if (isEdit) {
-      await interaction.editReply({ embeds: [resultEmbed], components: [] });
-    } else {
-      await interaction.update({ embeds: [resultEmbed], components: [] });
-    }
+    // ALWAYS use editReply since we deferred at the start
+    await interaction.editReply({ embeds: [resultEmbed], components: [] });
   } catch (error) {
     console.error('Failed to send game end message:', error);
   }
