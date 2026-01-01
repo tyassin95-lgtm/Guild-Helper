@@ -4,7 +4,13 @@ const { updateEventEmbed, cleanupOrphanedEvent } = require('../embed');
 const { updateCalendar } = require('../calendar/calendarUpdate');
 
 async function handlePvPButtons({ interaction, collections }) {
-  const { pvpEvents, pvpBonuses } = collections;
+  const { pvpEvents, pvpBonuses, guildSettings } = collections;
+
+  // View Code button (for authorized users)
+  if (interaction.customId.startsWith('pvp_view_code:')) {
+    const eventId = interaction.customId.split(':')[1];
+    return handleViewCode(interaction, eventId, collections);
+  }
 
   // RSVP Attending button
   if (interaction.customId.startsWith('pvp_rsvp_attending:')) {
@@ -197,6 +203,72 @@ async function handlePvPButtons({ interaction, collections }) {
 
     return interaction.showModal(modal);
   }
+}
+
+/**
+ * Handle View Code button click
+ * Only allows admins and users with authorized roles to view
+ */
+async function handleViewCode(interaction, eventId, collections) {
+  const { pvpEvents, guildSettings } = collections;
+
+  // Check if user is admin
+  const isAdmin = interaction.member.permissions.has(PermissionFlagsBits.Administrator);
+
+  // Get authorized roles from settings
+  const settings = await guildSettings.findOne({ guildId: interaction.guildId });
+  const authorizedRoles = settings?.pvpCodeManagers || [];
+
+  // Check if user has any of the authorized roles
+  const hasAuthorizedRole = authorizedRoles.some(roleId => 
+    interaction.member.roles.cache.has(roleId)
+  );
+
+  // Deny access if user is neither admin nor has authorized role
+  if (!isAdmin && !hasAuthorizedRole) {
+    return interaction.reply({
+      content: '❌ You do not have permission to view attendance codes.\n\n' +
+               'Only administrators and users with authorized roles can view codes.\n' +
+               'Ask an admin to grant you access with `/pvpcodemanagers`.',
+      flags: [64]
+    });
+  }
+
+  // User is authorized, fetch the event
+  const event = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
+
+  if (!event) {
+    return interaction.reply({
+      content: '❌ Event not found. It may have been deleted.',
+      flags: [64]
+    });
+  }
+
+  // Get event type name
+  const eventTypeNames = {
+    siege: 'Siege',
+    riftstone: 'Riftstone Fight',
+    boonstone: 'Boonstone Fight',
+    wargames: 'Wargames',
+    guildevent: 'Guild Event'
+  };
+
+  const typeName = eventTypeNames[event.eventType] || event.eventType;
+
+  // Format event time
+  const timestamp = Math.floor(event.eventTime.getTime() / 1000);
+
+  // Show the code in an ephemeral message
+  return interaction.reply({
+    content: `🔐 **PvP Event Attendance Code**\n\n` +
+             `**Event:** ${typeName}${event.location ? ` - ${event.location}` : ''}\n` +
+             `**Time:** <t:${timestamp}:F>\n` +
+             `**Bonus Points:** +${event.bonusPoints || 10}\n\n` +
+             `**Attendance Code:** \`${event.password}\`\n\n` +
+             `Share this code with participants to record their attendance.\n` +
+             `${event.closed ? '⚠️ *Note: This event is closed*' : ''}`,
+    flags: [64] // Ephemeral
+  });
 }
 
 /**

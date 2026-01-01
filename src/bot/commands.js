@@ -128,6 +128,30 @@ async function registerSlashCommands(client) {
       default_member_permissions: ADMIN
     },
     {
+      name: 'pvpcodemanagers',
+      description: 'Admins: Manage who can view PvP attendance codes.',
+      default_member_permissions: ADMIN,
+      options: [
+        {
+          type: 3, // STRING
+          name: 'action',
+          description: 'What to do',
+          required: true,
+          choices: [
+            { name: 'add (authorize role)', value: 'add' },
+            { name: 'remove (revoke role)', value: 'remove' },
+            { name: 'list (show authorized roles)', value: 'list' }
+          ]
+        },
+        {
+          type: 8, // ROLE
+          name: 'role',
+          description: 'Role to add/remove',
+          required: false
+        }
+      ]
+    },
+    {
       name: 'itemroll',
       description: 'Admins: Create an item roll event where players can roll for loot.',
       default_member_permissions: ADMIN
@@ -273,7 +297,7 @@ async function registerSlashCommands(client) {
         }
       ]
     },
-    // Kill Bias Command (Admin) - NEW
+    // Kill Bias Command (Admin)
     {
       name: 'killbias',
       description: 'Admins: Secretly adjust kill success rates for users.',

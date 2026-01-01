@@ -18,6 +18,7 @@ const { handlePartyManageButtons } = require('../../features/parties/handlers/ma
 const { handlePvPEvent } = require('../../features/pvp/commands/pvpevent');
 const { handlePvPCalendar } = require('../../features/pvp/commands/pvpcalendar');
 const { handleResetBonuses, handleResetBonusesConfirmation } = require('../../features/pvp/commands/resetbonuses');
+const { handlePvPCodeManagers } = require('../../features/pvp/commands/pvpcodemanagers');
 const { handlePvPButtons } = require('../../features/pvp/handlers/buttons');
 const { handlePvPSelects } = require('../../features/pvp/handlers/selects');
 const { handlePvPModals } = require('../../features/pvp/handlers/modals');
@@ -74,7 +75,7 @@ const { handleRob } = require('../../features/gambling/commands/rob');
 const { handleKill } = require('../../features/gambling/commands/kill');
 const { handleSend, handleSendConfirmation } = require('../../features/gambling/commands/send');
 const { handleLeaderboard } = require('../../features/gambling/commands/leaderboard');
-const { handleKillBias } = require('../../features/gambling/commands/killbias'); // NEW
+const { handleKillBias } = require('../../features/gambling/commands/killbias');
 const { handleBlackjackButtons } = require('../../features/gambling/handlers/blackjackButtons');
 const { handleTriviaButtons } = require('../../features/gambling/handlers/triviaButtons');
 
@@ -146,6 +147,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'pvpevent')    return handlePvPEvent({ interaction, collections });
       if (name === 'pvpcalendar') return handlePvPCalendar({ interaction, collections });
       if (name === 'resetbonuses') return handleResetBonuses({ interaction, collections });
+      if (name === 'pvpcodemanagers') return handlePvPCodeManagers({ interaction, collections });
       if (name === 'itemroll')    return handleItemRoll({ interaction, collections });
 
       // Raid commands
@@ -173,7 +175,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'kill')                return handleKill({ interaction, collections });
       if (name === 'send')                return handleSend({ interaction, collections });
       if (name === 'leaderboard')         return handleLeaderboard({ interaction, collections });
-      if (name === 'killbias')            return handleKillBias({ interaction, collections }); // NEW
+      if (name === 'killbias')            return handleKillBias({ interaction, collections });
 
       // Broadcast commands
       if (name === 'startbroadcast')      return handleStartBroadcast({ interaction, collections, client });
