@@ -2,7 +2,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { PermissionFlagsBits } = require('discord.js');
 
 const SIGNUP_DURATION = 5 * 60 * 1000; // 5 minutes
-const MIN_PARTICIPANTS = 3;
+const MIN_PARTICIPANTS = 1;
 const MAX_PARTICIPANTS = 6;
 
 async function handleStartGamblingRaid({ interaction, collections }) {
@@ -40,7 +40,7 @@ async function handleStartGamblingRaid({ interaction, collections }) {
     .setTitle('🎰 GAMBLING RAID SIGNUP')
     .setDescription(
       '**A dangerous raid is forming!**\n\n' +
-      `💰 **Prize Pool:** ${lootAmount.toLocaleString()} coins\n` +
+      `💰 **Prize:** Unknown\n` +
       `👥 **Participants:** 0/${MAX_PARTICIPANTS}\n` +
       `⏱️ **Signup closes:** <t:${Math.floor((Date.now() + SIGNUP_DURATION) / 1000)}:R>\n\n` +
       `⚠️ **Only ONE lucky raider will claim the entire prize!**\n` +
