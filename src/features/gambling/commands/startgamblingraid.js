@@ -85,9 +85,15 @@ async function handleStartGamblingRaid({ interaction, collections }) {
     lootAmount,
     winner: null,
     scenarioId: null,
+
+    // 🔒 NEW
+    processingStep: false,
+    voteTimeoutId: null,
+
     createdAt: new Date(),
     expiresAt: new Date(Date.now() + SIGNUP_DURATION)
   };
+
 
   const result = await gamblingRaids.insertOne(raid);
 

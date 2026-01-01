@@ -181,7 +181,7 @@ async function handleRaidVote({ interaction, collections }) {
 
   if (voteCount === updatedRaid.participants.length) {
     console.log(`✅ All ${voteCount} participants voted, processing immediately...`);
-    // All votes in - process immediately
+
     await processVotes(interaction.client, collections, raid._id);
   }
 }
@@ -264,6 +264,11 @@ async function presentDecision(client, collections, raidId, stepIndex) {
       console.error(`❌ Raid not found`);
       return;
     }
+    // 🔓 Unlock voting for the new step
+    await gamblingRaids.updateOne(
+      { _id: raidId },
+      { $set: { processingStep: false } }
+    );
 
     if (raid.status !== 'active') {
       console.error(`❌ Raid not active, status is: ${raid.status}`);
@@ -334,7 +339,6 @@ async function presentDecision(client, collections, raidId, stepIndex) {
     await message.edit({ embeds: [decisionEmbed], components: [buttons] });
     console.log(`✅ Decision ${stepIndex + 1} presented successfully`);
 
-    // Set timeout for voting (60 seconds)
     setTimeout(async () => {
       console.log(`⏰ Vote timeout for step ${stepIndex + 1}, processing votes...`);
       try {
@@ -354,6 +358,8 @@ async function processVotes(client, collections, raidId) {
 
   console.log(`🗳️ Processing votes for raid ${raidId}`);
 
+  let locked = false;
+
   try {
     // Fetch fresh raid data
     const raid = await gamblingRaids.findOne({ _id: raidId });
@@ -363,10 +369,23 @@ async function processVotes(client, collections, raidId) {
       return;
     }
 
+    // 🔒 Prevent double processing
+    if (raid.processingStep) {
+      console.log('⚠️ Votes already processed for this step');
+      return;
+    }
+
+    // 🔐 Lock this step
+    await gamblingRaids.updateOne(
+      { _id: raidId },
+      { $set: { processingStep: true } }
+    );
+    locked = true;
+
     const voteKey = `step_${raid.currentStep}`;
     const currentVotes = raid.votes[voteKey] || {};
 
-    // Get the scenario
+    // Get scenario
     const { getScenarioById } = require('../utils/raidScenarios');
     const scenario = getScenarioById(raid.scenarioId);
 
@@ -376,7 +395,6 @@ async function processVotes(client, collections, raidId) {
     }
 
     const step = scenario.steps[raid.currentStep];
-
     if (!step) {
       console.error(`❌ Step not found: ${raid.currentStep}`);
       return;
@@ -388,85 +406,75 @@ async function processVotes(client, collections, raidId) {
       voteCounts[choiceIndex] = (voteCounts[choiceIndex] || 0) + 1;
     });
 
-    // Find winning choice (or random if tie)
+    // Resolve winner
     let winningChoice = 0;
     let maxVotes = 0;
     const tiedChoices = [];
 
     Object.entries(voteCounts).forEach(([choice, count]) => {
-      const choiceNum = parseInt(choice, 10);
+      const c = parseInt(choice, 10);
       if (count > maxVotes) {
         maxVotes = count;
-        winningChoice = choiceNum;
+        winningChoice = c;
         tiedChoices.length = 0;
-        tiedChoices.push(choiceNum);
+        tiedChoices.push(c);
       } else if (count === maxVotes) {
-        tiedChoices.push(choiceNum);
+        tiedChoices.push(c);
       }
     });
 
-    // If no votes at all, pick random
     if (Object.keys(voteCounts).length === 0) {
       winningChoice = Math.floor(Math.random() * step.choices.length);
-      console.log(`⚠️ No votes cast, randomly chose option ${winningChoice}`);
-    }
-
-    // If tie, pick random
-    if (tiedChoices.length > 1) {
+    } else if (tiedChoices.length > 1) {
       winningChoice = tiedChoices[Math.floor(Math.random() * tiedChoices.length)];
-      console.log(`🎲 Tie-breaker: chose option ${winningChoice}`);
     }
-
-    console.log(`✅ Winning choice: ${winningChoice} with ${maxVotes} vote(s)`);
 
     const chosenOption = step.choices[winningChoice];
 
-    // Update raid and get the NEW currentStep value
+    // Update raid state
     const updateResult = await gamblingRaids.findOneAndUpdate(
-      { _id: raid._id },
+      { _id: raidId },
       {
         $push: { choicesMade: winningChoice },
-        $inc: { currentStep: 1 }
+        $inc: { currentStep: 1 },
+        $unset: { [`votes.step_${raid.currentStep}`]: '' }
       },
       { returnDocument: 'after' }
     );
 
-    const updatedRaid = updateResult.value;
-    const nextStepIndex = updatedRaid.currentStep;
-
-    console.log(`📝 Updated raid: currentStep is now ${nextStepIndex}`);
+    const nextStepIndex = updateResult.value.currentStep;
 
     // Show result
     const channel = await client.channels.fetch(raid.channelId);
     const message = await channel.messages.fetch(raid.messageId);
 
     const resultEmbed = new EmbedBuilder()
-      .setColor(0x3498DB) // Blue
-      .setTitle(`${scenario.emoji} Decision Made!`)
+      .setColor(0x3498DB)
+      .setTitle('Decision Made!')
       .setDescription(
         `**The raiders chose:** ${chosenOption.emoji} ${chosenOption.label}\n\n` +
         `${chosenOption.result}\n\n` +
-        `⏱️ Next decision in 30 seconds...\n` +
-        `*Take your time to read!*`
-      )
-      .setTimestamp();
+        `⏱️ Next decision in 30 seconds...`
+      );
 
     await message.edit({ embeds: [resultEmbed], components: [] });
 
-    console.log(`✅ Vote result shown, scheduling next decision (step ${nextStepIndex}) in 8 seconds...`);
-
-    // Wait 8 seconds, then next decision
-    setTimeout(async () => {
-      console.log(`⏰ Moving to decision ${nextStepIndex + 1}...`);
-      try {
-        await presentDecision(client, collections, raidId, nextStepIndex);
-      } catch (err) {
-        console.error(`❌ Error presenting next decision:`, err);
-      }
+    // Schedule next step
+    setTimeout(() => {
+      presentDecision(client, collections, raidId, nextStepIndex)
+        .catch(err => console.error(err));
     }, RESULT_DISPLAY_TIME);
 
-  } catch (error) {
-    console.error('❌ Error processing votes:', error);
+  } catch (err) {
+    console.error('❌ Error processing votes:', err);
+  } finally {
+    // 🔓 ALWAYS UNLOCK (even on error)
+    if (locked) {
+      await gamblingRaids.updateOne(
+        { _id: raidId },
+        { $set: { processingStep: false } }
+      );
+    }
   }
 }
 
@@ -476,7 +484,11 @@ async function finishRaid(client, collections, raidId) {
   console.log(`🏁 Finishing raid ${raidId}`);
 
   try {
-    const raid = await gamblingRaids.findOne({ _id: raidId });
+    const raid = await gamblingRaids.findOneAndUpdate(
+      { _id: raidId },
+      { $set: { status: 'finished' } },
+      { returnDocument: 'after' }
+    ).then(res => res.value);
 
     if (!raid) {
       console.error(`❌ Raid not found`);
@@ -508,10 +520,7 @@ async function finishRaid(client, collections, raidId) {
     await gamblingRaids.updateOne(
       { _id: raid._id },
       {
-        $set: {
-          status: 'finished',
-          winner
-        }
+        $set: { winner }
       }
     );
 
