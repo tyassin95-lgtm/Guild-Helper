@@ -14,8 +14,6 @@ async function handleStartGamblingRaid({ interaction, collections }) {
     });
   }
 
-  await interaction.deferReply();
-
   const { gamblingRaids } = collections;
   const guildId = interaction.guildId;
 
@@ -26,10 +24,17 @@ async function handleStartGamblingRaid({ interaction, collections }) {
   });
 
   if (existingRaid) {
-    return interaction.editReply({
-      content: '❌ There is already an active gambling raid in this server! Wait for it to finish.'
+    return interaction.reply({
+      content: '❌ There is already an active gambling raid in this server! Wait for it to finish.',
+      flags: [64] // Ephemeral
     });
   }
+
+  // Reply ephemerally to hide the command usage
+  await interaction.reply({
+    content: '✅ Starting gambling raid...',
+    flags: [64] // Ephemeral - only you can see this
+  });
 
   // Generate random loot amount (100k - 1M)
   const lootAmount = Math.floor(Math.random() * (1000000 - 100000 + 1)) + 100000;
@@ -40,10 +45,10 @@ async function handleStartGamblingRaid({ interaction, collections }) {
     .setTitle('🎰 GAMBLING RAID SIGNUP')
     .setDescription(
       '**A dangerous raid is forming!**\n\n' +
-      `💰 **Prize:** Unknown\n` +
+      `💰 **Prize Pool:** Unknown\n` +
       `👥 **Participants:** 0/${MAX_PARTICIPANTS}\n` +
       `⏱️ **Signup closes:** <t:${Math.floor((Date.now() + SIGNUP_DURATION) / 1000)}:R>\n\n` +
-      `⚠️ **Only ONE lucky raider will claim the entire prize!**\n` +
+      `⚠️ **You need to work TOGETHER to complete the raid!**\n` +
       `Minimum ${MIN_PARTICIPANTS} participants required to start.`
     )
     .addFields({
@@ -61,7 +66,8 @@ async function handleStartGamblingRaid({ interaction, collections }) {
       .setStyle(ButtonStyle.Success)
   );
 
-  const message = await interaction.editReply({
+  // Post the embed as a new message in the channel
+  const message = await interaction.channel.send({
     embeds: [signupEmbed],
     components: [joinButton]
   });

@@ -79,10 +79,10 @@ async function handleRaidJoin({ interaction, collections }) {
     .setTitle('🎰 GAMBLING RAID SIGNUP')
     .setDescription(
       '**A dangerous raid is forming!**\n\n' +
-      `💰 **Prize Pool:** ${updatedRaid.lootAmount.toLocaleString()} coins\n` +
+      `💰 **Prize Pool:** Unknown\n` +
       `👥 **Participants:** ${updatedRaid.participants.length}/${MAX_PARTICIPANTS}\n` +
       `⏱️ **Signup closes:** <t:${Math.floor(updatedRaid.expiresAt.getTime() / 1000)}:R>\n\n` +
-      `⚠️ **Only ONE lucky raider will claim the entire prize!**\n` +
+      `⚠️ **You must work TOGETHER to complete the raid!**\n` +
       `Minimum 3 participants required to start.`
     )
     .addFields({
