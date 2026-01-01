@@ -60,9 +60,11 @@ function hit(gameState) {
   // Check for bust
   if (isBusted(hand)) {
     if (gameState.splitHand && gameState.activeHand === 'main') {
-      // Switch to split hand
+      // Main hand busted, switch to split hand
       gameState.activeHand = 'split';
+      gameState.status = 'playing'; // Continue playing split hand
     } else {
+      // No split hand or split hand also busted
       gameState.status = 'playerBusted';
     }
   }
@@ -78,12 +80,14 @@ function stand(gameState) {
   gameState.canDoubleDown = false;
   gameState.canSplit = false;
 
-  // If playing split hand, switch to it
+  // If playing main hand and there's a split hand, switch to it
   if (gameState.splitHand && gameState.activeHand === 'main') {
     gameState.activeHand = 'split';
+    gameState.status = 'playing'; // Continue playing split hand
     return gameState;
   }
 
+  // Either no split hand, or we just finished the split hand
   gameState.status = 'dealerTurn';
   return gameState;
 }
@@ -108,6 +112,10 @@ function doubleDown(gameState) {
   if (gameState.activeHand === 'main') {
     gameState.playerValue = value;
   }
+
+  // Disable further actions
+  gameState.canDoubleDown = false;
+  gameState.canSplit = false;
 
   // Check for bust
   if (isBusted(hand)) {
@@ -135,14 +143,24 @@ function split(gameState) {
 
   // Split the hand
   const [card1, card2] = gameState.playerHand;
+
+  // Main hand gets first card + new card
   gameState.playerHand = [card1, drawCard(gameState.deck)];
+
+  // Split hand gets second card + new card
   gameState.splitHand = [card2, drawCard(gameState.deck)];
 
   gameState.playerValue = calculateHandValue(gameState.playerHand);
 
-  // After splitting, can't split again or double
+  // Set active hand to main (play main hand first)
+  gameState.activeHand = 'main';
+
+  // After splitting, can't split again or double (unless special rules)
   gameState.canSplit = false;
   gameState.canDoubleDown = false;
+
+  // Status remains 'playing' for the main hand
+  gameState.status = 'playing';
 
   return gameState;
 }

@@ -104,11 +104,18 @@ async function handleBlackjackButtons({ interaction, collections }) {
         const balance = await getBalance({ userId, guildId, collections });
 
         if (balance.balance < gameState.betAmount) {
-          return interaction.update({
-            content: '❌ Insufficient balance to double down!',
-            embeds: [],
-            components: []
-          });
+          // Insufficient balance - show error but keep game active
+          const errorEmbed = createBlackjackEmbed(gameState, true);
+          errorEmbed.setDescription(
+            `${errorEmbed.data.description}\n\n` +
+            `❌ **Cannot double down!**\n` +
+            `You need **${gameState.betAmount.toLocaleString()} more coins** but only have **${balance.balance.toLocaleString()} coins**.\n\n` +
+            `Please choose another action.`
+          );
+          errorEmbed.setFooter({ text: '⏱️ 60 seconds to make your next move' });
+
+          const buttons = createGameButtons(gameState);
+          return interaction.update({ embeds: [errorEmbed], components: [buttons] });
         }
 
         await subtractBalance({ userId, guildId, amount: gameState.betAmount, collections });
@@ -148,11 +155,18 @@ async function handleBlackjackButtons({ interaction, collections }) {
         const balanceForSplit = await getBalance({ userId, guildId, collections });
 
         if (balanceForSplit.balance < gameState.betAmount) {
-          return interaction.update({
-            content: '❌ Insufficient balance to split!',
-            embeds: [],
-            components: []
-          });
+          // Insufficient balance - show error but keep game active
+          const errorEmbed = createBlackjackEmbed(gameState, true);
+          errorEmbed.setDescription(
+            `${errorEmbed.data.description}\n\n` +
+            `❌ **Cannot split!**\n` +
+            `You need **${gameState.betAmount.toLocaleString()} more coins** to split but only have **${balanceForSplit.balance.toLocaleString()} coins**.\n\n` +
+            `Please choose another action.`
+          );
+          errorEmbed.setFooter({ text: '⏱️ 60 seconds to make your next move' });
+
+          const buttons = createGameButtons(gameState);
+          return interaction.update({ embeds: [errorEmbed], components: [buttons] });
         }
 
         await subtractBalance({ userId, guildId, amount: gameState.betAmount, collections });
