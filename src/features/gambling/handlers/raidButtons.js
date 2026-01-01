@@ -4,6 +4,8 @@ const { addBalance } = require('../utils/balanceManager');
 
 const MAX_PARTICIPANTS = 6;
 const VOTE_DURATION = 60 * 1000; // 60 seconds per vote
+const RESULT_DISPLAY_TIME = 30 * 1000; // 8 seconds to read results
+const INTRO_DELAY = 30 * 1000; // 8 seconds to read intro
 
 async function handleRaidButtons({ interaction, collections }) {
   const customId = interaction.customId;
@@ -83,7 +85,7 @@ async function handleRaidJoin({ interaction, collections }) {
       `👥 **Participants:** ${updatedRaid.participants.length}/${MAX_PARTICIPANTS}\n` +
       `⏱️ **Signup closes:** <t:${Math.floor(updatedRaid.expiresAt.getTime() / 1000)}:R>\n\n` +
       `⚠️ **You must work TOGETHER to complete the raid!**\n` +
-      `Minimum 3 participant required to start.`
+      `Minimum 1 participant required to start.`
     )
     .addFields({
       name: '📋 Current Raiders',
@@ -104,16 +106,29 @@ async function handleRaidJoin({ interaction, collections }) {
 
 async function handleRaidVote({ interaction, collections }) {
   const parts = interaction.customId.split(':');
-  const raidId = parts[1];
+  const raidIdString = parts[1];
   const choiceIndex = parseInt(parts[2], 10);
 
   const { gamblingRaids } = collections;
   const userId = interaction.user.id;
 
+  // CRITICAL FIX: Convert string to ObjectId
+  let raidId;
+  try {
+    raidId = new ObjectId(raidIdString);
+  } catch (err) {
+    console.error(`❌ Invalid raid ID format: ${raidIdString}`);
+    return interaction.reply({
+      content: '❌ Invalid raid ID.',
+      flags: [64]
+    });
+  }
+
   // Find raid
-  const raid = await gamblingRaids.findOne({ _id: new ObjectId(raidId) });
+  const raid = await gamblingRaids.findOne({ _id: raidId });
 
   if (!raid) {
+    console.log(`❌ Raid not found: ${raidIdString}`);
     return interaction.reply({
       content: '❌ This raid no longer exists.',
       flags: [64]
@@ -165,6 +180,7 @@ async function handleRaidVote({ interaction, collections }) {
   const voteCount = Object.keys(currentVotes).length;
 
   if (voteCount === updatedRaid.participants.length) {
+    console.log(`✅ All ${voteCount} participants voted, processing immediately...`);
     // All votes in - process immediately
     await processVotes(interaction.client, collections, raid._id);
   }
@@ -210,25 +226,25 @@ async function startScenario(client, collections, raidId, scenario) {
         `${scenario.intro}\n\n` +
         `💰 **Prize:** Unknown\n` +
         `👥 **Raiders:** ${raid.participants.length}\n\n` +
-        `⏱️ Starting first decision in 5 seconds...`
+        `⏱️ Starting first decision in 30 seconds...\n` +
+        `*Read the story carefully!*`
       )
       .setFooter({ text: 'Get ready to vote!' })
       .setTimestamp();
 
     await message.edit({ embeds: [introEmbed], components: [] });
 
-    console.log(`✅ Raid intro shown, scheduling first decision...`);
+    console.log(`✅ Raid intro shown, scheduling first decision in 30 seconds...`);
 
-    // Wait 5 seconds, then start first decision
+    // Wait 8 seconds, then start first decision
     setTimeout(async () => {
-      console.log(`⏰ 5 seconds elapsed, presenting first decision...`);
+      console.log(`⏰ 30 seconds elapsed, presenting first decision...`);
       try {
-        // CRITICAL FIX: Pass raidId instead of scenario object
         await presentDecision(client, collections, raidId, 0);
       } catch (err) {
         console.error(`❌ Error in presentDecision:`, err);
       }
-    }, 5000);
+    }, INTRO_DELAY);
 
   } catch (error) {
     console.error('❌ Error starting scenario:', error);
@@ -241,7 +257,7 @@ async function presentDecision(client, collections, raidId, stepIndex) {
   console.log(`📊 Presenting decision ${stepIndex + 1} for raid ${raidId}`);
 
   try {
-    // CRITICAL FIX: Fetch fresh raid data every time
+    // Fetch fresh raid data every time
     const raid = await gamblingRaids.findOne({ _id: raidId });
 
     if (!raid) {
@@ -303,12 +319,12 @@ async function presentDecision(client, collections, raidId, stepIndex) {
       .setFooter({ text: 'Vote for your preferred choice!' })
       .setTimestamp();
 
-    // Create choice buttons
+    // Create choice buttons - CRITICAL FIX: Use raidId.toString()
     const buttons = new ActionRowBuilder();
     step.choices.forEach((choice, index) => {
       buttons.addComponents(
         new ButtonBuilder()
-          .setCustomId(`raid_vote:${raidId}:${index}`)
+          .setCustomId(`raid_vote:${raidId.toString()}:${index}`)
           .setLabel(choice.label)
           .setEmoji(choice.emoji)
           .setStyle(ButtonStyle.Primary)
@@ -339,7 +355,7 @@ async function processVotes(client, collections, raidId) {
   console.log(`🗳️ Processing votes for raid ${raidId}`);
 
   try {
-    // CRITICAL FIX: Fetch fresh raid data
+    // Fetch fresh raid data
     const raid = await gamblingRaids.findOne({ _id: raidId });
 
     if (!raid || raid.status !== 'active') {
@@ -405,18 +421,18 @@ async function processVotes(client, collections, raidId) {
 
     const chosenOption = step.choices[winningChoice];
 
-    // CRITICAL FIX: Update raid and get the NEW currentStep value
+    // Update raid and get the NEW currentStep value
     const updateResult = await gamblingRaids.findOneAndUpdate(
       { _id: raid._id },
       {
         $push: { choicesMade: winningChoice },
         $inc: { currentStep: 1 }
       },
-      { returnDocument: 'after' } // Get the updated document
+      { returnDocument: 'after' }
     );
 
     const updatedRaid = updateResult.value;
-    const nextStepIndex = updatedRaid.currentStep; // This is now the NEW step index
+    const nextStepIndex = updatedRaid.currentStep;
 
     console.log(`📝 Updated raid: currentStep is now ${nextStepIndex}`);
 
@@ -430,24 +446,24 @@ async function processVotes(client, collections, raidId) {
       .setDescription(
         `**The raiders chose:** ${chosenOption.emoji} ${chosenOption.label}\n\n` +
         `${chosenOption.result}\n\n` +
-        `⏱️ Next decision in 3 seconds...`
+        `⏱️ Next decision in 30 seconds...\n` +
+        `*Take your time to read!*`
       )
       .setTimestamp();
 
     await message.edit({ embeds: [resultEmbed], components: [] });
 
-    console.log(`✅ Vote result shown, scheduling next decision (step ${nextStepIndex})...`);
+    console.log(`✅ Vote result shown, scheduling next decision (step ${nextStepIndex}) in 8 seconds...`);
 
-    // Wait 3 seconds, then next decision
+    // Wait 8 seconds, then next decision
     setTimeout(async () => {
       console.log(`⏰ Moving to decision ${nextStepIndex + 1}...`);
       try {
-        // CRITICAL FIX: Pass the correct step index (nextStepIndex, not raid.currentStep + 1)
         await presentDecision(client, collections, raidId, nextStepIndex);
       } catch (err) {
         console.error(`❌ Error presenting next decision:`, err);
       }
-    }, 3000);
+    }, RESULT_DISPLAY_TIME);
 
   } catch (error) {
     console.error('❌ Error processing votes:', error);
@@ -547,7 +563,7 @@ async function finishRaid(client, collections, raidId) {
         .setColor(0xFFD700)
         .setTitle('🎰 YOU WON THE RAID!')
         .setDescription(
-          `Congratulations! You were chosen as the lucky winner!\n\n` +
+          `Congratulations! You have picked up the loot!\n\n` +
           `**Raid:** ${scenario.title}\n` +
           `**Prize:** ${raid.lootAmount.toLocaleString()} coins\n\n` +
           `The coins have been added to your balance!`
