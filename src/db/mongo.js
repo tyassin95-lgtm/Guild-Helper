@@ -58,7 +58,7 @@ function getCollections(db = _db) {
 
     // Gambling system
     gamblingBalances: db.collection('gamblingBalances'),
-    gamblingDailies: db.collection('gamblingDailies'),
+    gamblingFunds: db.collection('gamblingFunds'),
     gamblingGames: db.collection('gamblingGames'),
     blackjackGames: db.collection('blackjackGames'),
 
@@ -73,7 +73,7 @@ function getCollections(db = _db) {
     // Kill system
     killCooldowns: db.collection('killCooldowns'),
     killStats: db.collection('killStats'),
-    killBiases: db.collection('killBiases'), // NEW
+    killBiases: db.collection('killBiases'),
 
     // Transfer system
     transferHistory: db.collection('transferHistory'),

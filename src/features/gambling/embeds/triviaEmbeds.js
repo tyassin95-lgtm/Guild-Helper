@@ -1,5 +1,9 @@
 const { EmbedBuilder } = require('discord.js');
 
+const COINS_PER_CORRECT = 500;
+const PERFECT_RUN_BONUS = 2500;
+const TOTAL_QUESTIONS = 10;
+
 /**
  * Create trivia question embed
  */
@@ -20,7 +24,7 @@ function createTriviaEmbed(question, currentIndex, totalQuestions, currentStreak
       { name: '📚 Category', value: question.category, inline: true },
       { name: '⏱️ Time Limit', value: '20 seconds', inline: true }
     )
-    .setFooter({ text: '💡 Answer quickly! You have 20 seconds.' });
+    .setFooter({ text: `💰 ${COINS_PER_CORRECT} coins per correct answer | ${(COINS_PER_CORRECT * TOTAL_QUESTIONS).toLocaleString()} + ${PERFECT_RUN_BONUS.toLocaleString()} bonus for perfect run!` });
 
   return embed;
 }
@@ -50,28 +54,29 @@ function createTriviaResultEmbed(
       `You ran out of time!\n\n` +
       `**Correct Answer:** ${correctAnswerLetter}. ${correctAnswerText}\n\n` +
       `**Final Streak:** ${finalStreak} correct answers\n` +
-      `**Total Earned:** ${finalStreak * 50} coins`;
+      `**Total Earned:** ${(finalStreak * COINS_PER_CORRECT).toLocaleString()} coins`;
 
   } else if (isCorrect) {
     color = 0x00FF00; // Green
     title = isPerfectRun ? '🎉 PERFECT RUN!' : '✅ CORRECT!';
 
     if (isPerfectRun) {
+      const totalCoins = (TOTAL_QUESTIONS * COINS_PER_CORRECT) + PERFECT_RUN_BONUS;
       description = 
         `**Amazing!** You got all 10 questions correct!\n\n` +
-        `**This Question:** +50 coins\n` +
-        `**Perfect Run Bonus:** +250 coins\n` +
-        `**Total This Session:** ${finalStreak * 50 + 250} coins\n\n` +
+        `**This Question:** +${COINS_PER_CORRECT} coins\n` +
+        `**Perfect Run Bonus:** +${PERFECT_RUN_BONUS.toLocaleString()} coins\n` +
+        `**Total This Session:** ${totalCoins.toLocaleString()} coins\n\n` +
         `🏆 You're a trivia master!`;
     } else if (isComplete) {
       description = 
         `**Session Complete!**\n\n` +
         `**Final Streak:** ${finalStreak} correct answers\n` +
-        `**Total Earned:** ${finalStreak * 50} coins\n\n` +
+        `**Total Earned:** ${(finalStreak * COINS_PER_CORRECT).toLocaleString()} coins\n\n` +
         `Great job! Play again to beat your record!`;
     } else {
       description = 
-        `**+${coinsEarned} coins**\n\n` +
+        `**+${coinsEarned.toLocaleString()} coins**\n\n` +
         `**Current Streak:** ${finalStreak} correct\n\n` +
         `Get ready for the next question...`;
     }
@@ -87,7 +92,7 @@ function createTriviaResultEmbed(
       `**Your Answer:** ${selectedAnswerLetter}. ${selectedAnswerText}\n` +
       `**Correct Answer:** ${correctAnswerLetter}. ${correctAnswerText}\n\n` +
       `**Final Streak:** ${finalStreak} correct answers\n` +
-      `**Total Earned:** ${finalStreak * 50} coins\n\n` +
+      `**Total Earned:** ${(finalStreak * COINS_PER_CORRECT).toLocaleString()} coins\n\n` +
       `Better luck next time!`;
   }
 
@@ -105,5 +110,8 @@ function createTriviaResultEmbed(
 
 module.exports = {
   createTriviaEmbed,
-  createTriviaResultEmbed
+  createTriviaResultEmbed,
+  COINS_PER_CORRECT,
+  PERFECT_RUN_BONUS,
+  TOTAL_QUESTIONS
 };

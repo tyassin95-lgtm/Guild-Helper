@@ -3,7 +3,7 @@ const { createRobEmbed } = require('../embeds/robEmbeds');
 
 const ROB_COOLDOWN_HOURS = 1;
 const MIN_BALANCE_TO_ROB = 0;
-const MIN_BALANCE_TO_BE_ROBBED = 500;
+const MIN_BALANCE_TO_BE_ROBBED = 1000;
 
 async function handleRob({ interaction, collections }) {
   const robberId = interaction.user.id;

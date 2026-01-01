@@ -32,36 +32,34 @@ function createBalanceEmbed(user, balance, stats = null) {
 }
 
 /**
- * Create daily claim success embed
+ * Create fund claim success embed (formerly daily)
  */
-function createDailyClaimEmbed(user, claimResult) {
+function createFundClaimEmbed(user, claimResult) {
   const embed = new EmbedBuilder()
     .setColor(0x00FF00) // Green
-    .setTitle('🎁 Daily Reward Claimed!')
+    .setTitle('💰 Gambling Fund Claimed!')
     .setDescription(`**+${claimResult.totalReward.toLocaleString()} coins**`)
     .addFields(
-      { name: '💰 Base Reward', value: `${claimResult.baseReward.toLocaleString()} coins`, inline: true }
+      { name: '💵 Base Reward', value: `${claimResult.baseReward.toLocaleString()} coins`, inline: true }
     );
 
-  if (claimResult.streakBonus > 0) {
+  if (claimResult.milestoneBonus > 0) {
     embed.addFields(
-      { name: '🔥 Streak Bonus', value: `${claimResult.streakBonus.toLocaleString()} coins`, inline: true }
+      { name: '🎁 Milestone Bonus', value: `${claimResult.milestoneBonus.toLocaleString()} coins`, inline: true }
     );
   }
 
   embed.addFields(
-    { name: '📅 Current Streak', value: `${claimResult.currentStreak} day${claimResult.currentStreak !== 1 ? 's' : ''}`, inline: true },
-    { name: '💵 New Balance', value: `${claimResult.newBalance.toLocaleString()} coins`, inline: false }
+    { name: '🎯 Total Uses', value: `${claimResult.totalUses} time${claimResult.totalUses !== 1 ? 's' : ''}`, inline: true },
+    { name: '💰 New Balance', value: `${claimResult.newBalance.toLocaleString()} coins`, inline: false }
   );
 
-  if (claimResult.isNewStreak) {
-    embed.setFooter({ text: '⚠️ Your streak was reset! Claim daily to build it back up.' });
-  } else if (claimResult.currentStreak < 20) {
-    const nextMilestone = claimResult.currentStreak < 5 ? 5 : 
-                         claimResult.currentStreak < 10 ? 10 :
-                         claimResult.currentStreak < 15 ? 15 : 20;
-    const daysUntil = nextMilestone - claimResult.currentStreak;
-    embed.setFooter({ text: `Next milestone: ${nextMilestone} days (${daysUntil} days away!)` });
+  if (claimResult.isMilestone) {
+    embed.setFooter({ text: '🎉 Milestone reached! Keep claiming to earn more bonuses!' });
+  } else {
+    const nextMilestone = Math.ceil((claimResult.totalUses + 1) / 5) * 5;
+    const usesUntil = nextMilestone - claimResult.totalUses;
+    embed.setFooter({ text: `Next milestone: ${nextMilestone} uses (${usesUntil} uses away!)` });
   }
 
   return embed;
@@ -371,7 +369,7 @@ function createCoinflipResultEmbed(betAmount, choice, result, won, newBalance) {
 
 module.exports = {
   createBalanceEmbed,
-  createDailyClaimEmbed,
+  createFundClaimEmbed,
   createBlackjackEmbed,
   createBlackjackResultEmbed,
   createCoinflipEmbed,

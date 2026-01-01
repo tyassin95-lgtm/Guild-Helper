@@ -66,7 +66,7 @@ const {
 
 // Gambling system imports
 const { handleGamblingBalance } = require('../../features/gambling/commands/gamblingbalance');
-const { handleGamblingDaily } = require('../../features/gambling/commands/gamblingdaily');
+const { handleGamblingFund } = require('../../features/gambling/commands/gamblingfund');
 const { handleGiveGamblingMoney } = require('../../features/gambling/commands/givegamblingmoney');
 const { handleBlackjack } = require('../../features/gambling/commands/blackjack');
 const { handleCoinflip } = require('../../features/gambling/commands/coinflip');
@@ -166,7 +166,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
       // Gambling commands
       if (name === 'gamblingbalance')     return handleGamblingBalance({ interaction, collections });
-      if (name === 'gamblingdaily')       return handleGamblingDaily({ interaction, collections });
+      if (name === 'gamblingfund')        return handleGamblingFund({ interaction, collections });
       if (name === 'givegamblingmoney')   return handleGiveGamblingMoney({ interaction, collections });
       if (name === 'blackjack')           return handleBlackjack({ interaction, collections });
       if (name === 'coinflip')            return handleCoinflip({ interaction, collections });

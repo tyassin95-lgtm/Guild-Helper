@@ -1,7 +1,7 @@
 const { getBalance, subtractBalance, addBalance } = require('./balanceManager');
 
 const KILL_COOLDOWN_HOURS = 2;
-const MIN_BALANCE_TO_KILL = 500;
+const MIN_BALANCE_TO_KILL = 20000;
 
 /**
  * Check if user can attempt a kill

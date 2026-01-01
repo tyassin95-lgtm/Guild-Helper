@@ -3,6 +3,10 @@ const { ObjectId } = require('mongodb');
 const { addBalance } = require('../utils/balanceManager');
 const { createTriviaEmbed, createTriviaResultEmbed } = require('../embeds/triviaEmbeds');
 
+const COINS_PER_CORRECT = 500;
+const PERFECT_RUN_BONUS = 2500;
+const TOTAL_QUESTIONS = 10;
+
 function createTriviaButtons(sessionId) {
   const row = new ActionRowBuilder();
 
@@ -65,13 +69,13 @@ async function handleTriviaButtons({ interaction, collections }) {
 
   if (isCorrect) {
     currentStreak++;
-    totalEarned = 50; // 50 coins per correct answer
+    totalEarned = COINS_PER_CORRECT; // 500 coins per correct answer
 
     // Award coins (NO gambling stat tracking - it's earned from trivia, not gambling)
     await addBalance({
       userId,
       guildId,
-      amount: 50,
+      amount: COINS_PER_CORRECT,
       collections
     });
 
@@ -81,7 +85,7 @@ async function handleTriviaButtons({ interaction, collections }) {
       {
         $inc: {
           totalCorrect: 1,
-          totalEarned: 50
+          totalEarned: COINS_PER_CORRECT
         },
         $set: {
           lastPlayed: new Date()
@@ -96,23 +100,23 @@ async function handleTriviaButtons({ interaction, collections }) {
     );
 
     // Check if this is question 10 and they got all 10 correct
-    if (session.currentQuestionIndex === 9 && currentStreak === 10) {
-      // Perfect run! 250 bonus (NO gambling stat tracking)
+    if (session.currentQuestionIndex === 9 && currentStreak === TOTAL_QUESTIONS) {
+      // Perfect run! 2500 bonus (NO gambling stat tracking)
       await addBalance({
         userId,
         guildId,
-        amount: 250,
+        amount: PERFECT_RUN_BONUS,
         collections
       });
 
-      totalEarned = 50 + 250; // This question + bonus
+      totalEarned = COINS_PER_CORRECT + PERFECT_RUN_BONUS; // This question + bonus
 
       await triviaStats.updateOne(
         { userId, guildId },
         {
           $inc: {
             perfectRuns: 1,
-            totalEarned: 250
+            totalEarned: PERFECT_RUN_BONUS
           },
           $max: {
             longestStreak: currentStreak
@@ -266,5 +270,8 @@ async function handleTriviaButtons({ interaction, collections }) {
 
 module.exports = {
   handleTriviaButtons,
-  createTriviaButtons
+  createTriviaButtons,
+  COINS_PER_CORRECT,
+  PERFECT_RUN_BONUS,
+  TOTAL_QUESTIONS
 };

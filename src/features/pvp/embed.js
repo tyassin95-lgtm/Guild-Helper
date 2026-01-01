@@ -127,7 +127,7 @@ async function createEventEmbed(event, client, collections) {
       new ButtonBuilder()
         .setCustomId(`pvp_rsvp_not_attending:${event._id}`)
         .setLabel('Not Attending')
-        .setStyle(ButtonStyle.Danger)
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji('❌'),
       new ButtonBuilder()
         .setCustomId(`pvp_rsvp_maybe:${event._id}`)
@@ -150,7 +150,7 @@ async function createEventEmbed(event, client, collections) {
       new ButtonBuilder()
         .setCustomId(`pvp_view_code:${event._id}`)
         .setLabel('View Code')
-        .setStyle(ButtonStyle.Secondary)
+        .setStyle(ButtonStyle.Danger)
         .setEmoji('🔐'),
       new ButtonBuilder()
         .setCustomId(`pvp_close_attendance:${event._id}`)

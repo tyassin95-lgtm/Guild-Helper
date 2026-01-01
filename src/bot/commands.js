@@ -585,8 +585,8 @@ async function registerSlashCommands(client) {
       ]
     },
     {
-      name: 'gamblingdaily',
-      description: 'Claim your daily gambling reward (500 coins, +streak bonuses).'
+      name: 'gamblingfund',
+      description: 'Claim your gambling fund (5000 coins every 8 hours, +bonuses every 5 uses).'
     },
     {
       name: 'blackjack',
@@ -628,7 +628,7 @@ async function registerSlashCommands(client) {
     },
     {
       name: 'trivia',
-      description: 'Answer trivia questions to earn coins! (50 per correct, 250 bonus for 10/10)'
+      description: 'Answer trivia questions to earn coins! (500 per correct, 2500 bonus for 10/10)'
     },
     {
       name: 'rob',

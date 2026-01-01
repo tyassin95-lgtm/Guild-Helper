@@ -18,7 +18,7 @@ async function ensureIndexes({
   applicationBlacklist,
   applicationCooldowns,
   gamblingBalances,
-  gamblingDailies,
+  gamblingFunds,
   gamblingGames,
   blackjackGames,
   triviaStats,
@@ -27,7 +27,7 @@ async function ensureIndexes({
   robStats,
   killCooldowns,
   killStats,
-  killBiases, // NEW
+  killBiases,
   transferHistory,
   broadcastSessions,
   broadcastUsers,
@@ -147,10 +147,11 @@ async function ensureIndexes({
   await gamblingBalances.createIndex({ guildId: 1 });
   await gamblingBalances.createIndex({ guildId: 1, balance: -1 }); // Sort by balance descending
 
-  // Gambling dailies
-  await gamblingDailies.createIndex({ userId: 1, guildId: 1 }, { unique: true });
-  await gamblingDailies.createIndex({ guildId: 1 });
-  await gamblingDailies.createIndex({ lastClaimed: 1 });
+  // Gambling funds (formerly dailies)
+  await gamblingFunds.createIndex({ userId: 1, guildId: 1 }, { unique: true });
+  await gamblingFunds.createIndex({ guildId: 1 });
+  await gamblingFunds.createIndex({ lastClaimed: 1 });
+  await gamblingFunds.createIndex({ guildId: 1, totalUses: -1 }); // Sort by total uses descending
 
   // Gambling games (history)
   await gamblingGames.createIndex({ guildId: 1 });
@@ -187,7 +188,7 @@ async function ensureIndexes({
   await killStats.createIndex({ guildId: 1, successfulKills: -1 }); // Most kills leaderboard
   await killStats.createIndex({ guildId: 1, totalCoinsStolen: -1 }); // Most stolen leaderboard
 
-  // Kill Bias Indexes - NEW
+  // Kill Bias Indexes
   await killBiases.createIndex({ userId: 1, guildId: 1 }, { unique: true });
   await killBiases.createIndex({ guildId: 1 });
   await killBiases.createIndex({ setBy: 1 });
