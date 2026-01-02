@@ -182,7 +182,12 @@ async function handleRaidVote({ interaction, collections }) {
   if (voteCount === updatedRaid.participants.length) {
     console.log(`✅ All ${voteCount} participants voted, processing immediately...`);
 
-    await processVotes(interaction.client, collections, raid._id);
+    await processVotes(
+      interaction.client,
+      collections,
+      raid._id,
+      raid.currentStep
+    );
   }
 }
 
@@ -342,7 +347,7 @@ async function presentDecision(client, collections, raidId, stepIndex) {
     setTimeout(async () => {
       console.log(`⏰ Vote timeout for step ${stepIndex + 1}, processing votes...`);
       try {
-        await processVotes(client, collections, raidId);
+        await processVotes(client, collections, raidId, stepIndex);
       } catch (err) {
         console.error(`❌ Error processing votes:`, err);
       }
@@ -353,7 +358,7 @@ async function presentDecision(client, collections, raidId, stepIndex) {
   }
 }
 
-async function processVotes(client, collections, raidId) {
+async function processVotes(client, collections, raidId, expectedStep) {
   const { gamblingRaids } = collections;
 
   console.log(`🗳️ Processing votes for raid ${raidId}`);
@@ -366,6 +371,14 @@ async function processVotes(client, collections, raidId) {
 
     if (!raid || raid.status !== 'active') {
       console.error(`❌ Raid not found or not active`);
+      return;
+    }
+
+    // 🛑 Ignore stale timeouts or duplicate calls
+    if (expectedStep !== undefined && raid.currentStep !== expectedStep) {
+      console.log(
+        `⚠️ Ignoring stale processVotes call (expected step ${expectedStep}, current step ${raid.currentStep})`
+      );
       return;
     }
 
