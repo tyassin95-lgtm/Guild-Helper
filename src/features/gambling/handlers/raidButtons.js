@@ -328,11 +328,8 @@ async function presentDecision(client, collections, raidId, stepIndex) {
       return;
     }
 
-    const message = await channel.messages.fetch(raid.messageId);
-    if (!message) {
-      console.error(`❌ Message not found`);
-      return;
-    }
+    // Create participant mentions
+    const participantMentions = raid.participants.map(id => `<@${id}>`).join(' ');
 
     const decisionEmbed = new EmbedBuilder()
       .setColor(0xE67E22)
@@ -352,7 +349,19 @@ async function presentDecision(client, collections, raidId, stepIndex) {
       );
     });
 
-    await message.edit({ embeds: [decisionEmbed], components: [buttons] });
+    // Send a NEW message with participant mentions instead of editing
+    const newMessage = await channel.send({ 
+      content: `🎰 **VOTE NOW!** ${participantMentions}`,
+      embeds: [decisionEmbed], 
+      components: [buttons] 
+    });
+
+    // Update the raid with the new message ID so we can track it
+    await gamblingRaids.updateOne(
+      { _id: raidId },
+      { $set: { messageId: newMessage.id } }
+    );
+
     console.log(`✅ Decision ${stepIndex + 1} presented successfully for raid ${raidId.toString()}`);
 
     setTimeout(() => {
