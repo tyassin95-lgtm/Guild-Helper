@@ -85,7 +85,7 @@ async function handleRaidJoin({ interaction, collections }) {
       `👥 **Participants:** ${updatedRaid.participants.length}/${MAX_PARTICIPANTS}\n` +
       `⏱️ **Signup closes:** <t:${Math.floor((updatedRaid.createdAt.getTime() + 3 * 60 * 1000) / 1000)}:R>\n\n` +
       `⚠️ **You must work TOGETHER to complete the raid!**\n` +
-      `Minimum 3 participant required to start.`
+      `Minimum 2 participant required to start.`
     )
     .addFields({
       name: '📋 Current Raiders',

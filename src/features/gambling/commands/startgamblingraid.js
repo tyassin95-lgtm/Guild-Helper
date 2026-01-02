@@ -2,7 +2,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { PermissionFlagsBits } = require('discord.js');
 
 const SIGNUP_DURATION = 3 * 60 * 1000; // 3 minutes
-const MIN_PARTICIPANTS = 3;
+const MIN_PARTICIPANTS = 2;
 const MAX_PARTICIPANTS = 6;
 
 async function handleStartGamblingRaid({ interaction, collections }) {
