@@ -112,11 +112,14 @@ async function handleRaidVote({ interaction, collections }) {
   const { gamblingRaids } = collections;
   const userId = interaction.user.id;
 
+  console.log(`🗳️ Vote button clicked - Raw ID string: "${raidIdString}", User: ${userId}, Choice: ${choiceIndex}`);
+
   // CRITICAL FIX: Convert string to ObjectId with better error handling
   let raidId;
   try {
     raidId = new ObjectId(raidIdString);
-    console.log(`🗳️ Processing vote - Raid ID: ${raidId.toString()}, User: ${userId}, Choice: ${choiceIndex}`);
+    console.log(`   Converted to ObjectId: ${raidId.toString()}`);
+    console.log(`   ObjectId hex: ${raidId.toHexString()}`);
   } catch (err) {
     console.error(`❌ Invalid raid ID format: "${raidIdString}"`, err);
     return interaction.reply({
@@ -125,28 +128,43 @@ async function handleRaidVote({ interaction, collections }) {
     });
   }
 
-  // Find raid with better error logging
-  const raid = await gamblingRaids.findOne({ _id: raidId });
+  // DIAGNOSTIC: Check what's actually in the database
+  console.log(`🔍 Searching for raid with _id: ${raidId.toString()}`);
+
+  // Try multiple query methods
+  const raidByObjectId = await gamblingRaids.findOne({ _id: raidId });
+  const raidByString = await gamblingRaids.findOne({ _id: raidIdString });
+  const allRaids = await gamblingRaids.find({}).toArray();
+
+  console.log(`   Query by ObjectId: ${raidByObjectId ? 'FOUND' : 'NOT FOUND'}`);
+  console.log(`   Query by String: ${raidByString ? 'FOUND' : 'NOT FOUND'}`);
+  console.log(`   Total raids in database: ${allRaids.length}`);
+
+  if (allRaids.length > 0) {
+    console.log(`   All raid IDs in database:`);
+    allRaids.forEach(r => {
+      console.log(`      - ${r._id.toString()} (status: ${r.status}, guild: ${r.guildId})`);
+    });
+  }
+
+  const raid = raidByObjectId || raidByString;
 
   if (!raid) {
-    // Debug: Check if raid exists with string ID (fallback)
-    const raidByString = await gamblingRaids.findOne({ '_id': raidIdString }).catch(() => null);
-    console.error(`❌ Raid not found with ObjectId: ${raidId.toString()}`);
-    console.error(`   Attempted fallback string lookup: ${raidByString ? 'FOUND' : 'NOT FOUND'}`);
-
-    // Show available raids for debugging
-    const availableRaids = await gamblingRaids.find({ guildId: interaction.guildId }).project({ _id: 1, status: 1 }).toArray();
-    console.error(`   Available raids in guild:`, availableRaids);
+    console.error(`❌ Raid lookup failed completely`);
+    console.error(`   Looking for: ${raidId.toString()}`);
+    console.error(`   Database has ${allRaids.length} total raid(s)`);
 
     return interaction.reply({
-      content: '❌ This raid no longer exists or has ended.',
+      content: '❌ This raid no longer exists or has ended. The raid may have been cleaned up.',
       flags: [64]
     });
   }
 
+  console.log(`✅ Found raid: ${raid._id.toString()}, status: ${raid.status}`);
+
   if (raid.status !== 'active') {
     return interaction.reply({
-      content: '❌ This raid is not currently active.',
+      content: `❌ This raid is not currently active (status: ${raid.status}).`,
       flags: [64]
     });
   }
@@ -180,7 +198,7 @@ async function handleRaidVote({ interaction, collections }) {
     }
   );
 
-  console.log(`✅ Vote recorded for user ${userId} on raid ${raidId.toString()}`);
+  console.log(`✅ Vote recorded for user ${userId} on raid ${raid._id.toString()}`);
 
   await interaction.reply({
     content: `✅ Vote recorded!`,
@@ -202,7 +220,7 @@ async function handleRaidVote({ interaction, collections }) {
       raid.currentStep
     );
   } else {
-    console.log(`⏳ ${voteCount}/${updatedRaid.participants.length} votes received for raid ${raidId.toString()}`);
+    console.log(`⏳ ${voteCount}/${updatedRaid.participants.length} votes received for raid ${raid._id.toString()}`);
   }
 }
 
@@ -293,11 +311,20 @@ async function presentDecision(client, collections, raidId, stepIndex) {
   console.log(`   Raid ID type: ${typeof raidId}, Is ObjectId: ${raidId instanceof ObjectId}`);
 
   try {
-    const raid = await gamblingRaids.findOne({ _id: raidId });
-    if (!raid) {
-      console.error(`❌ Raid not found in presentDecision: ${raidId.toString()}`);
+    // DIAGNOSTIC: Check if raid still exists before presenting decision
+    const raidCheck = await gamblingRaids.findOne({ _id: raidId });
+    if (!raidCheck) {
+      console.error(`❌ CRITICAL: Raid ${raidId.toString()} disappeared before presenting decision!`);
+      const allRaids = await gamblingRaids.find({}).toArray();
+      console.error(`   Total raids in DB: ${allRaids.length}`);
+      if (allRaids.length > 0) {
+        console.error(`   Available raids:`);
+        allRaids.forEach(r => console.error(`      - ${r._id.toString()} (status: ${r.status})`));
+      }
       return;
     }
+
+    const raid = raidCheck;
 
     await gamblingRaids.updateOne(
       { _id: raidId },
@@ -343,9 +370,11 @@ async function presentDecision(client, collections, raidId, stepIndex) {
 
     const buttons = new ActionRowBuilder();
     step.choices.forEach((choice, index) => {
+      const buttonId = `raid_vote:${raidId.toString()}:${index}`;
+      console.log(`   Creating button ${index}: ${buttonId}`);
       buttons.addComponents(
         new ButtonBuilder()
-          .setCustomId(`raid_vote:${raidId.toString()}:${index}`)
+          .setCustomId(buttonId)
           .setLabel(choice.label)
           .setEmoji(choice.emoji)
           .setStyle(ButtonStyle.Primary)
@@ -354,6 +383,10 @@ async function presentDecision(client, collections, raidId, stepIndex) {
 
     await message.edit({ embeds: [decisionEmbed], components: [buttons] });
     console.log(`✅ Decision ${stepIndex + 1} presented successfully for raid ${raidId.toString()}`);
+
+    // DIAGNOSTIC: Verify raid still exists after presenting
+    const postPresentCheck = await gamblingRaids.findOne({ _id: raidId });
+    console.log(`   Post-present check: Raid ${postPresentCheck ? 'EXISTS' : 'MISSING'}`);
 
     setTimeout(() => {
       processVotes(client, collections, raidId, stepIndex).catch(console.error);
