@@ -83,7 +83,7 @@ async function handleRaidJoin({ interaction, collections }) {
       '**A dangerous raid is forming!**\n\n' +
       `💰 **Prize:** Unknown\n` +
       `👥 **Participants:** ${updatedRaid.participants.length}/${MAX_PARTICIPANTS}\n` +
-      `⏱️ **Signup closes:** <t:${Math.floor(updatedRaid.expiresAt.getTime() / 1000)}:R>\n\n` +
+      `⏱️ **Signup closes:** <t:${Math.floor((updatedRaid.createdAt.getTime() + 3 * 60 * 1000) / 1000)}:R>\n\n` +
       `⚠️ **You must work TOGETHER to complete the raid!**\n` +
       `Minimum 1 participant required to start.`
     )
