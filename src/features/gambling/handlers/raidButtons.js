@@ -112,25 +112,34 @@ async function handleRaidVote({ interaction, collections }) {
   const { gamblingRaids } = collections;
   const userId = interaction.user.id;
 
-  // CRITICAL FIX: Convert string to ObjectId
+  // CRITICAL FIX: Convert string to ObjectId with better error handling
   let raidId;
   try {
     raidId = new ObjectId(raidIdString);
+    console.log(`🗳️ Processing vote - Raid ID: ${raidId.toString()}, User: ${userId}, Choice: ${choiceIndex}`);
   } catch (err) {
-    console.error(`❌ Invalid raid ID format: ${raidIdString}`);
+    console.error(`❌ Invalid raid ID format: "${raidIdString}"`, err);
     return interaction.reply({
-      content: '❌ Invalid raid ID.',
+      content: '❌ Invalid raid ID format.',
       flags: [64]
     });
   }
 
-  // Find raid
+  // Find raid with better error logging
   const raid = await gamblingRaids.findOne({ _id: raidId });
 
   if (!raid) {
-    console.log(`❌ Raid not found: ${raidIdString}`);
+    // Debug: Check if raid exists with string ID (fallback)
+    const raidByString = await gamblingRaids.findOne({ '_id': raidIdString }).catch(() => null);
+    console.error(`❌ Raid not found with ObjectId: ${raidId.toString()}`);
+    console.error(`   Attempted fallback string lookup: ${raidByString ? 'FOUND' : 'NOT FOUND'}`);
+
+    // Show available raids for debugging
+    const availableRaids = await gamblingRaids.find({ guildId: interaction.guildId }).project({ _id: 1, status: 1 }).toArray();
+    console.error(`   Available raids in guild:`, availableRaids);
+
     return interaction.reply({
-      content: '❌ This raid no longer exists.',
+      content: '❌ This raid no longer exists or has ended.',
       flags: [64]
     });
   }
@@ -171,6 +180,8 @@ async function handleRaidVote({ interaction, collections }) {
     }
   );
 
+  console.log(`✅ Vote recorded for user ${userId} on raid ${raidId.toString()}`);
+
   await interaction.reply({
     content: `✅ Vote recorded!`,
     flags: [64]
@@ -190,17 +201,22 @@ async function handleRaidVote({ interaction, collections }) {
       raid._id,
       raid.currentStep
     );
+  } else {
+    console.log(`⏳ ${voteCount}/${updatedRaid.participants.length} votes received for raid ${raidId.toString()}`);
   }
 }
 
 async function startScenario(client, collections, raidId, scenario) {
   const { gamblingRaids } = collections;
 
+  console.log(`🎬 Starting scenario for raid ${raidId.toString()}`);
+  console.log(`   Raid ID type: ${typeof raidId}, Is ObjectId: ${raidId instanceof ObjectId}`);
+
   try {
     const raid = await gamblingRaids.findOne({ _id: raidId });
 
     if (!raid) {
-      console.error(`❌ Raid ${raidId} not found in startScenario`);
+      console.error(`❌ Raid ${raidId.toString()} not found in startScenario`);
       return;
     }
 
@@ -241,11 +257,13 @@ async function startScenario(client, collections, raidId, scenario) {
 
     await message.edit({ embeds: [introEmbed], components: [] });
 
-    console.log(`✅ Raid intro shown, scheduling first decision in 30 seconds...`);
+    console.log(`✅ Raid intro shown for raid ID: ${raidId.toString()}`);
+    console.log(`   Raid type: ${typeof raidId}, Is ObjectId: ${raidId instanceof ObjectId}`);
+    console.log(`   Scheduling first decision in 30 seconds...`);
 
     // Wait 30 seconds, then start first decision
     setTimeout(async () => {
-      console.log(`⏰ 30 seconds elapsed, presenting first decision...`);
+      console.log(`⏰ 30 seconds elapsed, presenting first decision for raid ${raidId.toString()}...`);
       try {
         await presentDecision(client, collections, raidId, 0);
       } catch (err) {
@@ -258,16 +276,10 @@ async function startScenario(client, collections, raidId, scenario) {
   }
 }
 
-// --- presentDecision, processVotes, finishRaid all same as original ---
-// The only critical fixes added:
-// - Ensure raidId is ObjectId
-// - Ensure votes objects exist
-// - Lock processingStep before processing
-// - Correct tie/random first-choice handling
-
 async function presentDecision(client, collections, raidId, stepIndex) {
   const { gamblingRaids } = collections;
 
+  // Ensure raidId is ObjectId
   if (!(raidId instanceof ObjectId)) {
     try {
       raidId = new ObjectId(raidId);
@@ -277,34 +289,50 @@ async function presentDecision(client, collections, raidId, stepIndex) {
     }
   }
 
-  console.log(`📊 Presenting decision ${stepIndex + 1} for raid ${raidId}`);
+  console.log(`📊 Presenting decision ${stepIndex + 1} for raid ${raidId.toString()}`);
+  console.log(`   Raid ID type: ${typeof raidId}, Is ObjectId: ${raidId instanceof ObjectId}`);
 
   try {
     const raid = await gamblingRaids.findOne({ _id: raidId });
-    if (!raid) return console.error(`❌ Raid not found`);
+    if (!raid) {
+      console.error(`❌ Raid not found in presentDecision: ${raidId.toString()}`);
+      return;
+    }
 
     await gamblingRaids.updateOne(
       { _id: raidId },
       { $set: { processingStep: false } }
     );
 
-    if (raid.status !== 'active') return console.error(`❌ Raid not active`);
+    if (raid.status !== 'active') {
+      console.error(`❌ Raid not active in presentDecision: ${raid.status}`);
+      return;
+    }
 
     const { getScenarioById } = require('../utils/raidScenarios');
     const scenario = getScenarioById(raid.scenarioId);
-    if (!scenario) return console.error(`❌ Scenario not found: ${raid.scenarioId}`);
+    if (!scenario) {
+      console.error(`❌ Scenario not found: ${raid.scenarioId}`);
+      return;
+    }
 
     const step = scenario.steps[stepIndex];
     if (!step) {
-      console.log(`✅ No more steps (step ${stepIndex}), finishing raid...`);
+      console.log(`✅ No more steps (step ${stepIndex}), finishing raid ${raidId.toString()}...`);
       return finishRaid(client, collections, raidId);
     }
 
     const channel = await client.channels.fetch(raid.channelId);
-    if (!channel) return console.error(`❌ Channel not found`);
+    if (!channel) {
+      console.error(`❌ Channel not found`);
+      return;
+    }
 
     const message = await channel.messages.fetch(raid.messageId);
-    if (!message) return console.error(`❌ Message not found`);
+    if (!message) {
+      console.error(`❌ Message not found`);
+      return;
+    }
 
     const decisionEmbed = new EmbedBuilder()
       .setColor(0xE67E22)
@@ -325,7 +353,7 @@ async function presentDecision(client, collections, raidId, stepIndex) {
     });
 
     await message.edit({ embeds: [decisionEmbed], components: [buttons] });
-    console.log(`✅ Decision ${stepIndex + 1} presented successfully`);
+    console.log(`✅ Decision ${stepIndex + 1} presented successfully for raid ${raidId.toString()}`);
 
     setTimeout(() => {
       processVotes(client, collections, raidId, stepIndex).catch(console.error);
@@ -339,20 +367,37 @@ async function presentDecision(client, collections, raidId, stepIndex) {
 async function processVotes(client, collections, raidId, expectedStep) {
   const { gamblingRaids } = collections;
 
-  console.log(`🗳️ Processing votes for raid ${raidId}`);
+  // Ensure raidId is ObjectId
+  if (!(raidId instanceof ObjectId)) {
+    try {
+      raidId = new ObjectId(raidId);
+    } catch (err) {
+      console.error('❌ Invalid raidId in processVotes:', raidId);
+      return;
+    }
+  }
+
+  console.log(`🗳️ Processing votes for raid ${raidId.toString()}, step ${expectedStep}`);
+  console.log(`   Raid ID type: ${typeof raidId}, Is ObjectId: ${raidId instanceof ObjectId}`);
 
   let locked = false;
 
   try {
     const raid = await gamblingRaids.findOne({ _id: raidId });
-    if (!raid || raid.status !== 'active') return;
-
-    if (expectedStep !== undefined && raid.currentStep !== expectedStep) {
-      console.log(`⚠️ Ignoring stale processVotes call`);
+    if (!raid || raid.status !== 'active') {
+      console.warn(`⚠️ Cannot process votes - raid ${raidId.toString()} not found or inactive`);
       return;
     }
 
-    if (raid.processingStep) return console.log('⚠️ Votes already processed for this step');
+    if (expectedStep !== undefined && raid.currentStep !== expectedStep) {
+      console.log(`⚠️ Ignoring stale processVotes call for step ${expectedStep}, current step is ${raid.currentStep}`);
+      return;
+    }
+
+    if (raid.processingStep) {
+      console.log('⚠️ Votes already processing for this step');
+      return;
+    }
 
     await gamblingRaids.updateOne({ _id: raidId }, { $set: { processingStep: true } });
     locked = true;
@@ -372,6 +417,8 @@ async function processVotes(client, collections, raidId, expectedStep) {
     Object.values(currentVotes).forEach(idx => {
       voteCounts[idx] = (voteCounts[idx] || 0) + 1;
     });
+
+    console.log(`📊 Vote counts for step ${raid.currentStep}:`, voteCounts);
 
     // Determine winning choice
     let winningChoice = 0;
@@ -394,6 +441,9 @@ async function processVotes(client, collections, raidId, expectedStep) {
       winningChoice = tiedChoices.length > 0
         ? tiedChoices[Math.floor(Math.random() * tiedChoices.length)]
         : Math.floor(Math.random() * step.choices.length);
+      console.log(`🎲 Tie or no votes - randomly selected choice ${winningChoice}`);
+    } else {
+      console.log(`✅ Winning choice: ${winningChoice} with ${maxVotes} vote(s)`);
     }
 
     const chosenOption = step.choices[winningChoice];
@@ -420,6 +470,8 @@ async function processVotes(client, collections, raidId, expectedStep) {
 
     await message.edit({ embeds: [resultEmbed], components: [] });
 
+    console.log(`✅ Moving to step ${nextStepIndex} in 30 seconds...`);
+
     setTimeout(() => {
       presentDecision(client, collections, raidId, nextStepIndex).catch(console.error);
     }, RESULT_DISPLAY_TIME);
@@ -436,7 +488,17 @@ async function processVotes(client, collections, raidId, expectedStep) {
 async function finishRaid(client, collections, raidId) {
   const { gamblingRaids } = collections;
 
-  console.log(`🏁 Finishing raid ${raidId}`);
+  // Ensure raidId is ObjectId
+  if (!(raidId instanceof ObjectId)) {
+    try {
+      raidId = new ObjectId(raidId);
+    } catch (err) {
+      console.error('❌ Invalid raidId in finishRaid:', raidId);
+      return;
+    }
+  }
+
+  console.log(`🏁 Finishing raid ${raidId.toString()}`);
 
   try {
     const raid = await gamblingRaids.findOneAndUpdate(
@@ -445,7 +507,10 @@ async function finishRaid(client, collections, raidId) {
       { returnDocument: 'after' }
     ).then(res => res.value);
 
-    if (!raid) return console.error(`❌ Raid not found`);
+    if (!raid) {
+      console.error(`❌ Raid not found in finishRaid`);
+      return;
+    }
 
     const { getScenarioById } = require('../utils/raidScenarios');
     const scenario = getScenarioById(raid.scenarioId);

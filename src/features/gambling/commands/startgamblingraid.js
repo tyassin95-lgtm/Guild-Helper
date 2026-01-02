@@ -39,6 +39,9 @@ async function handleStartGamblingRaid({ interaction, collections }) {
   // Generate random loot amount (100k - 1M)
   const lootAmount = Math.floor(Math.random() * (1000000 - 100000 + 1)) + 100000;
 
+  console.log(`🎰 Creating gambling raid in ${interaction.guild.name}`);
+  console.log(`   Prize pool: ${lootAmount.toLocaleString()} coins`);
+
   // Create signup embed
   const signupEmbed = new EmbedBuilder()
     .setColor(0xFFD700) // Gold
@@ -86,7 +89,7 @@ async function handleStartGamblingRaid({ interaction, collections }) {
     winner: null,
     scenarioId: null,
 
-    // 🔒 NEW
+    // Processing control
     processingStep: false,
     voteTimeoutId: null,
 
@@ -94,31 +97,52 @@ async function handleStartGamblingRaid({ interaction, collections }) {
     expiresAt: new Date(Date.now() + SIGNUP_DURATION)
   };
 
-
   const result = await gamblingRaids.insertOne(raid);
 
-  // Schedule raid start after 5 minutes
+  // VERIFY: Log the created raid ID
+  console.log(`✅ Gambling raid created:`);
+  console.log(`   ID: ${result.insertedId.toString()}`);
+  console.log(`   Type: ${typeof result.insertedId}`);
+  console.log(`   Is ObjectId: ${result.insertedId instanceof require('mongodb').ObjectId}`);
+  console.log(`   Guild: ${interaction.guild.name}`);
+  console.log(`   Channel: ${interaction.channel.name}`);
+  console.log(`   Message ID: ${message.id}`);
+  console.log(`   Prize: ${lootAmount.toLocaleString()} coins`);
+
+  // Schedule raid start after signup duration
   setTimeout(async () => {
+    console.log(`⏰ Signup period ended for raid ${result.insertedId.toString()}`);
     await startRaidPhase(interaction.client, collections, result.insertedId);
   }, SIGNUP_DURATION);
 
-  console.log(`✅ Gambling raid created in ${interaction.guild.name} with ${lootAmount.toLocaleString()} coins prize`);
+  console.log(`⏳ Raid signup will close in ${SIGNUP_DURATION / 1000} seconds`);
 }
 
 async function startRaidPhase(client, collections, raidId) {
   const { gamblingRaids } = collections;
 
+  console.log(`🎬 Attempting to start raid phase for ${raidId.toString()}`);
+
   try {
     const raid = await gamblingRaids.findOne({ _id: raidId });
 
-    if (!raid || raid.status !== 'signup') {
-      console.log('Raid not found or already started');
+    if (!raid) {
+      console.error(`❌ Raid not found in startRaidPhase: ${raidId.toString()}`);
       return;
     }
+
+    if (raid.status !== 'signup') {
+      console.log(`⚠️ Raid ${raidId.toString()} already started or finished (status: ${raid.status})`);
+      return;
+    }
+
+    console.log(`📊 Raid ${raidId.toString()} has ${raid.participants.length} participant(s)`);
 
     // Check minimum participants
     if (raid.participants.length < MIN_PARTICIPANTS) {
       // Cancel raid - not enough participants
+      console.log(`❌ Cancelling raid ${raidId.toString()} - not enough participants`);
+
       const channel = await client.channels.fetch(raid.channelId);
       const message = await channel.messages.fetch(raid.messageId);
 
@@ -138,13 +162,15 @@ async function startRaidPhase(client, collections, raidId) {
       // Delete raid from database
       await gamblingRaids.deleteOne({ _id: raidId });
 
-      console.log(`❌ Raid cancelled - not enough participants`);
+      console.log(`✅ Raid cancelled and removed from database`);
       return;
     }
 
     // Select random scenario
     const { getRandomScenario } = require('../utils/raidScenarios');
     const scenario = getRandomScenario();
+
+    console.log(`🎲 Selected scenario: ${scenario.title} (${scenario.id})`);
 
     // Update raid status
     await gamblingRaids.updateOne(
@@ -158,12 +184,14 @@ async function startRaidPhase(client, collections, raidId) {
       }
     );
 
+    console.log(`✅ Raid ${raidId.toString()} status updated to 'active'`);
+
     // Start the scenario
     const { startScenario } = require('../handlers/raidButtons');
     await startScenario(client, collections, raidId, scenario);
 
   } catch (error) {
-    console.error('Error starting raid phase:', error);
+    console.error(`❌ Error starting raid phase for ${raidId.toString()}:`, error);
   }
 }
 
