@@ -164,11 +164,15 @@ async function ensureIndexes({
   await blackjackGames.createIndex({ userId: 1, guildId: 1 }, { unique: true });
   await blackjackGames.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL
 
-  // Gambling raid system indexes (NEW)
+  // Gambling raid system indexes (FIXED - removed problematic TTL)
   await gamblingRaids.createIndex({ guildId: 1 });
   await gamblingRaids.createIndex({ guildId: 1, status: 1 });
   await gamblingRaids.createIndex({ messageId: 1 });
-  await gamblingRaids.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index
+  // REMOVED: TTL index that was causing immediate deletion
+  // await gamblingRaids.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+  // Optional: Add TTL with buffer for cleanup of old finished raids
+  await gamblingRaids.createIndex({ finishedAt: 1 }, { expireAfterSeconds: 86400 }); // Delete 24h after finishing
 
   // Trivia System Indexes
   await triviaStats.createIndex({ userId: 1, guildId: 1 }, { unique: true });

@@ -76,6 +76,7 @@ async function handleStartGamblingRaid({ interaction, collections }) {
   });
 
   // Create raid document
+  // FIXED: Removed expiresAt field to prevent TTL deletion during active raid
   const raid = {
     guildId,
     channelId: interaction.channelId,
@@ -93,8 +94,8 @@ async function handleStartGamblingRaid({ interaction, collections }) {
     processingStep: false,
     voteTimeoutId: null,
 
-    createdAt: new Date(),
-    expiresAt: new Date(Date.now() + SIGNUP_DURATION)
+    createdAt: new Date()
+    // REMOVED: expiresAt field (was causing TTL to delete raid during gameplay)
   };
 
   const result = await gamblingRaids.insertOne(raid);
