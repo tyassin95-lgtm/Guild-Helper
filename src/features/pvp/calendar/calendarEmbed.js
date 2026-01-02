@@ -188,7 +188,7 @@ function buildDayMessage(dayIndex, eventsByDay, startDate, guildId) {
       // Apply strikethrough if event is closed
       if (isClosed) {
         // Event line with strikethrough
-        content += `${eventNumber}~~${emoji} **${timeDisplay}** • ${typeName}~~ **(CANCELED)**\n`;
+        content += `${eventNumber}~~${emoji} **${timeDisplay}** • ${typeName}~~ **(CLOSED)**\n`;
 
         // Add location if it exists (with strikethrough)
         if (event.location) {
@@ -199,8 +199,8 @@ function buildDayMessage(dayIndex, eventsByDay, startDate, guildId) {
         const bonusPoints = event.bonusPoints || 10;
         content += `  ~~└─ Bonus: +${bonusPoints} roll points~~\n`;
 
-        // Add "Go to Event" link (still clickable but marked as canceled)
-        content += `  └─ [Go to Event](${eventLink}) *(Event Canceled)*\n`;
+        // Add "Go to Event" link (still clickable but marked as closeed)
+        content += `  └─ [Go to Event](${eventLink}) *(Event Closed)*\n`;
       } else {
         // Normal event line
         content += `${eventNumber}${emoji} **${timeDisplay}** • ${typeName}\n`;
