@@ -84,7 +84,7 @@ async function handleRob({ interaction, collections }) {
     const stealPercentage = 0.10 + Math.random() * 0.15; // 10-25%
     const stolenAmount = Math.min(
       Math.floor(targetBalance.balance * stealPercentage),
-      5000
+      500000
     );
 
     // Transfer coins
