@@ -9,6 +9,7 @@ async function registerSlashCommands(client) {
       name: 'excluderole',
       description: 'Admins: Exclude/include roles from tracking.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 3, // STRING
@@ -32,17 +33,20 @@ async function registerSlashCommands(client) {
     {
       name: 'playerlist',
       description: 'Admins: View all players and their party info.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'partiespanel',
       description: 'Admins: Create a stylized parties panel in this channel.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'resetparties',
       description: 'Admins: Reset party system data (DANGEROUS!).',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 3, // STRING
@@ -65,18 +69,21 @@ async function registerSlashCommands(client) {
     {
       name: 'remindparty',
       description: 'Admins: Send a DM to users who haven\'t set up their party info.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'guildroster',
       description: 'Admins: Create/update an auto-updating guild roster in this channel.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     // Screenshot storage command
     {
       name: 'screenshot',
       description: 'Admins: Manage gear screenshot storage system.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 3, // STRING
@@ -115,22 +122,26 @@ async function registerSlashCommands(client) {
     {
       name: 'pvpevent',
       description: 'Admins: Create a PvP event with attendance tracking.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'pvpcalendar',
       description: 'Admins: Create a PvP calendar showing upcoming events.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'resetbonuses',
       description: 'Admins: Reset all PvP bonuses (DANGEROUS!).',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'pvpcodemanagers',
       description: 'Admins: Manage who can view PvP attendance codes.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 3, // STRING
@@ -154,34 +165,40 @@ async function registerSlashCommands(client) {
     {
       name: 'itemroll',
       description: 'Admins: Create an item roll event where players can roll for loot.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     // Raid Commands
     {
       name: 'createraid',
       description: 'Admins: Create a raid event with attendance tracking.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'deleteraid',
       description: 'Admins: Delete a raid event.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'closeraid',
       description: 'Admins: Close or reopen a raid event.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     // Application System Commands
     {
       name: 'createapplication',
       description: 'Admins: Create a new application panel.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'deleteapplication',
       description: 'Admins: Delete an application panel.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 3, // STRING
@@ -195,6 +212,7 @@ async function registerSlashCommands(client) {
       name: 'editapplication',
       description: 'Admins: Edit an existing application panel.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 3, // STRING
@@ -208,6 +226,7 @@ async function registerSlashCommands(client) {
       name: 'applicationstats',
       description: 'Admins: View application statistics.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 3, // STRING
@@ -221,6 +240,7 @@ async function registerSlashCommands(client) {
       name: 'applicationhistory',
       description: 'Admins: View application history for a user.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 6, // USER
@@ -234,6 +254,7 @@ async function registerSlashCommands(client) {
       name: 'blacklist',
       description: 'Admins: Manage application blacklist.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 3, // STRING
@@ -264,6 +285,7 @@ async function registerSlashCommands(client) {
       name: 'clearoldtickets',
       description: 'Admins: Clean up old closed application tickets.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 4, // INTEGER
@@ -280,6 +302,7 @@ async function registerSlashCommands(client) {
       name: 'givegamblingmoney',
       description: 'Admins: Grant gambling coins to a user.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 6, // USER
@@ -300,13 +323,15 @@ async function registerSlashCommands(client) {
     {
       name: 'startgamblingraid',
       description: 'Admins: Start an interactive gambling raid event (100k-1M coins prize).',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     // Kill Bias Command (Admin)
     {
       name: 'killbias',
       description: 'Admins: Secretly adjust kill success rates for users.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 3, // STRING
@@ -347,6 +372,7 @@ async function registerSlashCommands(client) {
       name: 'startbroadcast',
       description: 'Admins: Start broadcasting selected users as an audio stream.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 7, // CHANNEL
@@ -360,12 +386,14 @@ async function registerSlashCommands(client) {
     {
       name: 'stopbroadcast',
       description: 'Admins: Stop active broadcast stream.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'addbroadcaster',
       description: 'Admins: Add user to broadcast list (their voice will be streamed).',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 6, // USER
@@ -379,6 +407,7 @@ async function registerSlashCommands(client) {
       name: 'removebroadcaster',
       description: 'Admins: Remove user from broadcast list.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 6, // USER
@@ -391,23 +420,27 @@ async function registerSlashCommands(client) {
     {
       name: 'listbroadcasters',
       description: 'Admins: View all users being broadcast.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'broadcaststatus',
       description: 'Admins: View current broadcast status and stream URL.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     // Wishlist Commands (Admin)
     {
       name: 'wishlists',
       description: 'Admins: Create an auto-updating wishlist panel in this channel.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'resetuserwishlist',
       description: 'Admins: Reset a specific user\'s wishlist.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 6, // USER
@@ -421,6 +454,7 @@ async function registerSlashCommands(client) {
       name: 'freezewishlists',
       description: 'Admins: Freeze or unfreeze wishlist submissions.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 3, // STRING
@@ -437,24 +471,28 @@ async function registerSlashCommands(client) {
     {
       name: 'wishlistreminder',
       description: 'Admins: Send DM reminders to users without submitted wishlists.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     {
       name: 'giveitem',
       description: 'Admins: Mark wishlisted items as given/distributed.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     // Poll Commands
     {
       name: 'guildpoll',
       description: 'Admins: Create a guild-wide poll with voting options.',
-      default_member_permissions: ADMIN
+      default_member_permissions: ADMIN,
+      dm_permission: false
     },
     // AutoMod Commands
     {
       name: 'automod',
       description: 'Admins: Configure automatic moderation system.',
       default_member_permissions: ADMIN,
+      dm_permission: false,
       options: [
         {
           type: 1, // SUB_COMMAND
@@ -565,21 +603,25 @@ async function registerSlashCommands(client) {
     // ----- Everyone -----
     {
       name: 'myinfo',
-      description: 'View and manage your party information.'
+      description: 'View and manage your party information.',
+      dm_permission: false
     },
     {
       name: 'viewparties',
-      description: 'View all static parties.'
+      description: 'View all static parties.',
+      dm_permission: false
     },
     // Wishlist Commands (Everyone)
     {
       name: 'mywishlist',
-      description: 'Setup and manage your item wishlist.'
+      description: 'Setup and manage your item wishlist.',
+      dm_permission: false
     },
     // Gambling Commands (Everyone)
     {
       name: 'gamblingbalance',
       description: 'Check your or another user\'s gambling balance.',
+      dm_permission: false,
       options: [
         {
           type: 6, // USER
@@ -591,11 +633,13 @@ async function registerSlashCommands(client) {
     },
     {
       name: 'gamblingfund',
-      description: 'Claim your gambling fund (5000 coins every 8 hours, +bonuses every 5 uses).'
+      description: 'Claim your gambling fund (5000 coins every 8 hours, +bonuses every 5 uses).',
+      dm_permission: false
     },
     {
       name: 'blackjack',
       description: 'Play blackjack and bet your gambling coins!',
+      dm_permission: false,
       options: [
         {
           type: 4, // INTEGER
@@ -610,6 +654,7 @@ async function registerSlashCommands(client) {
     {
       name: 'coinflip',
       description: 'Flip a coin and bet on the outcome!',
+      dm_permission: false,
       options: [
         {
           type: 4, // INTEGER
@@ -633,11 +678,13 @@ async function registerSlashCommands(client) {
     },
     {
       name: 'trivia',
-      description: 'Answer trivia questions to earn coins! (500 per correct, 2500 bonus for 10/10)'
+      description: 'Answer trivia questions to earn coins! (500 per correct, 2500 bonus for 10/10)',
+      dm_permission: false
     },
     {
       name: 'rob',
       description: 'Attempt to rob another user',
+      dm_permission: false,
       options: [
         {
           type: 6, // USER
@@ -650,6 +697,7 @@ async function registerSlashCommands(client) {
     {
       name: 'kill',
       description: 'Attempt to eliminate a user',
+      dm_permission: false,
       options: [
         {
           type: 6, // USER
@@ -662,6 +710,7 @@ async function registerSlashCommands(client) {
     {
       name: 'send',
       description: 'Send coins to another user',
+      dm_permission: false,
       options: [
         {
           type: 6, // USER
@@ -682,6 +731,7 @@ async function registerSlashCommands(client) {
     {
       name: 'leaderboard',
       description: 'View the server gambling leaderboard.',
+      dm_permission: false,
       options: [
         {
           type: 3, // STRING
