@@ -637,7 +637,7 @@ async function registerSlashCommands(client) {
     },
     {
       name: 'rob',
-      description: 'Attempt to rob another user (8 hour cooldown, risky!)',
+      description: 'Attempt to rob another user',
       options: [
         {
           type: 6, // USER
@@ -649,7 +649,7 @@ async function registerSlashCommands(client) {
     },
     {
       name: 'kill',
-      description: 'Attempt to eliminate a user - winner takes ALL (12h cooldown, 50% chance)',
+      description: 'Attempt to eliminate a user',
       options: [
         {
           type: 6, // USER
@@ -675,7 +675,7 @@ async function registerSlashCommands(client) {
           description: 'Amount of coins to send',
           required: true,
           min_value: 10,
-          max_value: 5000000
+          max_value: 1000000
         }
       ]
     },

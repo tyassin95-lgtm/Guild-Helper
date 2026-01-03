@@ -3,8 +3,8 @@ const { getBalance, subtractBalance, addBalance } = require('../utils/balanceMan
 const { createTransferEmbed, createTransferConfirmEmbed, createTransferReceiptEmbed } = require('../embeds/transferEmbeds');
 
 const MIN_TRANSFER = 10;
-const MAX_TRANSFER = 50000;
-const CONFIRM_THRESHOLD = 5000; // Amounts >= this require confirmation
+const MAX_TRANSFER = 1000000;
+const CONFIRM_THRESHOLD = 250000; // Amounts >= this require confirmation
 
 async function handleSend({ interaction, collections }) {
   const senderId = interaction.user.id;
