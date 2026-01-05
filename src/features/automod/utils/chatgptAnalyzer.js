@@ -23,9 +23,10 @@ Analyze messages for:
 IMPORTANT CONTEXT RULES:
 - Academic or educational discussions about these topics are ACCEPTABLE
 - Self-deprecating humor is ACCEPTABLE
+- Talking about something that happened to you is ACCEPTABLE as long as its not directed at someone in the chat
 - Song lyrics or quotes (when clearly identified) may be ACCEPTABLE
 - Friendly banter between friends is usually ACCEPTABLE
-- Direct insults, slurs, or attacks are NEVER acceptable
+- Direct insults, slurs, or attacks are NOT acceptable
 
 Respond ONLY with valid JSON in this exact format:
 {
