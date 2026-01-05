@@ -15,9 +15,9 @@ async function handleCoinflip({ interaction, collections }) {
     });
   }
 
-  if (betAmount > 5000000) {
+  if (betAmount > 50000000) {
     return interaction.reply({
-      content: '❌ Maximum bet is **5,000,000 coins**.',
+      content: '❌ Maximum bet is **50,000,000 coins**.',
       flags: [64] // MessageFlags.Ephemeral
     });
   }

@@ -25,9 +25,9 @@ async function handleBlackjack({ interaction, collections }) {
     });
   }
 
-  if (betAmount > 5000000) {
+  if (betAmount > 50000000) {
     return interaction.editReply({
-      content: '❌ Maximum bet is **5,000,000 coins**.',
+      content: '❌ Maximum bet is **50,000,000 coins**.',
       components: []
     });
   }
