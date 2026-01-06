@@ -45,14 +45,9 @@ async function takeModerationAction({ message, reason, severity, settings, colle
   const timeoutDuration = settings.timeoutDuration || 300; // Default 5 minutes
 
   try {
-    // 1. Delete the message
-    await message.delete().catch(err => {
-      console.error('Failed to delete message:', err);
-    });
-
-    // 2. Handle based on severity
+    // Handle based on severity
     if (severity === 'low') {
-      // LOW SEVERITY: Issue warning
+      // LOW SEVERITY: Issue warning, DO NOT DELETE MESSAGE
       await addWarning({
         collections,
         guildId: guild.id,
@@ -75,7 +70,11 @@ async function takeModerationAction({ message, reason, severity, settings, colle
       });
 
       if (reachedLimit) {
-        // Timeout user after reaching warning limit
+        // Delete message and timeout user after reaching warning limit
+        await message.delete().catch(err => {
+          console.error('Failed to delete message:', err);
+        });
+
         if (settings.timeoutUser !== false) {
           const timeoutMs = timeoutDuration * 1000;
           await member.timeout(timeoutMs, `AutoMod: ${WARNINGS_BEFORE_TIMEOUT} warnings reached`).catch(err => {
@@ -129,7 +128,7 @@ async function takeModerationAction({ message, reason, severity, settings, colle
 
         console.log(`AutoMod: ${author.tag} timed out after ${WARNINGS_BEFORE_TIMEOUT} warnings`);
       } else {
-        // Just a warning, no timeout yet
+        // Just a warning, no timeout yet, NO MESSAGE DELETION
         if (settings.sendDM !== false) {
           await sendWarningDM({
             user: author,
@@ -152,11 +151,15 @@ async function takeModerationAction({ message, reason, severity, settings, colle
           warningCount
         });
 
-        console.log(`AutoMod: Warning ${warningCount}/${WARNINGS_BEFORE_TIMEOUT} issued to ${author.tag} - ${reason}`);
+        console.log(`AutoMod: Warning ${warningCount}/${WARNINGS_BEFORE_TIMEOUT} issued to ${author.tag} - ${reason} (message kept)`);
       }
 
     } else if (severity === 'medium' || severity === 'high') {
-      // MEDIUM/HIGH SEVERITY: Immediate timeout
+      // MEDIUM/HIGH SEVERITY: Delete message and immediate timeout
+      await message.delete().catch(err => {
+        console.error('Failed to delete message:', err);
+      });
+
       if (settings.timeoutUser !== false) {
         const timeoutMs = timeoutDuration * 1000;
         await member.timeout(timeoutMs, `AutoMod: ${reason}`).catch(err => {
