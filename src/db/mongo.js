@@ -94,7 +94,8 @@ function getCollections(db = _db) {
 
     // AutoMod system
     automodSettings: db.collection('automodSettings'),
-    automodLogs: db.collection('automodLogs')
+    automodLogs: db.collection('automodLogs'),
+    automodWarnings: db.collection('automodWarnings') // NEW: Warning tracking
   };
 }
 

@@ -594,6 +594,32 @@ async function registerSlashCommands(client) {
         },
         {
           type: 1, // SUB_COMMAND
+          name: 'warnings',
+          description: 'View user warnings',
+          options: [
+            {
+              type: 6, // USER
+              name: 'user',
+              description: 'User to check warnings for',
+              required: true
+            }
+          ]
+        },
+        {
+          type: 1, // SUB_COMMAND
+          name: 'clearwarnings',
+          description: 'Clear all warnings for a user',
+          options: [
+            {
+              type: 6, // USER
+              name: 'user',
+              description: 'User to clear warnings for',
+              required: true
+            }
+          ]
+        },
+        {
+          type: 1, // SUB_COMMAND
           name: 'status',
           description: 'View AutoMod configuration'
         }
@@ -785,6 +811,14 @@ async function registerSlashCommands(client) {
     console.log('✅ Screenshot command verified:', screenshotCmd.id);
   } else {
     console.error('❌ WARNING: Screenshot command not found in registered commands!');
+  }
+
+  // Verify automod command was registered
+  const automodCmd = globalCommands.find(c => c.name === 'automod');
+  if (automodCmd) {
+    console.log('✅ AutoMod command verified:', automodCmd.id);
+  } else {
+    console.error('❌ WARNING: AutoMod command not found in registered commands!');
   }
 
   console.log('✅ Command registration complete!');

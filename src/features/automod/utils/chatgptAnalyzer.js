@@ -10,39 +10,62 @@ async function analyzeMessage(messageContent) {
     return { flagged: false, reason: 'API key missing', severity: 'none' };
   }
 
-  const systemPrompt = `You are a Discord server moderator assistant. Your job is to detect problematic messages that could lead to fights or create a hostile environment.
+  const systemPrompt = `You are a Discord server moderator assistant. Your job is to detect problematic messages and categorize their severity.
 
-Analyze messages for:
-- Hate speech (racism, sexism, homophobia, transphobia, etc.)
-- Personal attacks or harassment directed at others
-- Aggressive or inflammatory language intended to provoke
-- Threats or violent content
-- Excessive profanity used to insult others
-- Discrimination of any kind
+You should flag messages at THREE severity levels:
 
-IMPORTANT CONTEXT RULES:
-- Academic or educational discussions about these topics are ACCEPTABLE
-- Self-deprecating humor is ACCEPTABLE
-- Talking about something that happened to you is ACCEPTABLE as long as its not directed at someone in the chat
-- Song lyrics or quotes (when clearly identified) may be ACCEPTABLE
-- Friendly banter between friends is usually ACCEPTABLE
-- Direct insults, slurs, or attacks are NOT acceptable
+**LOW (Warning-worthy):**
+- Mild personal insults ("you're an idiot", "you're stupid", "dumbass")
+- Casual rudeness or disrespect directed at individuals
+- Minor inflammatory language toward others
+- Aggressive tone without serious threats
+- Minor name-calling or put-downs
+
+**MEDIUM (Timeout-worthy for repeated offenses):**
+- Repeated harassment or bullying of the same person
+- Moderate personal attacks with hostile intent
+- Discriminatory language (without explicit slurs)
+- Persistent inflammatory behavior across messages
+- Telling someone to harm themselves (indirect phrasing)
+
+**HIGH (Immediate timeout):**
+- Explicit hate speech with slurs (racial slurs, homophobic slurs, transphobic slurs used as attacks)
+- Direct threats of violence against individuals ("I will kill you", "I hope you die")
+- Severe harassment, doxxing attempts, or stalking behavior
+- Explicit and direct calls for harm or violence
+
+You should ALLOW and NOT flag:
+- Criticism of ideas, decisions, or actions (even harsh criticism like "this idea is stupid" or "that's a dumb policy")
+- Profanity used for emphasis or emotion, not directed at people ("this is fucking awesome", "I'm so damn tired", "what the hell")
+- General venting or expressing frustration about situations (not people)
+- Heated debates or arguments between users (unless crossing into personal attacks)
+- Sarcasm, jokes, or friendly banter (even edgy humor between friends)
+- Self-deprecating comments or jokes about oneself
+- Historical or academic discussion of sensitive topics
+- Song lyrics, quotes, or cultural references
+- Expressing negative emotions about events or situations
+
+**Key principle:** Only flag messages that target INDIVIDUALS with negativity. General complaints, frustration with situations, or criticism of ideas are acceptable.
+
+When in doubt about whether something targets an individual or is just general frustration, DO NOT flag.
 
 Respond ONLY with valid JSON in this exact format:
 {
   "flagged": true,
-  "reason": "brief explanation of what was flagged",
-  "severity": "high"
+  "reason": "brief explanation",
+  "severity": "low"
 }
 
-OR if acceptable:
+OR:
 {
   "flagged": false,
   "reason": "acceptable",
   "severity": "none"
 }
 
-Severity levels: "none", "low", "medium", "high"`;
+Severity levels: "none", "low", "medium", "high"
+
+When in doubt about severity, err on the side of "low" rather than "medium" or "high".`;
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -57,8 +80,9 @@ Severity levels: "none", "low", "medium", "high"`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `Analyze this message: "${messageContent}"` }
         ],
-        temperature: 0.3, // Lower temperature for more consistent moderation
-        max_tokens: 150
+        temperature: 0.5, // Increased from 0.3 for more lenient interpretation
+        max_tokens: 150,
+        frequency_penalty: 0.3 // Discourage repetitive flagging patterns
       })
     });
 
@@ -94,52 +118,58 @@ Severity levels: "none", "low", "medium", "high"`;
 }
 
 /**
- * Quick regex-based pre-filter for obvious violations
+ * Quick check if message is obviously safe (no AI needed)
  * Returns true if message should skip AI analysis (obviously fine)
  * Returns false if message needs AI analysis
  */
-function needsAIAnalysis(messageContent) {
-  // List of common slurs and extremely offensive terms (add more as needed)
-  const obviousSlurs = [
-    // Racial slurs (censored patterns)
+function isObviouslySafe(messageContent) {
+  // Very short messages are usually safe
+  if (messageContent.length < 10) return true;
+
+  // List of patterns that need checking
+  const suspiciousPatterns = [
+    // Profanity (only when potentially directed at people)
+    /\bf+[u\*]+c+k\s+(you|off)/i,
+    /\bs+h+[i\*]+t+h+e+a+d/i,
+    /\bb+[i\*]+t+c+h/i,
+    /\ba+s+s+h+o+l+e/i,
+
+    // Slurs (racial, homophobic, etc.)
     /n[i1!]gg[e3]r/i,
     /n[i1!]gg[a4]/i,
-    // Homophobic slurs
     /f[a4]gg[o0]t/i,
     /f[a4]g/i,
-    // Other common slurs
     /r[e3]t[a4]rd/i,
     /tr[a4]nny/i,
-    // Add more patterns as needed
-  ];
 
-  // Check for obvious slurs
-  for (const pattern of obviousSlurs) {
-    if (pattern.test(messageContent)) {
-      return true; // Definitely needs checking
-    }
-  }
-
-  // Check for aggressive patterns
-  const aggressivePatterns = [
+    // Aggressive phrases
     /k[yi]ll\s+(yourself|urself|you)/i,
     /you\s+should\s+die/i,
     /go\s+die/i,
-    /neck\s+yourself/i
+    /neck\s+yourself/i,
+    /die|death/i,
+
+    // Insults directed at people
+    /you\s+(are|re)\s+(stupid|dumb|idiot)/i,
+    /shut\s+up/i,
+    /hate\s+you/i,
   ];
 
-  for (const pattern of aggressivePatterns) {
-    if (pattern.test(messageContent)) {
-      return true; // Definitely needs checking
-    }
-  }
+  // If no suspicious patterns, likely safe
+  return !suspiciousPatterns.some(pattern => pattern.test(messageContent));
+}
 
-  // If message is very short and has no suspicious patterns, might skip AI
-  // But for strictness, we'll analyze everything that's not obviously safe
-  return true; // For now, analyze everything
+/**
+ * Quick regex-based pre-filter for obvious violations
+ * Returns true if message should be immediately flagged (obviously bad)
+ */
+function needsAIAnalysis(messageContent) {
+  // For backwards compatibility, always analyze if not obviously safe
+  return !isObviouslySafe(messageContent);
 }
 
 module.exports = {
   analyzeMessage,
-  needsAIAnalysis
+  needsAIAnalysis,
+  isObviouslySafe
 };

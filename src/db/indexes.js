@@ -38,7 +38,8 @@ async function ensureIndexes({
   wishlistGivenItems,
   guildPolls,
   automodSettings,
-  automodLogs
+  automodLogs,
+  automodWarnings // NEW: Warning tracking
 }) {
   // Guild settings index
   await guildSettings.createIndex({ guildId: 1 }, { unique: true });
@@ -251,6 +252,12 @@ async function ensureIndexes({
   await automodLogs.createIndex({ userId: 1, guildId: 1 });
   await automodLogs.createIndex({ timestamp: -1 }); // Sort by timestamp descending
   await automodLogs.createIndex({ guildId: 1, userId: 1, timestamp: -1 });
+
+  // AutoMod warning indexes (with TTL for auto-cleanup)
+  await automodWarnings.createIndex({ userId: 1, guildId: 1 });
+  await automodWarnings.createIndex({ guildId: 1 });
+  await automodWarnings.createIndex({ timestamp: -1 });
+  await automodWarnings.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // Auto-delete old warnings
 
   console.log('All indexes created successfully');
 }

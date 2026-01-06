@@ -3,6 +3,7 @@
  */
 
 const { PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { getActiveWarnings, clearWarnings, WARNINGS_BEFORE_TIMEOUT } = require('../utils/warningManager');
 
 async function handleAutoMod({ interaction, collections }) {
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -38,6 +39,14 @@ async function handleAutoMod({ interaction, collections }) {
   if (subcommand === 'timeout') {
     return handleTimeout({ interaction, collections });
   }
+
+  if (subcommand === 'warnings') {
+    return handleViewWarnings({ interaction, collections });
+  }
+
+  if (subcommand === 'clearwarnings') {
+    return handleClearWarnings({ interaction, collections });
+  }
 }
 
 /**
@@ -65,7 +74,7 @@ async function handleSetup({ interaction, collections }) {
         enabledChannelIds: [],
         exemptRoleIds: [],
         timeoutDuration: 300, // 5 minutes
-        severityThreshold: 'low',
+        severityThreshold: 'low', // Changed to 'low' to catch all levels including warnings
         sendDM: true,
         timeoutUser: true,
         logChannelId: null,
@@ -78,12 +87,19 @@ async function handleSetup({ interaction, collections }) {
   const embed = new EmbedBuilder()
     .setColor('#3498db')
     .setTitle('✅ AutoMod Setup Complete')
-    .setDescription('AutoMod has been initialized with default settings. Configure it using the following commands:')
+    .setDescription('AutoMod has been initialized with default settings. The system uses a **3-strike warning system** before timeouts.\n\n' +
+                   '**How it works:**\n' +
+                   '• Minor violations (insults, rudeness) = Warning\n' +
+                   '• 3 warnings in 24 hours = Automatic timeout\n' +
+                   '• Serious violations (slurs, threats) = Immediate timeout\n\n' +
+                   'Configure it using the following commands:')
     .addFields(
       { name: '📍 Monitor Channels', value: '`/automod channels add #channel` - Add channels to monitor', inline: false },
       { name: '🛡️ Exempt Roles', value: '`/automod exempt add @role` - Exempt roles from automod', inline: false },
       { name: '📋 Log Channel', value: '`/automod logchannel #channel` - Set moderation log channel', inline: false },
       { name: '⏱️ Timeout Duration', value: '`/automod timeout 5` - Set timeout duration (in minutes)', inline: false },
+      { name: '⚠️ View Warnings', value: '`/automod warnings @user` - Check user warnings', inline: false },
+      { name: '🧹 Clear Warnings', value: '`/automod clearwarnings @user` - Reset warnings', inline: false },
       { name: '✅ Enable AutoMod', value: '`/automod toggle on` - Enable the system', inline: false },
       { name: '📊 View Status', value: '`/automod status` - View current configuration', inline: false }
     )
@@ -126,7 +142,7 @@ async function handleToggle({ interaction, collections }) {
 
   return interaction.reply({
     content: enabled 
-      ? '✅ **AutoMod is now ENABLED**\n\nThe system will now monitor configured channels and take action on problematic messages.' 
+      ? '✅ **AutoMod is now ENABLED**\n\nThe system will now monitor configured channels with a 3-strike warning system:\n• Warnings for minor violations\n• Timeout after 3 warnings in 24 hours\n• Immediate timeout for serious violations' 
       : '❌ **AutoMod is now DISABLED**\n\nNo automatic moderation actions will be taken.',
     flags: [64]
   });
@@ -391,6 +407,9 @@ async function handleStatus({ interaction, collections }) {
   const embed = new EmbedBuilder()
     .setColor(settings.enabled ? '#2ecc71' : '#95a5a6')
     .setTitle('⚙️ AutoMod Configuration')
+    .setDescription(settings.enabled 
+      ? '**Warning System:** 3 strikes in 24 hours = timeout\n**Minor violations** get warnings, **serious violations** get immediate timeout'
+      : 'AutoMod is currently disabled')
     .addFields(
       { 
         name: '📊 Status', 
@@ -422,10 +441,84 @@ async function handleStatus({ interaction, collections }) {
         inline: false 
       }
     )
-    .setFooter({ text: 'AutoMod System' })
+    .setFooter({ text: 'AutoMod System • Warnings expire after 24 hours' })
     .setTimestamp();
 
   return interaction.reply({ embeds: [embed], flags: [64] });
+}
+
+/**
+ * /automod warnings - View user warnings
+ */
+async function handleViewWarnings({ interaction, collections }) {
+  const user = interaction.options.getUser('user');
+
+  const warnings = await getActiveWarnings({
+    collections,
+    guildId: interaction.guildId,
+    userId: user.id
+  });
+
+  if (warnings.length === 0) {
+    return interaction.reply({
+      content: `✅ ${user.tag} has no active warnings.`,
+      flags: [64]
+    });
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor('#f39c12')
+    .setTitle(`⚠️ Active Warnings for ${user.tag}`)
+    .setDescription(`**Total:** ${warnings.length}/${WARNINGS_BEFORE_TIMEOUT} warnings\n\n` +
+                   `Warnings expire 24 hours after being issued.\n` +
+                   `${warnings.length >= WARNINGS_BEFORE_TIMEOUT ? '⚠️ **Next violation will result in timeout!**' : ''}`)
+    .setTimestamp();
+
+  warnings.forEach((warning, index) => {
+    const timeAgo = Math.floor((Date.now() - warning.timestamp.getTime()) / 1000 / 60); // minutes ago
+    const hoursAgo = Math.floor(timeAgo / 60);
+    const minutesAgo = timeAgo % 60;
+
+    let timeString;
+    if (hoursAgo > 0) {
+      timeString = `${hoursAgo}h ${minutesAgo}m ago`;
+    } else {
+      timeString = `${minutesAgo}m ago`;
+    }
+
+    embed.addFields({
+      name: `Warning ${index + 1} (${timeString})`,
+      value: `**Reason:** ${warning.reason}\n**Message:** \`${warning.messageContent.substring(0, 100)}${warning.messageContent.length > 100 ? '...' : ''}\``,
+      inline: false
+    });
+  });
+
+  return interaction.reply({ embeds: [embed], flags: [64] });
+}
+
+/**
+ * /automod clearwarnings - Clear all warnings for a user
+ */
+async function handleClearWarnings({ interaction, collections }) {
+  const user = interaction.options.getUser('user');
+
+  const count = await clearWarnings({
+    collections,
+    guildId: interaction.guildId,
+    userId: user.id
+  });
+
+  if (count === 0) {
+    return interaction.reply({
+      content: `ℹ️ ${user.tag} has no warnings to clear.`,
+      flags: [64]
+    });
+  }
+
+  return interaction.reply({
+    content: `✅ Cleared ${count} warning${count === 1 ? '' : 's'} for ${user.tag}.`,
+    flags: [64]
+  });
 }
 
 module.exports = { handleAutoMod };
