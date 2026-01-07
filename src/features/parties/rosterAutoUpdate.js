@@ -4,7 +4,7 @@ let autoUpdateInterval = null;
 
 /**
  * Start the auto-update task for guild rosters
- * Updates all rosters every hour
+ * Updates all rosters every 12 hours
  */
 function startRosterAutoUpdate(client, collections) {
   if (autoUpdateInterval) {
@@ -12,7 +12,7 @@ function startRosterAutoUpdate(client, collections) {
     return;
   }
 
-  console.log('🔄 Starting guild roster auto-update (every 1 hour)...');
+  console.log('🔄 Starting guild roster auto-update (every 12 hours)...');
 
   // Run immediately on start
   updateAllRosters(client, collections);
@@ -20,7 +20,7 @@ function startRosterAutoUpdate(client, collections) {
   // Then run every hour
   autoUpdateInterval = setInterval(() => {
     updateAllRosters(client, collections);
-  }, 60 * 60 * 1000); // 60 minutes in milliseconds
+  }, 12 * 60 * 60 * 1000); // 12 hours in milliseconds
 
   console.log('✅ Guild roster auto-update started');
 }

@@ -2,7 +2,7 @@
  * Generate the PvP calendar as formatted text (not embed)
  * Shows today + next 6 days (rolling 7-day window)
  * Returns an array of messages - one header message + one message per day
- * Updates every 15 minutes
+ * Updates every 4 hours
  */
 async function createCalendarMessages(guildId, client, collections) {
   const { pvpEvents } = collections;
@@ -74,7 +74,7 @@ async function createCalendarMessages(guildId, client, collections) {
   const headerMessage = 
     `# 🗓️ PvP Weekly Schedule\n` +
     `**${startDateStr} - ${endDateStr}**\n\n` +
-    `📊 **${events.length}** event${events.length !== 1 ? 's' : ''} scheduled • 🔄 Updates every 15 minutes • Last updated <t:${timestamp}:R>\n` +
+    `📊 **${events.length}** event${events.length !== 1 ? 's' : ''} scheduled • 🔄 Updates every 4 hours • Last updated <t:${timestamp}:R>\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
   messages.push(headerMessage);

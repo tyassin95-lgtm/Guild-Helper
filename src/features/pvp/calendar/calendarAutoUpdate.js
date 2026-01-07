@@ -12,15 +12,15 @@ function startCalendarAutoUpdate(client, collections) {
     return;
   }
 
-  console.log('🔄 Starting PvP calendar auto-update (every 15 minutes)...');
+  console.log('🔄 Starting PvP calendar auto-update (every 4 hours)...');
 
   // Run immediately on start
   updateAllCalendars(client, collections);
 
-  // Then run every 15 minutes
+  // Then run every 4 hours
   autoUpdateInterval = setInterval(() => {
     updateAllCalendars(client, collections);
-  }, 15 * 60 * 1000); // 15 minutes in milliseconds
+  }, 4* 60 * 60 * 1000); // 4 hours in milliseconds
 
   console.log('✅ PvP calendar auto-update started');
 }
