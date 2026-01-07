@@ -2,7 +2,7 @@
  * Main message handler for automod system
  */
 
-const { analyzeMessage, isObviouslySafe } = require('../utils/chatgptAnalyzer');
+const { analyzeMessage } = require('../utils/chatgptAnalyzer');
 const { logModerationAction, sendLogToChannel } = require('../utils/moderationLogger');
 const {
   addWarning,
@@ -257,13 +257,7 @@ async function handleAutoModCheck({ message, collections, client }) {
       return;
     }
 
-    // Quick pre-filter: skip obviously safe messages
-    if (isObviouslySafe(message.content)) {
-      console.log(`Message skipped (obviously safe): "${message.content.substring(0, 50)}..."`);
-      return;
-    }
-
-    // Analyze message with ChatGPT
+    // Analyze ALL messages with ChatGPT (no pre-filtering)
     console.log(`Analyzing message from ${message.author.tag}: "${message.content.substring(0, 100)}..."`);
 
     const analysis = await analyzeMessage(message.content);

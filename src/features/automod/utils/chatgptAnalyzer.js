@@ -130,75 +130,19 @@ OR:
 }
 
 /**
- * Quick check if message is obviously safe (no AI needed)
- * Returns true if message should skip AI analysis (obviously fine)
- * Returns false if message needs AI analysis
+ * DEPRECATED: Pre-filtering has been removed - all messages are now analyzed by AI
+ * This function is kept for backwards compatibility but always returns false
  */
 function isObviouslySafe(messageContent) {
-  // Very short messages (< 5 chars) are usually safe
-  if (messageContent.length < 5) return true;
-
-  // Convert to lowercase for easier pattern matching
-  const lower = messageContent.toLowerCase();
-
-  // List of patterns that need checking
-  const suspiciousPatterns = [
-    // Direct "you" statements with negative words - ALWAYS check these
-    /\byou\s+(are|re|r)\s+/i,
-    /\byou\s+will\s+/i,
-    /\byou\s+should\s+/i,
-    /\byou\s+can[\'\']?t\s+/i,
-    /\byou[\'\']?re\s+/i,
-    /\byour\s+/i,
-
-    // Profanity patterns
-    /\bfuck/i,
-    /\bshit/i,
-    /\bbitch/i,
-    /\bass\s*hole/i,
-    /\bdamn\s+you/i,
-    /\bcunt/i,
-    /\bdick\s*(head)?/i,
-    /\bprick/i,
-
-    // Slurs (racial, homophobic, etc.) - spell out common variants
-    /n[-_]?word/i,
-    /\bn+[i1!]+g+[e3a4]+r*s*/i,
-    /\bf+[a4@]+g+[o0s]*t*s*/i,
-    /\br+[e3]+t+[a4@]+r+d+s*/i,
-    /\bt+r+[a4@]+n+[yn]+/i,
-
-    // Aggressive/harmful phrases
-    /\bk[i1!]+ll\s*(yourself|urself|you|ur\s*self)/i,
-    /\bdie/i,
-    /\bdeath/i,
-    /\bhope\s+you/i,
-    /\bgo\s+(die|to\s+hell|fuck|kys)/i,
-    /\bneck\s+yourself/i,
-    /\bkys/i,
-    /\buninstall/i,
-
-    // Common insults
-    /\b(stupid|dumb|idiot|moron|retard)s?\b/i,
-    /\bloser/i,
-    /\btrash/i,
-    /\bgarbage/i,
-    /\bshut\s+up/i,
-    /\bhate\s+you/i,
-    /\bslacker/i,
-  ];
-
-  // If any suspicious pattern matches, needs AI analysis
-  return !suspiciousPatterns.some(pattern => pattern.test(messageContent));
+  return false; // Always return false to ensure AI analysis
 }
 
 /**
- * Quick regex-based pre-filter for obvious violations
- * Returns true if message should be immediately flagged (obviously bad)
+ * DEPRECATED: Pre-filtering has been removed - all messages are now analyzed by AI
+ * This function is kept for backwards compatibility but always returns true
  */
 function needsAIAnalysis(messageContent) {
-  // For backwards compatibility, always analyze if not obviously safe
-  return !isObviouslySafe(messageContent);
+  return true; // Always return true to ensure AI analysis
 }
 
 module.exports = {
