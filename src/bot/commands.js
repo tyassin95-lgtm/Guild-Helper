@@ -316,7 +316,7 @@ async function registerSlashCommands(client) {
           description: 'Amount of coins to give',
           required: true,
           min_value: 1,
-          max_value: 1000000
+          max_value: 1000000000
         }
       ]
     },
