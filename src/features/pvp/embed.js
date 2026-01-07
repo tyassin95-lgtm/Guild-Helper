@@ -7,6 +7,7 @@ async function createEventEmbed(event, client, collections) {
     riftstone: '💎',
     boonstone: '🔮',
     wargames: '⚔️',
+    warboss: '👹',
     guildevent: '🎪'
   };
 
@@ -15,6 +16,7 @@ async function createEventEmbed(event, client, collections) {
     riftstone: 'Riftstone Fight',
     boonstone: 'Boonstone Fight',
     wargames: 'Wargames',
+    warboss: 'War Boss',
     guildevent: 'Guild Event'
   };
 

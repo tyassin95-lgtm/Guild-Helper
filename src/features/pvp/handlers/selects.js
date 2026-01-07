@@ -5,11 +5,12 @@ async function handlePvPSelects({ interaction, collections }) {
   if (interaction.customId === 'pvp_select_event_type') {
     const eventType = interaction.values[0];
 
-    // If Riftstone, Boonstone, or Guild Event, ask for location via modal
-    if (eventType === 'riftstone' || eventType === 'boonstone' || eventType === 'guildevent') {
+    // If Riftstone, Boonstone, War Boss, or Guild Event, ask for location via modal
+    if (eventType === 'riftstone' || eventType === 'boonstone' || eventType === 'warboss' || eventType === 'guildevent') {
       const eventNames = {
         'riftstone': 'Riftstone Fight',
         'boonstone': 'Boonstone Fight',
+        'warboss': 'War Boss',
         'guildevent': 'Guild Event'
       };
 

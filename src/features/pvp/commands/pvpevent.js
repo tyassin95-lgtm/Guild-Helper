@@ -17,6 +17,7 @@ async function handlePvPEvent({ interaction, collections }) {
         { label: 'Riftstone Fight', value: 'riftstone', emoji: '💎' },
         { label: 'Boonstone Fight', value: 'boonstone', emoji: '🔮' },
         { label: 'Wargames', value: 'wargames', emoji: '⚔️' },
+        { label: 'War Boss', value: 'warboss', emoji: '👹' },
         { label: 'Guild Event', value: 'guildevent', emoji: '🎪' }
       ])
   );

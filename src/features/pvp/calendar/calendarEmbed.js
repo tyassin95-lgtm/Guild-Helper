@@ -131,6 +131,7 @@ function buildDayMessage(dayIndex, eventsByDay, startDate, guildId) {
     riftstone: '💎',
     boonstone: '🔮',
     wargames: '⚔️',
+    warboss: '👹',
     guildevent: '🎪'
   };
 
@@ -139,6 +140,7 @@ function buildDayMessage(dayIndex, eventsByDay, startDate, guildId) {
     riftstone: 'Riftstone Fight',
     boonstone: 'Boonstone Fight',
     wargames: 'Wargames',
+    warboss: 'War Boss',
     guildevent: 'Guild Event'
   };
 

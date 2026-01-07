@@ -9,6 +9,7 @@ const DEFAULT_EVENT_IMAGES = {
   riftstone: 'https://i.imgur.com/3izMckr.jpeg',
   boonstone: 'https://i.imgur.com/puSQ5lu.jpeg',
   wargames: 'https://i.imgur.com/qtY18tv.jpeg',
+  warboss: 'https://i.imgur.com/hsvWdXJ.png',
   guildevent: 'https://i.imgur.com/RLVX4iT.jpeg'
 };
 
@@ -59,7 +60,7 @@ function parseEventTime(timeInput) {
 async function handlePvPModals({ interaction, collections }) {
   const { pvpEvents, pvpBonuses, pvpActivityRanking } = collections;
 
-  // Location input modal (for Riftstone/Boonstone/Guild Event)
+  // Location input modal (for Riftstone/Boonstone/War Boss/Guild Event)
   if (interaction.customId.startsWith('pvp_location_modal:')) {
     const eventType = interaction.customId.split(':')[1];
     const location = interaction.fields.getTextInputValue('location');
