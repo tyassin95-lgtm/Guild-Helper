@@ -127,11 +127,11 @@ async function handleRob({ interaction, collections }) {
     }
 
   } else {
-    // FAILURE: Lose 15% of balance as police fine, capped at 2500
+    // FAILURE: Lose 15% of balance as police fine, capped at 9999999999999999
     const finePercentage = 0.15;
     const fineAmount = Math.min(
       Math.floor(robberBalance.balance * finePercentage),
-      2500
+      9999999999999999
     );
 
     // Deduct fine
