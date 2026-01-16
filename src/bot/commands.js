@@ -316,7 +316,7 @@ async function registerSlashCommands(client) {
           description: 'Amount of coins to give',
           required: true,
           min_value: 1,
-          max_value: 1000000000
+          max_value: 1000000000000000
         }
       ]
     },
@@ -670,10 +670,10 @@ async function registerSlashCommands(client) {
         {
           type: 4, // INTEGER
           name: 'bet',
-          description: 'Amount to bet (10-9,999,999,999,999,999 coins)',
+          description: 'Amount to bet (10-1,000,000,000,000,000 coins)',
           required: true,
           min_value: 10,
-          max_value: 9999999999999999
+          max_value: 1000000000000000
         }
       ]
     },
@@ -685,10 +685,10 @@ async function registerSlashCommands(client) {
         {
           type: 4, // INTEGER
           name: 'bet',
-          description: 'Amount to bet (10-9,999,999,999,999,999 coins)',
+          description: 'Amount to bet (10-1,000,000,000,000,000 coins)',
           required: true,
           min_value: 10,
-          max_value: 9999999999999999
+          max_value: 1000000000000000
         },
         {
           type: 3, // STRING
@@ -750,7 +750,7 @@ async function registerSlashCommands(client) {
           description: 'Amount of coins to send',
           required: true,
           min_value: 10,
-          max_value: 9999999999999999
+          max_value: 1000000000000000
         }
       ]
     },
