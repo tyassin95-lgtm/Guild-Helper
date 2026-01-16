@@ -21,7 +21,7 @@ async function updateGuildRoster(guild, channelId, collections) {
       weapon2: { $exists: true }
     }).toArray();
 
-    // Build roster messages
+    // Build roster messages - returns array of {content: "..."}
     const messageContents = players.length > 0
       ? await RosterBuilder.buildRosterMessages(guild, players, collections)
       : RosterBuilder.buildEmptyRosterMessage();
@@ -47,20 +47,31 @@ async function updateGuildRoster(guild, channelId, collections) {
 
       // Update or create messages
       for (let i = 0; i < messageContents.length; i++) {
+        // Extract content string from object
+        const content = messageContents[i].content;
+
+        // Validate content length
+        if (content.length > 2000) {
+          console.error(`Message ${i} is too long: ${content.length} characters. Truncating...`);
+          // Emergency truncation
+          const truncated = content.substring(0, 1990) + '\n...[TRUNCATED]';
+          messageContents[i] = { content: truncated };
+        }
+
         if (i < existingMessages.length) {
           // Edit existing message
           try {
-            await existingMessages[i].edit(messageContents[i]);
+            await existingMessages[i].edit({ content: messageContents[i].content });
             newMessageIds.push(existingMessages[i].id);
           } catch (err) {
             console.error('Error editing roster message:', err);
             // If edit fails, create new message
-            const newMsg = await channel.send(messageContents[i]);
+            const newMsg = await channel.send({ content: messageContents[i].content });
             newMessageIds.push(newMsg.id);
           }
         } else {
           // Create new message for additional pages
-          const newMsg = await channel.send(messageContents[i]);
+          const newMsg = await channel.send({ content: messageContents[i].content });
           newMessageIds.push(newMsg.id);
         }
       }
@@ -90,7 +101,14 @@ async function updateGuildRoster(guild, channelId, collections) {
       const messageIds = [];
 
       for (const msgContent of messageContents) {
-        const msg = await channel.send(msgContent);
+        // Validate content length before sending
+        const content = msgContent.content;
+        if (content.length > 2000) {
+          console.error(`New message is too long: ${content.length} characters. Truncating...`);
+          msgContent.content = content.substring(0, 1990) + '\n...[TRUNCATED]';
+        }
+
+        const msg = await channel.send({ content: msgContent.content });
         messageIds.push(msg.id);
       }
 
