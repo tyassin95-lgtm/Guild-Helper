@@ -70,7 +70,7 @@ class RosterBuilder {
       '```\n';
 
     const messageFooter = '─────────────────────────────────────────────────────────────────────────────────────────────\n' +
-      '🛡️ Tank | 💚 Healer | ⚔️ DPS\n📸 Gear links appear next to each player mention';
+      '🛡️ Tank | 💚 Healer | ⚔️ DPS';
 
     let currentMessage = messageHeader;
     let currentLength = messageHeader.length;
@@ -89,21 +89,10 @@ class RosterBuilder {
       const eventsFormatted = player.pvpEvents.toString().padEnd(14);
       const bonusFormatted = `+${player.rollBonus}`.padEnd(4);
 
-      // Discord mention with gear link
-      let gearLink;
-      if (player.gearScreenshotUrl) {
-        gearLink = ` [${player.displayName}'s Gear](<${player.gearScreenshotUrl}>)`;
-      } else {
-        gearLink = ` [No Gear Uploaded](<https://example.com>)`;
-      }
-      const discordMention = `<@${player.userId}>` + gearLink;
-
-      // Table row (inside code block)
-      const tableRow = '```\n' + 
-        `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted} ${bonusFormatted}` + 
-        '```';
-
-      const memberEntry = discordMention + '\n' + tableRow + '\n';
+      // Table row (separate code block per player)
+      const memberEntry = '```\n' + 
+        `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted} ${bonusFormatted}\n` +
+        '```\n';
       const memberEntryLength = memberEntry.length;
 
       // Check if this is the last player
