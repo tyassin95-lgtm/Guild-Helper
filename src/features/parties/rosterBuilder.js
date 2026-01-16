@@ -20,7 +20,7 @@ class RosterBuilder {
    */
   static async buildRosterMessages(guild, players, collections) {
     const messages = [];
-    const maxMessageLength = 1900; // Safe limit for Discord messages
+    const maxMessageLength = 1800; // Safer limit (was 1900)
 
     // Sort players: first by role (tank > healer > dps), then alphabetically by display name
     const roleOrder = { tank: 0, healer: 1, dps: 2 };
@@ -61,74 +61,81 @@ class RosterBuilder {
     const totalCP = playersWithData.reduce((sum, p) => sum + (p.cp || 0), 0);
 
     // Build message header (only for first message)
-    let messageHeader = '**🏰 GUILD ROSTER**\n';
-    messageHeader += `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithData.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n`;
-    messageHeader += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-    messageHeader += '```\n';
-    messageHeader += 'Name            Role      Weapons              CP         Total Events   Weekly Bonus\n';
-    messageHeader += '─────────────────────────────────────────────────────────────────────────────────────────────\n';
-    messageHeader += '```\n';
+    const messageHeader = '**🏰 GUILD ROSTER**\n' +
+      `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithData.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n` +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '```\n' +
+      'Name            Role      Weapons              CP         Total Events   Weekly Bonus\n' +
+      '─────────────────────────────────────────────────────────────────────────────────────────────\n' +
+      '```\n';
 
-    let membersList = '';
+    const messageFooter = '─────────────────────────────────────────────────────────────────────────────────────────────\n' +
+      '🛡️ Tank | 💚 Healer | ⚔️ DPS\n📸 Gear links appear next to each player mention';
+
     let currentMessage = messageHeader;
-    let isFirstMessage = true;
+    let currentLength = messageHeader.length;
 
-    for (const player of playersWithData) {
+    for (let i = 0; i < playersWithData.length; i++) {
+      const player = playersWithData[i];
+
       // Build member data row
       const name = player.displayName.substring(0, 15).padEnd(15);
-
       const roleEmoji = getRoleEmoji(player.role);
       const roleDisplay = getRoleDisplayName(player.role).substring(0, 7).padEnd(7);
-
-      // Weapons column
       const weapon1 = player.weapon1 || 'Unknown';
       const weapon2 = player.weapon2 || 'Unknown';
       const weaponsShort = `${weapon1.substring(0, 10)}/${weapon2.substring(0, 10)}`.substring(0, 20).padEnd(20);
-
-      // CP column - padded to 10 characters
       const cpFormatted = this.formatCombatPower(player.cp || 0).padEnd(10);
-
-      // Total Events column - padded to 14 characters (centered under "Total Events")
       const eventsFormatted = player.pvpEvents.toString().padEnd(14);
-
-      // Weekly Bonus column - padded to 4 characters (centered under "Weekly Bonus")
       const bonusFormatted = `+${player.rollBonus}`.padEnd(4);
 
-      // Discord mention with gear link on same line
+      // Discord mention with gear link
       let gearLink;
       if (player.gearScreenshotUrl) {
-        gearLink = ` [${player.displayName}'s Gear](<${player.gearScreenshotUrl}>)`; // Angle brackets prevent auto-embed
+        gearLink = ` [${player.displayName}'s Gear](<${player.gearScreenshotUrl}>)`;
       } else {
-        gearLink = ` [No Gear Uploaded](<https://example.com>)`; // Dummy link for consistent formatting
+        gearLink = ` [No Gear Uploaded](<https://example.com>)`;
       }
       const discordMention = `<@${player.userId}>` + gearLink;
 
       // Table row (inside code block)
-      const tableRow = '```\n' + `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted} ${bonusFormatted}` + '```';
+      const tableRow = '```\n' + 
+        `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted} ${bonusFormatted}` + 
+        '```';
 
       const memberEntry = discordMention + '\n' + tableRow + '\n';
+      const memberEntryLength = memberEntry.length;
 
-      // Check if adding this entry would exceed the limit
-      if ((currentMessage + membersList + memberEntry).length > maxMessageLength) {
-        // Finalize current message (no footer for seamless continuation)
-        currentMessage += membersList;
+      // Check if this is the last player
+      const isLastPlayer = (i === playersWithData.length - 1);
+
+      // Calculate what the message would be with this entry and footer (if last)
+      const potentialLength = currentLength + memberEntryLength + (isLastPlayer ? messageFooter.length : 0);
+
+      // If adding this entry would exceed limit, finalize current message and start new one
+      if (potentialLength > maxMessageLength) {
+        // Finalize current message (no footer for continuation)
         messages.push({ content: currentMessage });
 
-        // Start new message with NO header (seamless continuation)
-        currentMessage = '';
-        membersList = '';
-        isFirstMessage = false;
+        // Start new message (no header for continuation - seamless)
+        currentMessage = memberEntry;
+        currentLength = memberEntryLength;
+      } else {
+        // Add to current message
+        currentMessage += memberEntry;
+        currentLength += memberEntryLength;
       }
 
-      membersList += memberEntry;
+      // If this is the last player, add footer
+      if (isLastPlayer) {
+        currentMessage += messageFooter;
+      }
     }
 
-    // Finalize last message with legend
-    currentMessage += membersList;
-    currentMessage += '─────────────────────────────────────────────────────────────────────────────────────────────\n';
-    currentMessage += '🛡️ Tank | 💚 Healer | ⚔️ DPS\n📸 Gear links appear next to each player mention';
-
-    messages.push({ content: currentMessage });
+    // Push the final message
+    if (currentMessage.trim().length > 0) {
+      messages.push({ content: currentMessage });
+    }
 
     return messages;
   }
