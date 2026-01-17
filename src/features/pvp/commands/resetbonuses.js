@@ -1,7 +1,7 @@
 const { PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 async function handleResetBonuses({ interaction, collections }) {
-  const { pvpBonuses } = collections;
+  const { pvpBonuses, guildSettings } = collections;
 
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
@@ -23,11 +23,18 @@ async function handleResetBonuses({ interaction, collections }) {
   // Count current bonuses
   const currentBonuses = await pvpBonuses.countDocuments({ guildId: interaction.guildId });
 
+  // Get current weekly event count
+  const settings = await guildSettings.findOne({ guildId: interaction.guildId });
+  const weeklyEvents = settings?.weeklyTotalEvents || 0;
+
   return interaction.reply({
     content: `⚠️ **WARNING**: This will reset **all PvP bonuses** for this server.\n\n` +
-             `Current bonuses: **${currentBonuses}**\n\n` +
+             `Current bonuses: **${currentBonuses}**\n` +
+             `Weekly events tracked: **${weeklyEvents}**\n\n` +
              `This will:\n` +
              `• Clear all weekly PvP attendance bonuses\n` +
+             `• Clear all attendance counters\n` +
+             `• Reset weekly event count to 0\n` +
              `• Reset all bonus counts to 0\n\n` +
              `**This action cannot be undone!**`,
     components: [row],
@@ -36,7 +43,7 @@ async function handleResetBonuses({ interaction, collections }) {
 }
 
 async function handleResetBonusesConfirmation({ interaction, collections }) {
-  const { pvpBonuses } = collections;
+  const { pvpBonuses, guildSettings } = collections;
 
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.update({ content: '❌ You need administrator permissions.', components: [] });
@@ -51,9 +58,22 @@ async function handleResetBonusesConfirmation({ interaction, collections }) {
   // Reset all bonuses for this guild
   const result = await pvpBonuses.deleteMany({ guildId: interaction.guildId });
 
+  // Reset the weekly event counter
+  await guildSettings.updateOne(
+    { guildId: interaction.guildId },
+    { 
+      $set: { 
+        weeklyTotalEvents: 0,
+        lastUpdated: new Date()
+      }
+    },
+    { upsert: true }
+  );
+
   let message = `✅ **PvP bonus reset complete!**\n\n`;
   message += `• Reset ${result.deletedCount} bonus record(s)\n`;
-  message += `• All users' weekly bonuses have been cleared\n`;
+  message += `• Reset weekly event counter to 0\n`;
+  message += `• All users' weekly bonuses and attendance have been cleared\n`;
   message += `• Bonuses will start accumulating again from the next PvP event`;
 
   return interaction.editReply({ content: message, components: [] });

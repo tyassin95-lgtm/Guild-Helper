@@ -16,6 +16,36 @@ class RosterBuilder {
   }
 
   /**
+   * Get attendance emoji based on percentage
+   * Green (🟢) for ≥70%, Orange (🟠) for 40-69%, Red (🔴) for <40%
+   */
+  static getAttendanceEmoji(percentage) {
+    if (percentage >= 70) return '🟢';
+    if (percentage >= 40) return '🟠';
+    return '🔴';
+  }
+
+  /**
+   * Calculate and format attendance percentage
+   */
+  static formatAttendance(eventsAttended, totalEvents) {
+    // Handle edge cases
+    if (!totalEvents || totalEvents === 0) {
+      return '-- 0%';
+    }
+
+    if (!eventsAttended || eventsAttended === 0) {
+      return '🔴 0%';
+    }
+
+    // Calculate percentage
+    const percentage = Math.round((eventsAttended / totalEvents) * 100);
+    const emoji = this.getAttendanceEmoji(percentage);
+
+    return `${emoji} ${percentage}%`;
+  }
+
+  /**
    * Build roster messages with proper pagination
    */
   static async buildRosterMessages(guild, players, collections) {
@@ -25,29 +55,34 @@ class RosterBuilder {
     // Sort players: first by role (tank > healer > dps), then alphabetically by display name
     const roleOrder = { tank: 0, healer: 1, dps: 2 };
 
-    // Fetch all member display names, PvP event counts, and PvP bonuses
-    const { pvpActivityRanking, pvpBonuses } = collections;
+    // Fetch all member display names, PvP event counts, PvP bonuses, and attendance data
+    const { pvpActivityRanking, pvpBonuses, guildSettings } = collections;
+
+    // Get guild's weekly event count (for attendance calculation)
+    const settings = await guildSettings.findOne({ guildId: guild.id });
+    const weeklyTotalEvents = settings?.weeklyTotalEvents || 0;
 
     const playersWithData = await Promise.all(
       players.map(async (p) => {
         const member = await guild.members.fetch(p.userId).catch(() => null);
         const displayName = member ? member.displayName : 'Unknown';
 
-        // Get PvP events attended
+        // Get PvP events attended (all-time)
         const pvpData = await pvpActivityRanking.findOne({
           userId: p.userId,
           guildId: guild.id
         });
         const pvpEvents = pvpData?.totalEvents || 0;
 
-        // Get PvP weekly roll bonus
+        // Get PvP weekly roll bonus and attendance
         const bonusData = await pvpBonuses.findOne({
           userId: p.userId,
           guildId: guild.id
         });
         const rollBonus = bonusData?.bonusCount || 0;
+        const eventsAttended = bonusData?.eventsAttended || 0;
 
-        return { ...p, displayName, pvpEvents, rollBonus };
+        return { ...p, displayName, pvpEvents, rollBonus, eventsAttended };
       })
     );
 
@@ -65,12 +100,12 @@ class RosterBuilder {
       `📅 <t:${Math.floor(Date.now() / 1000)}:F> | 👥 ${playersWithData.length} Members | 💪 ${this.formatCombatPower(totalCP)} Total CP\n` +
       '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
       '```\n' +
-      'Name            Role      Weapons              CP         Total Events   Weekly Bonus\n' +
-      '─────────────────────────────────────────────────────────────────────────────────────────────\n' +
+      'Name            Role      Weapons              CP         Total Events   Weekly Bonus   Attendance\n' +
+      '──────────────────────────────────────────────────────────────────────────────────────────────────────\n' +
       '```\n';
 
-    const messageFooter = '─────────────────────────────────────────────────────────────────────────────────────────────\n' +
-      '🛡️ Tank | 💚 Healer | ⚔️ DPS';
+    const messageFooter = '──────────────────────────────────────────────────────────────────────────────────────────────────────\n' +
+      '🛡️ Tank | 💚 Healer | ⚔️ DPS | 🟢 ≥70% | 🟠 40-69% | 🔴 <40%';
 
     let currentMessage = messageHeader;
     let currentLength = messageHeader.length;
@@ -87,11 +122,14 @@ class RosterBuilder {
       const weaponsShort = `${weapon1.substring(0, 10)}/${weapon2.substring(0, 10)}`.substring(0, 20).padEnd(20);
       const cpFormatted = this.formatCombatPower(player.cp || 0).padEnd(10);
       const eventsFormatted = player.pvpEvents.toString().padEnd(14);
-      const bonusFormatted = `+${player.rollBonus}`.padEnd(4);
+      const bonusFormatted = `+${player.rollBonus}`.padEnd(14);
+
+      // NEW: Calculate and format attendance
+      const attendanceFormatted = this.formatAttendance(player.eventsAttended, weeklyTotalEvents).padEnd(10);
 
       // Table row (separate code block per player)
       const memberEntry = '```\n' + 
-        `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted} ${bonusFormatted}\n` +
+        `${name} ${roleEmoji}${roleDisplay} ${weaponsShort} ${cpFormatted} ${eventsFormatted} ${bonusFormatted} ${attendanceFormatted}\n` +
         '```\n';
       const memberEntryLength = memberEntry.length;
 

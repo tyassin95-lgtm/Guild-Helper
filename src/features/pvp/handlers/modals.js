@@ -58,7 +58,7 @@ function parseEventTime(timeInput) {
 }
 
 async function handlePvPModals({ interaction, collections }) {
-  const { pvpEvents, pvpBonuses, pvpActivityRanking } = collections;
+  const { pvpEvents, pvpBonuses, pvpActivityRanking, guildSettings } = collections;
 
   // Location input modal (for Riftstone/Boonstone/War Boss/Guild Event)
   if (interaction.customId.startsWith('pvp_location_modal:')) {
@@ -106,6 +106,9 @@ async function handlePvPModals({ interaction, collections }) {
     // Get the bonus points for this event
     const bonusPoints = event.bonusPoints || 10;
 
+    // Check if this is the first attendee for this event
+    const isFirstAttendee = !event.attendees || event.attendees.length === 0;
+
     // Use atomic operation to add user to attendees (prevents race conditions)
     const updateResult = await pvpEvents.updateOne(
       { 
@@ -142,11 +145,28 @@ async function handlePvPModals({ interaction, collections }) {
       return interaction.editReply({ content: '❌ Unable to record attendance. Please try again.' });
     }
 
+    // If this is the first attendee, increment the guild's weekly event counter
+    if (isFirstAttendee) {
+      await guildSettings.updateOne(
+        { guildId: interaction.guildId },
+        { 
+          $inc: { weeklyTotalEvents: 1 },
+          $set: { lastUpdated: new Date() }
+        },
+        { upsert: true }
+      );
+      console.log(`✅ Incremented weeklyTotalEvents for guild ${interaction.guildId} (first attendee)`);
+    }
+
     // Add bonus points to user (weekly bonus - can be reset)
+    // ALSO increment their eventsAttended counter
     await pvpBonuses.updateOne(
       { userId: interaction.user.id, guildId: interaction.guildId },
       { 
-        $inc: { bonusCount: bonusPoints },
+        $inc: { 
+          bonusCount: bonusPoints,
+          eventsAttended: 1  // NEW: Track number of events attended
+        },
         $set: { lastUpdated: new Date() }
       },
       { upsert: true }
@@ -207,6 +227,9 @@ async function handlePvPModals({ interaction, collections }) {
         return interaction.editReply({ content: `❌ ${member.displayName} already has attendance recorded for this event.` });
       }
 
+      // Check if this is the first attendee for this event
+      const isFirstAttendee = !event.attendees || event.attendees.length === 0;
+
       // Add attendance for the user
       await pvpEvents.updateOne(
         { _id: new ObjectId(eventId) },
@@ -220,11 +243,28 @@ async function handlePvPModals({ interaction, collections }) {
         }
       );
 
+      // If this is the first attendee, increment the guild's weekly event counter
+      if (isFirstAttendee) {
+        await guildSettings.updateOne(
+          { guildId: interaction.guildId },
+          { 
+            $inc: { weeklyTotalEvents: 1 },
+            $set: { lastUpdated: new Date() }
+          },
+          { upsert: true }
+        );
+        console.log(`✅ Incremented weeklyTotalEvents for guild ${interaction.guildId} (manual attendance - first attendee)`);
+      }
+
       // Add bonus points to user (weekly bonus - can be reset)
+      // ALSO increment their eventsAttended counter
       await pvpBonuses.updateOne(
         { userId: userId, guildId: interaction.guildId },
         { 
-          $inc: { bonusCount: bonusPoints },
+          $inc: { 
+            bonusCount: bonusPoints,
+            eventsAttended: 1  // NEW: Track number of events attended
+          },
           $set: { lastUpdated: new Date() }
         },
         { upsert: true }

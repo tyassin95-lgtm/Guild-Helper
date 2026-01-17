@@ -21,7 +21,7 @@ async function ensureIndexes({
   gamblingFunds,
   gamblingGames,
   blackjackGames,
-  gamblingRaids, // NEW: Gambling raid system
+  gamblingRaids,
   triviaStats,
   triviaSessions,
   robCooldowns,
@@ -84,6 +84,7 @@ async function ensureIndexes({
   await pvpBonuses.createIndex({ userId: 1, guildId: 1 }, { unique: true });
   await pvpBonuses.createIndex({ guildId: 1 });
   await pvpBonuses.createIndex({ guildId: 1, bonusCount: -1 }); // Sort by bonus count descending
+  await pvpBonuses.createIndex({ guildId: 1, eventsAttended: -1 }); // NEW: Sort by attendance descending
 
   // PvP Activity Ranking indexes (all-time - never reset)
   await pvpActivityRanking.createIndex({ userId: 1, guildId: 1 }, { unique: true });
