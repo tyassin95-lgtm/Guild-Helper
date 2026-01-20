@@ -7,7 +7,7 @@ const { updateCalendar } = require('../calendar/calendarUpdate');
 const DEFAULT_EVENT_IMAGES = {
   siege: 'https://i.imgur.com/GVJjTpu.jpeg',
   riftstone: 'https://i.imgur.com/3izMckr.jpeg',
-  boonstone: 'https://i.imgur.com/puSQ5lu.jpeg',
+  boonstone: 'https://i.imgur.com/Ax4pkYA.jpeg',
   wargames: 'https://i.imgur.com/qtY18tv.jpeg',
   warboss: 'https://i.imgur.com/hsvWdXJ.png',
   guildevent: 'https://i.imgur.com/RLVX4iT.jpeg'
