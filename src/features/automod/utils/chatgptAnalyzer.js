@@ -132,7 +132,15 @@ Respond ONLY with valid JSON in this exact format:
     const content = data.choices[0].message.content.trim();
 
     try {
-      const result = JSON.parse(content);
+      let jsonContent = content;
+
+      if (content.startsWith('```json')) {
+        jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      } else if (content.startsWith('```')) {
+        jsonContent = content.replace(/```\n?/g, '').trim();
+      }
+
+      const result = JSON.parse(jsonContent);
 
       if (typeof result.flagged !== 'boolean') {
         console.error('Invalid AI response format:', content);
