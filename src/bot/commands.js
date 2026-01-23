@@ -631,20 +631,13 @@ async function registerSlashCommands(client) {
         },
         {
           type: 1,
-                { name: 'Thread (create thread)', value: 'thread' }
-              ]
-            }
-          ]
-        },
-        {
-          type: 1,
           name: 'translationlanguages',
           description: 'Set which languages to translate between',
           options: [
             {
               type: 3,
               name: 'languages',
-              description: 'Comma-separated list (e.g., "en,de,fr")',
+              description: 'Comma-separated list (e.g., "en,de,fr,es")',
               required: true
             }
           ]
