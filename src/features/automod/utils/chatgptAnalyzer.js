@@ -1,20 +1,29 @@
 /**
- * ChatGPT API integration for message content analysis
+ * ChatGPT API integration for message content analysis and translation
  */
 
-async function analyzeMessage(messageContent) {
+async function analyzeAndTranslateMessage(messageContent, enabledLanguages = ['de', 'fr', 'en']) {
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
     console.error('OPENAI_API_KEY not found in environment variables');
-    return { flagged: false, reason: 'API key missing', severity: 'none' };
+    return {
+      moderation: { flagged: false, reason: 'API key missing', severity: 'none' },
+      translation: null
+    };
   }
 
-  const systemPrompt = `You are a Discord server moderator assistant. Your job is to detect problematic messages and categorize their severity.
+  const languagesList = enabledLanguages.join(', ');
+
+  const systemPrompt = `You are a Discord server moderator assistant with translation capabilities.
+
+Your job is to:
+1. Detect problematic messages and categorize their severity
+2. Provide fluent, natural translations of the message into other languages
 
 CRITICAL: Read the ENTIRE message carefully to understand CONTEXT before flagging.
 
-You should flag messages at THREE severity levels:
+**MODERATION LEVELS:**
 
 **LOW (Warning-worthy):**
 - Mild personal insults directed AT someone in the Discord ("you're an idiot", "@user you're stupid")
@@ -35,22 +44,22 @@ You should flag messages at THREE severity levels:
 - Severe harassment, doxxing attempts, or stalking behavior
 - Explicit and direct calls for harm or violence
 
-You should ALLOW and NOT flag:
+**DO NOT FLAG:**
 
 **VENTING/REPORTING:**
-- Users describing harassment they experienced ("someone called me stupid yesterday")
-- Reporting toxic behavior from others ("this person was so rude to me")
+- Users describing harassment they experienced
+- Reporting toxic behavior from others
 - Sharing past negative experiences
 - Quoting what others said to them
 
 **ABOUT ANONYMOUS/EXTERNAL GROUPS:**
 - Complaints about game groups, randoms, PUGs, or anonymous players
-- Frustration with unnamed strangers outside Discord ("these randoms were terrible")
+- Frustration with unnamed strangers outside Discord
 - Venting about bad game experiences with strangers
 - Even if using offensive language, if it's about anonymous people NOT in the Discord, consider LOW severity at most
 
 **GENERAL DISCOURSE:**
-- Criticism of ideas, decisions, or actions (even harsh criticism)
+- Criticism of ideas, decisions, or actions
 - Profanity used for emphasis or emotion, not directed at Discord members
 - General venting or expressing frustration about situations
 - Heated debates or arguments (unless crossing into personal attacks)
@@ -59,25 +68,35 @@ You should ALLOW and NOT flag:
 - Historical or academic discussion
 - Song lyrics, quotes, or cultural references
 
-**KEY PRINCIPLES:**
-1. **Context is everything**: "you're stupid" in a report about harassment = OK. "you're stupid" said TO someone = flag.
-2. **Anonymous vs. Known**: Complaining about "randoms in my game group" = much less severe than attacking a Discord member.
-3. **Reporting vs. Attacking**: If someone is DESCRIBING harassment they received, do NOT flag them for the words they're quoting.
-4. **When in doubt**: If you're not sure if it targets a Discord member specifically, DO NOT flag or use LOW severity.
+**TRANSLATION GUIDELINES:**
+- Translate naturally as if written by a native speaker
+- Preserve tone, emotion, and intent
+- Keep slang and informal language informal in translation
+- Don't translate if message is too short (under 10 characters) or only emojis/symbols
+- Detect the source language automatically
+- Only translate to languages different from the source
 
 Respond ONLY with valid JSON in this exact format:
 {
-  "flagged": true,
-  "reason": "brief explanation",
-  "severity": "low"
+  "moderation": {
+    "flagged": false,
+    "reason": "acceptable",
+    "severity": "none"
+  },
+  "translation": {
+    "sourceLanguage": "en",
+    "shouldTranslate": true,
+    "translations": {
+      "de": "German translation here",
+      "fr": "French translation here"
+    }
+  }
 }
 
-OR:
-{
-  "flagged": false,
-  "reason": "acceptable",
-  "severity": "none"
-}`;
+If the message is too short to translate or only contains emojis, set shouldTranslate to false and translations to {}.
+Only include translations for languages DIFFERENT from the source language.
+
+Available languages for translation: ${languagesList}`;
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -87,66 +106,58 @@ OR:
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini', // Cost-effective model
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Analyze this message: "${messageContent}"` }
+          { role: 'user', content: `Analyze and translate this message: "${messageContent}"` }
         ],
-        temperature: 0.5, // Increased from 0.3 for more lenient interpretation
-        max_tokens: 150,
-        frequency_penalty: 0.3 // Discourage repetitive flagging patterns
+        temperature: 0.5,
+        max_tokens: 500,
+        frequency_penalty: 0.3
       })
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error('OpenAI API error:', response.status, errorData);
-      return { flagged: false, reason: 'API error', severity: 'none' };
+      return {
+        moderation: { flagged: false, reason: 'API error', severity: 'none' },
+        translation: null
+      };
     }
 
     const data = await response.json();
     const content = data.choices[0].message.content.trim();
 
-    // Parse JSON response
     try {
       const result = JSON.parse(content);
 
-      // Validate response structure
-      if (typeof result.flagged !== 'boolean') {
+      if (typeof result.moderation?.flagged !== 'boolean') {
         console.error('Invalid AI response format:', content);
-        return { flagged: false, reason: 'Invalid response', severity: 'none' };
+        return {
+          moderation: { flagged: false, reason: 'Invalid response', severity: 'none' },
+          translation: null
+        };
       }
 
       return result;
     } catch (parseError) {
       console.error('Failed to parse AI response:', content);
-      return { flagged: false, reason: 'Parse error', severity: 'none' };
+      return {
+        moderation: { flagged: false, reason: 'Parse error', severity: 'none' },
+        translation: null
+      };
     }
 
   } catch (error) {
     console.error('ChatGPT analysis error:', error);
-    return { flagged: false, reason: 'Network error', severity: 'none' };
+    return {
+      moderation: { flagged: false, reason: 'Network error', severity: 'none' },
+      translation: null
+    };
   }
 }
 
-/**
- * DEPRECATED: Pre-filtering has been removed - all messages are now analyzed by AI
- * This function is kept for backwards compatibility but always returns false
- */
-function isObviouslySafe(messageContent) {
-  return false; // Always return false to ensure AI analysis
-}
-
-/**
- * DEPRECATED: Pre-filtering has been removed - all messages are now analyzed by AI
- * This function is kept for backwards compatibility but always returns true
- */
-function needsAIAnalysis(messageContent) {
-  return true; // Always return true to ensure AI analysis
-}
-
 module.exports = {
-  analyzeMessage,
-  needsAIAnalysis,
-  isObviouslySafe
+  analyzeAndTranslateMessage
 };

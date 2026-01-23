@@ -2,7 +2,7 @@
  * Main message handler for automod system
  */
 
-const { analyzeMessage } = require('../utils/chatgptAnalyzer');
+const { analyzeAndTranslateMessage } = require('../utils/chatgptAnalyzer');
 const { logModerationAction, sendLogToChannel } = require('../utils/moderationLogger');
 const {
   addWarning,
@@ -14,21 +14,14 @@ const {
   WARNINGS_BEFORE_TIMEOUT
 } = require('../utils/warningManager');
 
-/**
- * Check if user is exempt from automod
- */
-async function isUserExempt({ member, settings }) {
+function isUserExempt({ member, settings }) {
   if (!settings || !settings.exemptRoleIds || settings.exemptRoleIds.length === 0) {
     return false;
   }
 
-  // Check if user has any exempt roles
   return member.roles.cache.some(role => settings.exemptRoleIds.includes(role.id));
 }
 
-/**
- * Check if channel is being monitored
- */
 function isChannelMonitored({ channelId, settings }) {
   if (!settings || !settings.enabledChannelIds || settings.enabledChannelIds.length === 0) {
     return false;
@@ -37,17 +30,12 @@ function isChannelMonitored({ channelId, settings }) {
   return settings.enabledChannelIds.includes(channelId);
 }
 
-/**
- * Take moderation action on a user
- */
 async function takeModerationAction({ message, reason, severity, settings, collections, client }) {
   const { member, channel, guild, author } = message;
-  const timeoutDuration = settings.timeoutDuration || 300; // Default 5 minutes
+  const timeoutDuration = settings.timeoutDuration || 300;
 
   try {
-    // Handle based on severity
     if (severity === 'low') {
-      // LOW SEVERITY: Issue warning, DO NOT DELETE MESSAGE
       await addWarning({
         collections,
         guildId: guild.id,
@@ -62,7 +50,6 @@ async function takeModerationAction({ message, reason, severity, settings, colle
         userId: author.id
       });
 
-      // Check if user has reached warning limit
       const reachedLimit = await shouldTimeout({
         collections,
         guildId: guild.id,
@@ -70,7 +57,6 @@ async function takeModerationAction({ message, reason, severity, settings, colle
       });
 
       if (reachedLimit) {
-        // Delete message and timeout user after reaching warning limit
         await message.delete().catch(err => {
           console.error('Failed to delete message:', err);
         });
@@ -82,14 +68,12 @@ async function takeModerationAction({ message, reason, severity, settings, colle
           });
         }
 
-        // Clear warnings after timeout
         await clearWarnings({
           collections,
           guildId: guild.id,
           userId: author.id
         });
 
-        // Send timeout DM
         if (settings.sendDM !== false) {
           const dmMessage = `**🚫 Timeout Notice from ${guild.name}**\n\n` +
             `You have been timed out for **${Math.floor(timeoutDuration / 60)} minutes** after receiving ${WARNINGS_BEFORE_TIMEOUT} warnings.\n\n` +
@@ -102,7 +86,6 @@ async function takeModerationAction({ message, reason, severity, settings, colle
           });
         }
 
-        // Log timeout
         await logModerationAction({
           collections,
           guildId: guild.id,
@@ -128,7 +111,6 @@ async function takeModerationAction({ message, reason, severity, settings, colle
 
         console.log(`AutoMod: ${author.tag} timed out after ${WARNINGS_BEFORE_TIMEOUT} warnings`);
       } else {
-        // Just a warning, no timeout yet, NO MESSAGE DELETION
         if (settings.sendDM !== false) {
           await sendWarningDM({
             user: author,
@@ -139,7 +121,6 @@ async function takeModerationAction({ message, reason, severity, settings, colle
           });
         }
 
-        // Log warning
         await logWarningToChannel({
           client,
           collections,
@@ -155,7 +136,6 @@ async function takeModerationAction({ message, reason, severity, settings, colle
       }
 
     } else if (severity === 'medium' || severity === 'high') {
-      // MEDIUM/HIGH SEVERITY: Delete message and immediate timeout
       await message.delete().catch(err => {
         console.error('Failed to delete message:', err);
       });
@@ -167,14 +147,12 @@ async function takeModerationAction({ message, reason, severity, settings, colle
         });
       }
 
-      // Clear any existing warnings (since they got an immediate timeout)
       await clearWarnings({
         collections,
         guildId: guild.id,
         userId: author.id
       });
 
-      // Send DM
       if (settings.sendDM !== false) {
         const dmMessage = `**🚫 AutoMod Notice from ${guild.name}**\n\n` +
           `Your message in #${channel.name} was removed and you have been timed out for **${Math.floor(timeoutDuration / 60)} minutes**.\n\n` +
@@ -188,7 +166,6 @@ async function takeModerationAction({ message, reason, severity, settings, colle
         });
       }
 
-      // Log
       await logModerationAction({
         collections,
         guildId: guild.id,
@@ -220,70 +197,117 @@ async function takeModerationAction({ message, reason, severity, settings, colle
   }
 }
 
-/**
- * Main message check handler
- */
-async function handleAutoModCheck({ message, collections, client }) {
-  // Ignore bots
-  if (message.author.bot) return;
+async function sendTranslation({ message, translation, settings }) {
+  if (!translation || !translation.shouldTranslate) {
+    return;
+  }
 
-  // Ignore DMs
+  const { sourceLanguage, translations } = translation;
+
+  if (!translations || Object.keys(translations).length === 0) {
+    return;
+  }
+
+  const languageFlags = {
+    en: '🇬🇧',
+    de: '🇩🇪',
+    fr: '🇫🇷'
+  };
+
+  const languageNames = {
+    en: 'English',
+    de: 'German',
+    fr: 'French'
+  };
+
+  const translationLines = Object.entries(translations).map(([lang, text]) => {
+    const flag = languageFlags[lang] || '🌐';
+    const name = languageNames[lang] || lang.toUpperCase();
+    return `${flag} **${name}:** ${text}`;
+  });
+
+  const translationMode = settings.translationMode || 'reply';
+
+  try {
+    if (translationMode === 'reply') {
+      await message.reply({
+        content: `🌐 **Translations**\n${translationLines.join('\n')}`,
+        allowedMentions: { repliedUser: false }
+      });
+    } else if (translationMode === 'thread') {
+      const thread = await message.startThread({
+        name: '🌐 Translations',
+        autoArchiveDuration: 60
+      });
+
+      await thread.send({
+        content: translationLines.join('\n')
+      });
+    }
+
+    console.log(`Translation sent for message from ${message.author.tag} (${sourceLanguage} → ${Object.keys(translations).join(', ')})`);
+  } catch (error) {
+    console.error('Failed to send translation:', error);
+  }
+}
+
+async function handleAutoModCheck({ message, collections, client }) {
+  if (message.author.bot) return;
   if (!message.guild) return;
 
   const { automodSettings } = collections;
 
   try {
-    // Get automod settings for this guild
     const settings = await automodSettings.findOne({ guildId: message.guild.id });
 
-    // Check if automod is enabled
     if (!settings || !settings.enabled) {
       return;
     }
 
-    // Check if channel is being monitored
     if (!isChannelMonitored({ channelId: message.channel.id, settings })) {
       return;
     }
 
-    // Check if user is exempt
     const exempt = await isUserExempt({ member: message.member, settings });
     if (exempt) {
       return;
     }
 
-    // Ignore empty messages or messages with only attachments
     if (!message.content || message.content.trim().length === 0) {
       return;
     }
 
-    // Analyze ALL messages with ChatGPT (no pre-filtering)
     console.log(`Analyzing message from ${message.author.tag}: "${message.content.substring(0, 100)}..."`);
 
-    const analysis = await analyzeMessage(message.content);
+    const enabledLanguages = settings.translationLanguages || ['de', 'fr', 'en'];
+    const result = await analyzeAndTranslateMessage(message.content, enabledLanguages);
 
-    // Take action if message is flagged
-    if (analysis.flagged) {
-      console.log(`Message flagged: ${analysis.reason} (Severity: ${analysis.severity})`);
+    const { moderation, translation } = result;
 
-      // Check severity threshold
+    if (moderation.flagged) {
+      console.log(`Message flagged: ${moderation.reason} (Severity: ${moderation.severity})`);
+
       const severityThreshold = settings.severityThreshold || 'low';
       const severityLevels = { none: 0, low: 1, medium: 2, high: 3 };
 
-      if (severityLevels[analysis.severity] >= severityLevels[severityThreshold]) {
+      if (severityLevels[moderation.severity] >= severityLevels[severityThreshold]) {
         await takeModerationAction({
           message,
-          reason: analysis.reason,
-          severity: analysis.severity,
+          reason: moderation.reason,
+          severity: moderation.severity,
           settings,
           collections,
           client
         });
       } else {
-        console.log(`Message flagged but below severity threshold (${analysis.severity} < ${severityThreshold})`);
+        console.log(`Message flagged but below severity threshold (${moderation.severity} < ${severityThreshold})`);
       }
     } else {
-      console.log(`Message passed: ${analysis.reason}`);
+      console.log(`Message passed: ${moderation.reason}`);
+
+      if (settings.translationEnabled && translation) {
+        await sendTranslation({ message, translation, settings });
+      }
     }
 
   } catch (error) {

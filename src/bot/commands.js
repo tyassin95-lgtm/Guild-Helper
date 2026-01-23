@@ -4,7 +4,6 @@ async function registerSlashCommands(client) {
   const ADMIN = PermissionFlagsBits.Administrator.toString();
 
   const commands = [
-    // ----- Admin-only commands -----
     {
       name: 'excluderole',
       description: 'Admins: Exclude/include roles from tracking.',
@@ -12,7 +11,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 3, // STRING
+          type: 3,
           name: 'action',
           description: 'What to do',
           required: true,
@@ -23,7 +22,7 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 8, // ROLE
+          type: 8,
           name: 'role',
           description: 'Role to exclude/include',
           required: false
@@ -49,7 +48,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 3, // STRING
+          type: 3,
           name: 'action',
           description: 'What to reset',
           required: true,
@@ -59,7 +58,7 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 6, // USER
+          type: 6,
           name: 'target',
           description: 'User to reset (required if action is user)',
           required: false
@@ -78,7 +77,6 @@ async function registerSlashCommands(client) {
       default_member_permissions: ADMIN,
       dm_permission: false
     },
-    // Screenshot storage command
     {
       name: 'screenshot',
       description: 'Admins: Manage gear screenshot storage system.',
@@ -86,7 +84,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 3, // STRING
+          type: 3,
           name: 'action',
           description: 'Action to perform',
           required: true,
@@ -97,13 +95,13 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 7, // CHANNEL
+          type: 7,
           name: 'channel',
           description: 'Channel to use for storage (for set_channel)',
           required: false
         },
         {
-          type: 4, // INTEGER
+          type: 4,
           name: 'older_than_days',
           description: 'Delete screenshots older than X days (default: 90)',
           required: false,
@@ -111,14 +109,13 @@ async function registerSlashCommands(client) {
           max_value: 365
         },
         {
-          type: 5, // BOOLEAN
+          type: 5,
           name: 'confirm',
           description: 'Confirm deletion (for clean_storage)',
           required: false
         }
       ]
     },
-    // PvP Commands
     {
       name: 'pvpevent',
       description: 'Admins: Create a PvP event with attendance tracking.',
@@ -144,7 +141,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 3, // STRING
+          type: 3,
           name: 'action',
           description: 'What to do',
           required: true,
@@ -155,7 +152,7 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 8, // ROLE
+          type: 8,
           name: 'role',
           description: 'Role to add/remove',
           required: false
@@ -168,7 +165,6 @@ async function registerSlashCommands(client) {
       default_member_permissions: ADMIN,
       dm_permission: false
     },
-    // Raid Commands
     {
       name: 'createraid',
       description: 'Admins: Create a raid event with attendance tracking.',
@@ -187,7 +183,6 @@ async function registerSlashCommands(client) {
       default_member_permissions: ADMIN,
       dm_permission: false
     },
-    // Application System Commands
     {
       name: 'createapplication',
       description: 'Admins: Create a new application panel.',
@@ -201,7 +196,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 3, // STRING
+          type: 3,
           name: 'panel_id',
           description: 'The ID of the panel to delete',
           required: true
@@ -215,7 +210,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 3, // STRING
+          type: 3,
           name: 'panel_id',
           description: 'The ID of the panel to edit',
           required: true
@@ -229,7 +224,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 3, // STRING
+          type: 3,
           name: 'panel_id',
           description: 'Specific panel ID (optional)',
           required: false
@@ -243,7 +238,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 6, // USER
+          type: 6,
           name: 'user',
           description: 'User to check history for',
           required: true
@@ -257,7 +252,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 3, // STRING
+          type: 3,
           name: 'action',
           description: 'What to do',
           required: true,
@@ -268,13 +263,13 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 6, // USER
+          type: 6,
           name: 'user',
           description: 'User to add/remove from blacklist',
           required: false
         },
         {
-          type: 3, // STRING
+          type: 3,
           name: 'reason',
           description: 'Reason for blacklisting',
           required: false
@@ -288,7 +283,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 4, // INTEGER
+          type: 4,
           name: 'days',
           description: 'Delete tickets older than this many days (default: 30)',
           required: false,
@@ -297,7 +292,6 @@ async function registerSlashCommands(client) {
         }
       ]
     },
-    // Gambling Commands (Admin)
     {
       name: 'givegamblingmoney',
       description: 'Admins: Grant gambling coins to a user.',
@@ -305,13 +299,13 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 6, // USER
+          type: 6,
           name: 'user',
           description: 'User to give money to',
           required: true
         },
         {
-          type: 4, // INTEGER
+          type: 4,
           name: 'amount',
           description: 'Amount of coins to give',
           required: true,
@@ -326,7 +320,6 @@ async function registerSlashCommands(client) {
       default_member_permissions: ADMIN,
       dm_permission: false
     },
-    // Kill Bias Command (Admin)
     {
       name: 'killbias',
       description: 'Admins: Secretly adjust kill success rates for users.',
@@ -334,7 +327,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 3, // STRING
+          type: 3,
           name: 'action',
           description: 'What to do',
           required: true,
@@ -346,13 +339,13 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 6, // USER
+          type: 6,
           name: 'user',
           description: 'User to modify (for set/remove/check)',
           required: false
         },
         {
-          type: 4, // INTEGER
+          type: 4,
           name: 'success_rate',
           description: 'Success rate 0-100 (50 is default, for set only)',
           required: false,
@@ -360,14 +353,13 @@ async function registerSlashCommands(client) {
           max_value: 100
         },
         {
-          type: 3, // STRING
+          type: 3,
           name: 'reason',
           description: 'Reason for the bias (for set only)',
           required: false
         }
       ]
     },
-    // Broadcast Commands (Admin)
     {
       name: 'startbroadcast',
       description: 'Admins: Start broadcasting selected users as an audio stream.',
@@ -375,11 +367,11 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 7, // CHANNEL
+          type: 7,
           name: 'source_channel',
           description: 'Voice channel to monitor (leadership channel)',
           required: true,
-          channel_types: [2] // Voice channel only
+          channel_types: [2]
         }
       ]
     },
@@ -396,7 +388,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 6, // USER
+          type: 6,
           name: 'user',
           description: 'User whose voice should be broadcast',
           required: true
@@ -410,7 +402,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 6, // USER
+          type: 6,
           name: 'user',
           description: 'User to remove from broadcast',
           required: true
@@ -429,7 +421,6 @@ async function registerSlashCommands(client) {
       default_member_permissions: ADMIN,
       dm_permission: false
     },
-    // Wishlist Commands (Admin)
     {
       name: 'wishlists',
       description: 'Admins: Create an auto-updating wishlist panel in this channel.',
@@ -443,7 +434,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 6, // USER
+          type: 6,
           name: 'user',
           description: 'User whose wishlist to reset',
           required: true
@@ -457,7 +448,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 3, // STRING
+          type: 3,
           name: 'action',
           description: 'Freeze or unfreeze wishlists',
           required: true,
@@ -480,32 +471,30 @@ async function registerSlashCommands(client) {
       default_member_permissions: ADMIN,
       dm_permission: false
     },
-    // Poll Commands
     {
       name: 'guildpoll',
       description: 'Admins: Create a guild-wide poll with voting options.',
       default_member_permissions: ADMIN,
       dm_permission: false
     },
-    // AutoMod Commands
     {
       name: 'automod',
-      description: 'Admins: Configure automatic moderation system.',
+      description: 'Admins: Configure automatic moderation and translation system.',
       default_member_permissions: ADMIN,
       dm_permission: false,
       options: [
         {
-          type: 1, // SUB_COMMAND
+          type: 1,
           name: 'setup',
           description: 'Initial AutoMod setup'
         },
         {
-          type: 1, // SUB_COMMAND
+          type: 1,
           name: 'toggle',
           description: 'Enable or disable AutoMod',
           options: [
             {
-              type: 3, // STRING
+              type: 3,
               name: 'action',
               description: 'Enable or disable',
               required: true,
@@ -517,12 +506,12 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 1, // SUB_COMMAND
+          type: 1,
           name: 'channels',
           description: 'Manage monitored channels',
           options: [
             {
-              type: 3, // STRING
+              type: 3,
               name: 'action',
               description: 'What to do',
               required: true,
@@ -533,7 +522,7 @@ async function registerSlashCommands(client) {
               ]
             },
             {
-              type: 7, // CHANNEL
+              type: 7,
               name: 'channel',
               description: 'Channel to add/remove',
               required: false
@@ -541,12 +530,12 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 1, // SUB_COMMAND
+          type: 1,
           name: 'exempt',
           description: 'Manage exempt roles',
           options: [
             {
-              type: 3, // STRING
+              type: 3,
               name: 'action',
               description: 'What to do',
               required: true,
@@ -557,7 +546,7 @@ async function registerSlashCommands(client) {
               ]
             },
             {
-              type: 8, // ROLE
+              type: 8,
               name: 'role',
               description: 'Role to add/remove',
               required: false
@@ -565,12 +554,12 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 1, // SUB_COMMAND
+          type: 1,
           name: 'logchannel',
           description: 'Set channel for moderation logs',
           options: [
             {
-              type: 7, // CHANNEL
+              type: 7,
               name: 'channel',
               description: 'Channel for logs',
               required: true
@@ -578,12 +567,12 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 1, // SUB_COMMAND
+          type: 1,
           name: 'timeout',
           description: 'Set timeout duration',
           options: [
             {
-              type: 4, // INTEGER
+              type: 4,
               name: 'minutes',
               description: 'Timeout duration in minutes (1-1440)',
               required: true,
@@ -593,12 +582,12 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 1, // SUB_COMMAND
+          type: 1,
           name: 'warnings',
           description: 'View user warnings',
           options: [
             {
-              type: 6, // USER
+              type: 6,
               name: 'user',
               description: 'User to check warnings for',
               required: true
@@ -606,12 +595,12 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 1, // SUB_COMMAND
+          type: 1,
           name: 'clearwarnings',
           description: 'Clear all warnings for a user',
           options: [
             {
-              type: 6, // USER
+              type: 6,
               name: 'user',
               description: 'User to clear warnings for',
               required: true
@@ -619,14 +608,59 @@ async function registerSlashCommands(client) {
           ]
         },
         {
-          type: 1, // SUB_COMMAND
+          type: 1,
           name: 'status',
           description: 'View AutoMod configuration'
+        },
+        {
+          type: 1,
+          name: 'translation',
+          description: 'Enable or disable auto-translation',
+          options: [
+            {
+              type: 3,
+              name: 'action',
+              description: 'Enable or disable',
+              required: true,
+              choices: [
+                { name: 'ON (Enable Translation)', value: 'on' },
+                { name: 'OFF (Disable Translation)', value: 'off' }
+              ]
+            }
+          ]
+        },
+        {
+          type: 1,
+          name: 'translationmode',
+          description: 'Set how translations are displayed',
+          options: [
+            {
+              type: 3,
+              name: 'mode',
+              description: 'Display mode',
+              required: true,
+              choices: [
+                { name: 'Reply (post as reply)', value: 'reply' },
+                { name: 'Thread (create thread)', value: 'thread' }
+              ]
+            }
+          ]
+        },
+        {
+          type: 1,
+          name: 'translationlanguages',
+          description: 'Set which languages to translate between',
+          options: [
+            {
+              type: 3,
+              name: 'languages',
+              description: 'Comma-separated list (e.g., "en,de,fr")',
+              required: true
+            }
+          ]
         }
       ]
     },
-
-    // ----- Everyone -----
     {
       name: 'myinfo',
       description: 'View and manage your party information.',
@@ -637,20 +671,18 @@ async function registerSlashCommands(client) {
       description: 'View all static parties.',
       dm_permission: false
     },
-    // Wishlist Commands (Everyone)
     {
       name: 'mywishlist',
       description: 'Setup and manage your item wishlist.',
       dm_permission: false
     },
-    // Gambling Commands (Everyone)
     {
       name: 'gamblingbalance',
       description: 'Check your or another user\'s gambling balance.',
       dm_permission: false,
       options: [
         {
-          type: 6, // USER
+          type: 6,
           name: 'user',
           description: 'User to check balance for (optional)',
           required: false
@@ -668,7 +700,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 4, // INTEGER
+          type: 4,
           name: 'bet',
           description: 'Amount to bet (10-1,000,000,000,000,000 coins)',
           required: true,
@@ -683,7 +715,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 4, // INTEGER
+          type: 4,
           name: 'bet',
           description: 'Amount to bet (10-1,000,000,000,000,000 coins)',
           required: true,
@@ -691,7 +723,7 @@ async function registerSlashCommands(client) {
           max_value: 1000000000000000
         },
         {
-          type: 3, // STRING
+          type: 3,
           name: 'choice',
           description: 'Heads or Tails?',
           required: true,
@@ -713,7 +745,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 6, // USER
+          type: 6,
           name: 'target',
           description: 'User to rob',
           required: true
@@ -726,7 +758,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 6, // USER
+          type: 6,
           name: 'target',
           description: 'User to eliminate',
           required: true
@@ -739,13 +771,13 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 6, // USER
+          type: 6,
           name: 'user',
           description: 'User to send coins to',
           required: true
         },
         {
-          type: 4, // INTEGER
+          type: 4,
           name: 'amount',
           description: 'Amount of coins to send',
           required: true,
@@ -760,7 +792,7 @@ async function registerSlashCommands(client) {
       dm_permission: false,
       options: [
         {
-          type: 3, // STRING
+          type: 3,
           name: 'type',
           description: 'Type of leaderboard to view',
           required: false,
@@ -781,11 +813,9 @@ async function registerSlashCommands(client) {
   console.log(`   Total commands: ${commands.length}`);
   console.log(`   Commands: ${commands.map(c => c.name).join(', ')}`);
 
-  // Register globally (takes up to 1 hour to propagate)
   const globalCommands = await client.application.commands.set(commands);
   console.log('✅ Global commands registered:', globalCommands.size);
 
-  // Register to specific guild(s) for instant updates (optional but recommended for development)
   const GUILD_IDS = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',') : [];
 
   if (GUILD_IDS.length > 0) {
@@ -805,15 +835,6 @@ async function registerSlashCommands(client) {
     console.log('   To enable instant updates, add: GUILD_IDS=your_guild_id_here');
   }
 
-  // Verify screenshot command was registered
-  const screenshotCmd = globalCommands.find(c => c.name === 'screenshot');
-  if (screenshotCmd) {
-    console.log('✅ Screenshot command verified:', screenshotCmd.id);
-  } else {
-    console.error('❌ WARNING: Screenshot command not found in registered commands!');
-  }
-
-  // Verify automod command was registered
   const automodCmd = globalCommands.find(c => c.name === 'automod');
   if (automodCmd) {
     console.log('✅ AutoMod command verified:', automodCmd.id);

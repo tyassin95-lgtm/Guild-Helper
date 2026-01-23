@@ -2,7 +2,7 @@
  * /automod command - Main configuration command
  */
 
-const { PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { getActiveWarnings, clearWarnings, WARNINGS_BEFORE_TIMEOUT } = require('../utils/warningManager');
 
 async function handleAutoMod({ interaction, collections }) {
@@ -47,11 +47,20 @@ async function handleAutoMod({ interaction, collections }) {
   if (subcommand === 'clearwarnings') {
     return handleClearWarnings({ interaction, collections });
   }
+
+  if (subcommand === 'translation') {
+    return handleTranslation({ interaction, collections });
+  }
+
+  if (subcommand === 'translationmode') {
+    return handleTranslationMode({ interaction, collections });
+  }
+
+  if (subcommand === 'translationlanguages') {
+    return handleTranslationLanguages({ interaction, collections });
+  }
 }
 
-/**
- * /automod setup - Initial setup wizard
- */
 async function handleSetup({ interaction, collections }) {
   const { automodSettings } = collections;
 
@@ -64,20 +73,22 @@ async function handleSetup({ interaction, collections }) {
     });
   }
 
-  // Create default settings
   await automodSettings.updateOne(
     { guildId: interaction.guildId },
     {
       $set: {
         guildId: interaction.guildId,
-        enabled: false, // Start disabled
+        enabled: false,
         enabledChannelIds: [],
         exemptRoleIds: [],
-        timeoutDuration: 300, // 5 minutes
-        severityThreshold: 'low', // Changed to 'low' to catch all levels including warnings
+        timeoutDuration: 300,
+        severityThreshold: 'low',
         sendDM: true,
         timeoutUser: true,
         logChannelId: null,
+        translationEnabled: false,
+        translationMode: 'reply',
+        translationLanguages: ['de', 'fr', 'en'],
         createdAt: new Date()
       }
     },
@@ -92,7 +103,10 @@ async function handleSetup({ interaction, collections }) {
                    '• Minor violations (insults, rudeness) = Warning\n' +
                    '• 3 warnings in 24 hours = Automatic timeout\n' +
                    '• Serious violations (slurs, threats) = Immediate timeout\n\n' +
-                   'Configure it using the following commands:')
+                   '**Translation Feature:**\n' +
+                   '• Automatically translate messages between languages\n' +
+                   '• Supports: 🇬🇧 English, 🇩🇪 German, 🇫🇷 French\n' +
+                   '• Enable with `/automod translation on`')
     .addFields(
       { name: '📍 Monitor Channels', value: '`/automod channels add #channel` - Add channels to monitor', inline: false },
       { name: '🛡️ Exempt Roles', value: '`/automod exempt add @role` - Exempt roles from automod', inline: false },
@@ -100,6 +114,7 @@ async function handleSetup({ interaction, collections }) {
       { name: '⏱️ Timeout Duration', value: '`/automod timeout 5` - Set timeout duration (in minutes)', inline: false },
       { name: '⚠️ View Warnings', value: '`/automod warnings @user` - Check user warnings', inline: false },
       { name: '🧹 Clear Warnings', value: '`/automod clearwarnings @user` - Reset warnings', inline: false },
+      { name: '🌐 Translation', value: '`/automod translation on` - Enable auto-translation', inline: false },
       { name: '✅ Enable AutoMod', value: '`/automod toggle on` - Enable the system', inline: false },
       { name: '📊 View Status', value: '`/automod status` - View current configuration', inline: false }
     )
@@ -109,9 +124,6 @@ async function handleSetup({ interaction, collections }) {
   return interaction.reply({ embeds: [embed], flags: [64] });
 }
 
-/**
- * /automod toggle - Enable/disable automod
- */
 async function handleToggle({ interaction, collections }) {
   const { automodSettings } = collections;
   const action = interaction.options.getString('action');
@@ -127,7 +139,6 @@ async function handleToggle({ interaction, collections }) {
     });
   }
 
-  // Warn if enabling without channels configured
   if (enabled && (!settings.enabledChannelIds || settings.enabledChannelIds.length === 0)) {
     return interaction.reply({
       content: '⚠️ Cannot enable AutoMod: No channels are configured for monitoring.\n\nUse `/automod channels add #channel` to add channels first.',
@@ -148,9 +159,6 @@ async function handleToggle({ interaction, collections }) {
   });
 }
 
-/**
- * /automod channels - Manage monitored channels
- */
 async function handleChannels({ interaction, collections }) {
   const { automodSettings } = collections;
   const action = interaction.options.getString('action');
@@ -238,9 +246,6 @@ async function handleChannels({ interaction, collections }) {
   }
 }
 
-/**
- * /automod exempt - Manage exempt roles
- */
 async function handleExempt({ interaction, collections }) {
   const { automodSettings } = collections;
   const action = interaction.options.getString('action');
@@ -328,9 +333,6 @@ async function handleExempt({ interaction, collections }) {
   }
 }
 
-/**
- * /automod logchannel - Set log channel
- */
 async function handleLogChannel({ interaction, collections }) {
   const { automodSettings } = collections;
   const channel = interaction.options.getChannel('channel');
@@ -355,9 +357,6 @@ async function handleLogChannel({ interaction, collections }) {
   });
 }
 
-/**
- * /automod timeout - Set timeout duration
- */
 async function handleTimeout({ interaction, collections }) {
   const { automodSettings } = collections;
   const minutes = interaction.options.getInteger('minutes');
@@ -389,9 +388,6 @@ async function handleTimeout({ interaction, collections }) {
   });
 }
 
-/**
- * /automod status - View current settings
- */
 async function handleStatus({ interaction, collections }) {
   const { automodSettings } = collections;
 
@@ -403,6 +399,16 @@ async function handleStatus({ interaction, collections }) {
       flags: [64]
     });
   }
+
+  const translationStatus = settings.translationEnabled 
+    ? `✅ **ENABLED** (Mode: ${settings.translationMode || 'reply'})`
+    : '❌ **DISABLED**';
+
+  const languages = settings.translationLanguages || ['de', 'fr', 'en'];
+  const languageFlags = languages.map(lang => {
+    const flags = { en: '🇬🇧', de: '🇩🇪', fr: '🇫🇷' };
+    return flags[lang] || lang;
+  }).join(' ');
 
   const embed = new EmbedBuilder()
     .setColor(settings.enabled ? '#2ecc71' : '#95a5a6')
@@ -419,6 +425,16 @@ async function handleStatus({ interaction, collections }) {
       { 
         name: '⏱️ Timeout Duration', 
         value: `${Math.floor(settings.timeoutDuration / 60)} minutes`, 
+        inline: true 
+      },
+      { 
+        name: '🌐 Translation', 
+        value: translationStatus, 
+        inline: true 
+      },
+      { 
+        name: '🗣️ Translation Languages', 
+        value: `${languageFlags} (${languages.join(', ').toUpperCase()})`, 
         inline: true 
       },
       { 
@@ -447,9 +463,6 @@ async function handleStatus({ interaction, collections }) {
   return interaction.reply({ embeds: [embed], flags: [64] });
 }
 
-/**
- * /automod warnings - View user warnings
- */
 async function handleViewWarnings({ interaction, collections }) {
   const user = interaction.options.getUser('user');
 
@@ -475,7 +488,7 @@ async function handleViewWarnings({ interaction, collections }) {
     .setTimestamp();
 
   warnings.forEach((warning, index) => {
-    const timeAgo = Math.floor((Date.now() - warning.timestamp.getTime()) / 1000 / 60); // minutes ago
+    const timeAgo = Math.floor((Date.now() - warning.timestamp.getTime()) / 1000 / 60);
     const hoursAgo = Math.floor(timeAgo / 60);
     const minutesAgo = timeAgo % 60;
 
@@ -496,9 +509,6 @@ async function handleViewWarnings({ interaction, collections }) {
   return interaction.reply({ embeds: [embed], flags: [64] });
 }
 
-/**
- * /automod clearwarnings - Clear all warnings for a user
- */
 async function handleClearWarnings({ interaction, collections }) {
   const user = interaction.options.getUser('user');
 
@@ -517,6 +527,127 @@ async function handleClearWarnings({ interaction, collections }) {
 
   return interaction.reply({
     content: `✅ Cleared ${count} warning${count === 1 ? '' : 's'} for ${user.tag}.`,
+    flags: [64]
+  });
+}
+
+async function handleTranslation({ interaction, collections }) {
+  const { automodSettings } = collections;
+  const action = interaction.options.getString('action');
+
+  const enabled = action === 'on';
+
+  const settings = await automodSettings.findOne({ guildId: interaction.guildId });
+
+  if (!settings) {
+    return interaction.reply({
+      content: '❌ AutoMod is not set up yet. Run `/automod setup` first.',
+      flags: [64]
+    });
+  }
+
+  await automodSettings.updateOne(
+    { guildId: interaction.guildId },
+    { $set: { translationEnabled: enabled } }
+  );
+
+  if (enabled) {
+    const mode = settings.translationMode || 'reply';
+    const languages = settings.translationLanguages || ['de', 'fr', 'en'];
+    const languageFlags = languages.map(lang => {
+      const flags = { en: '🇬🇧', de: '🇩🇪', fr: '🇫🇷' };
+      return flags[lang] || lang;
+    }).join(' ');
+
+    return interaction.reply({
+      content: `✅ **Translation is now ENABLED**\n\n` +
+               `**Mode:** ${mode}\n` +
+               `**Languages:** ${languageFlags} ${languages.join(', ').toUpperCase()}\n\n` +
+               `Messages will be automatically translated between enabled languages.\n` +
+               `Use \`/automod translationmode\` to change display mode.\n` +
+               `Use \`/automod translationlanguages\` to change languages.`,
+      flags: [64]
+    });
+  } else {
+    return interaction.reply({
+      content: '❌ **Translation is now DISABLED**\n\nMessages will no longer be translated.',
+      flags: [64]
+    });
+  }
+}
+
+async function handleTranslationMode({ interaction, collections }) {
+  const { automodSettings } = collections;
+  const mode = interaction.options.getString('mode');
+
+  const settings = await automodSettings.findOne({ guildId: interaction.guildId });
+
+  if (!settings) {
+    return interaction.reply({
+      content: '❌ AutoMod is not set up yet. Run `/automod setup` first.',
+      flags: [64]
+    });
+  }
+
+  await automodSettings.updateOne(
+    { guildId: interaction.guildId },
+    { $set: { translationMode: mode } }
+  );
+
+  const modeDescriptions = {
+    reply: 'Translations will be posted as replies to the original message',
+    thread: 'Translations will be posted in a thread attached to the message'
+  };
+
+  return interaction.reply({
+    content: `✅ **Translation mode set to: ${mode}**\n\n${modeDescriptions[mode]}`,
+    flags: [64]
+  });
+}
+
+async function handleTranslationLanguages({ interaction, collections }) {
+  const { automodSettings } = collections;
+  const languagesString = interaction.options.getString('languages');
+
+  const requestedLanguages = languagesString.toLowerCase().split(',').map(l => l.trim());
+  const supportedLanguages = ['en', 'de', 'fr'];
+
+  const invalidLanguages = requestedLanguages.filter(lang => !supportedLanguages.includes(lang));
+  if (invalidLanguages.length > 0) {
+    return interaction.reply({
+      content: `❌ Invalid language(s): ${invalidLanguages.join(', ')}\n\nSupported languages: en, de, fr`,
+      flags: [64]
+    });
+  }
+
+  if (requestedLanguages.length < 2) {
+    return interaction.reply({
+      content: '❌ You must enable at least 2 languages for translation to work.',
+      flags: [64]
+    });
+  }
+
+  const settings = await automodSettings.findOne({ guildId: interaction.guildId });
+
+  if (!settings) {
+    return interaction.reply({
+      content: '❌ AutoMod is not set up yet. Run `/automod setup` first.',
+      flags: [64]
+    });
+  }
+
+  await automodSettings.updateOne(
+    { guildId: interaction.guildId },
+    { $set: { translationLanguages: requestedLanguages } }
+  );
+
+  const languageFlags = requestedLanguages.map(lang => {
+    const flags = { en: '🇬🇧', de: '🇩🇪', fr: '🇫🇷' };
+    return flags[lang] || lang;
+  }).join(' ');
+
+  return interaction.reply({
+    content: `✅ **Translation languages updated**\n\n${languageFlags} ${requestedLanguages.join(', ').toUpperCase()}\n\nMessages will be translated between these languages.`,
     flags: [64]
   });
 }
