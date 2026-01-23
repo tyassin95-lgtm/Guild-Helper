@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, Partials } = require('discord.js');
 const { connectMongo, getCollections } = require('./db/mongo');
 const { ensureIndexes } = require('./db/indexes');
 const { registerSlashCommands } = require('./bot/commands');
@@ -15,6 +15,7 @@ const { streamServer } = require('./features/broadcast/server/streamServer');
 const { broadcastManager } = require('./features/broadcast/utils/broadcastManager');
 const { handleGearUpload } = require('./features/parties/handlers/gearUploadHandler');
 const { handleAutoModCheck } = require('./features/automod/handlers/messageHandler');
+const { handleTranslationReaction } = require('./features/automod/handlers/reactionHandler');
 
 const client = new Client({
   intents: [
@@ -22,8 +23,14 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates,  // Required for voice receiving
-    GatewayIntentBits.DirectMessages     // Required for DM gear uploads
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.GuildMessageReactions
+  ],
+  partials: [
+    Partials.Message,
+    Partials.Channel,
+    Partials.Reaction
   ]
 });
 
@@ -38,25 +45,15 @@ const client = new Client({
       await registerSlashCommands(client);
       console.log('Slash commands registered.');
 
-      // Start the HTTP stream server
       streamServer.start();
 
-      // Resume active item rolls after bot restart
       await resumeActiveItemRolls(client, collections);
-
-      // Start auto-updating item roll embeds every 5 minutes
       startItemRollAutoUpdate(client, collections);
 
-      // Resume active polls after bot restart
       await resumeActivePolls(client, collections);
-
-      // Start auto-updating poll system (checks every 60 seconds)
       startPollAutoUpdate(client, collections);
 
-      // Start PvP calendar auto-update (every 15 minutes)
       startCalendarAutoUpdate(client, collections);
-
-      // Start guild roster auto-update (every hour)
       startRosterAutoUpdate(client, collections);
     });
 
@@ -73,18 +70,14 @@ const client = new Client({
       }
     });
 
-    // Handle message events for gear screenshot uploads AND automod
     client.on('messageCreate', async (message) => {
-      // Ignore bot messages
       if (message.author.bot) return;
 
       try {
-        // Handle automod check for guild messages
         if (message.guild) {
           await handleAutoModCheck({ message, collections, client });
         }
 
-        // Handle gear screenshot uploads (only process messages with attachments)
         if (message.attachments.size > 0) {
           await handleGearUpload({ message, collections });
         }
@@ -93,27 +86,36 @@ const client = new Client({
       }
     });
 
-    // Handle graceful shutdown
+    client.on('messageReactionAdd', async (reaction, user) => {
+      if (user.bot) return;
+
+      try {
+        if (reaction.partial) {
+          try {
+            await reaction.fetch();
+          } catch (error) {
+            console.error('Error fetching reaction:', error);
+            return;
+          }
+        }
+
+        await handleTranslationReaction({ reaction, user, collections, client });
+      } catch (err) {
+        console.error('Error handling reaction:', err);
+      }
+    });
+
     process.on('SIGINT', async () => {
       console.log('\n🛑 Shutting down gracefully...');
 
-      // Stop item roll auto-updates
       stopItemRollAutoUpdate();
-
-      // Stop poll auto-updates
       stopPollAutoUpdate();
-
-      // Stop calendar auto-updates
       stopCalendarAutoUpdate();
-
-      // Stop roster auto-updates
       stopRosterAutoUpdate();
 
-      // Stop all broadcasts
       broadcastManager.stopAll();
       streamServer.stop();
 
-      // Destroy Discord client
       client.destroy();
 
       console.log('✅ Shutdown complete');
@@ -123,23 +125,14 @@ const client = new Client({
     process.on('SIGTERM', async () => {
       console.log('\n🛑 SIGTERM received, shutting down...');
 
-      // Stop item roll auto-updates
       stopItemRollAutoUpdate();
-
-      // Stop poll auto-updates
       stopPollAutoUpdate();
-
-      // Stop calendar auto-updates
       stopCalendarAutoUpdate();
-
-      // Stop roster auto-updates
       stopRosterAutoUpdate();
 
-      // Stop all broadcasts
       broadcastManager.stopAll();
       streamServer.stop();
 
-      // Destroy Discord client
       client.destroy();
 
       console.log('✅ Shutdown complete');

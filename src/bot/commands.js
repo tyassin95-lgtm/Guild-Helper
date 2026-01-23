@@ -631,16 +631,6 @@ async function registerSlashCommands(client) {
         },
         {
           type: 1,
-          name: 'translationmode',
-          description: 'Set how translations are displayed',
-          options: [
-            {
-              type: 3,
-              name: 'mode',
-              description: 'Display mode',
-              required: true,
-              choices: [
-                { name: 'Reply (post as reply)', value: 'reply' },
                 { name: 'Thread (create thread)', value: 'thread' }
               ]
             }

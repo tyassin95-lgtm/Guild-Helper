@@ -1,29 +1,36 @@
 /**
- * ChatGPT API integration for message content analysis and translation
+ * ChatGPT API integration for message moderation and translation
  */
 
-async function analyzeAndTranslateMessage(messageContent, enabledLanguages = ['de', 'fr', 'en']) {
+async function analyzeMessageForModeration(messageContent) {
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
     console.error('OPENAI_API_KEY not found in environment variables');
     return {
-      moderation: { flagged: false, reason: 'API key missing', severity: 'none' },
-      translation: null
+      flagged: false,
+      reason: 'API key missing',
+      severity: 'none',
+      sourceLanguage: 'unknown'
     };
   }
 
-  const languagesList = enabledLanguages.join(', ');
-
-  const systemPrompt = `You are a Discord server moderator assistant with translation capabilities.
+  const systemPrompt = `You are a Discord server moderator assistant.
 
 Your job is to:
 1. Detect problematic messages and categorize their severity
-2. Provide fluent, natural translations of the message into other languages
+2. Detect the source language of the message
 
 CRITICAL: Read the ENTIRE message carefully to understand CONTEXT before flagging.
 
-**MODERATION LEVELS:**
+**MODERATION RULES:**
+
+If a message is ACCEPTABLE and does NOT violate any rules, you MUST respond with:
+- flagged: false
+- reason: "acceptable"
+- severity: "none"
+
+ONLY set flagged: true if the message ACTUALLY violates one of the rules below.
 
 **LOW (Warning-worthy):**
 - Mild personal insults directed AT someone in the Discord ("you're an idiot", "@user you're stupid")
@@ -44,7 +51,7 @@ CRITICAL: Read the ENTIRE message carefully to understand CONTEXT before flaggin
 - Severe harassment, doxxing attempts, or stalking behavior
 - Explicit and direct calls for harm or violence
 
-**DO NOT FLAG:**
+**DO NOT FLAG (these are ACCEPTABLE):**
 
 **VENTING/REPORTING:**
 - Users describing harassment they experienced
@@ -56,7 +63,6 @@ CRITICAL: Read the ENTIRE message carefully to understand CONTEXT before flaggin
 - Complaints about game groups, randoms, PUGs, or anonymous players
 - Frustration with unnamed strangers outside Discord
 - Venting about bad game experiences with strangers
-- Even if using offensive language, if it's about anonymous people NOT in the Discord, consider LOW severity at most
 
 **GENERAL DISCOURSE:**
 - Criticism of ideas, decisions, or actions
@@ -68,35 +74,29 @@ CRITICAL: Read the ENTIRE message carefully to understand CONTEXT before flaggin
 - Historical or academic discussion
 - Song lyrics, quotes, or cultural references
 
-**TRANSLATION GUIDELINES:**
-- Translate naturally as if written by a native speaker
-- Preserve tone, emotion, and intent
-- Keep slang and informal language informal in translation
-- Don't translate if message is too short (under 10 characters) or only emojis/symbols
-- Detect the source language automatically
-- Only translate to languages different from the source
+**LANGUAGE DETECTION:**
+Detect the primary language of the message. Common language codes:
+- en: English
+- de: German
+- fr: French
+- es: Spanish
+- pt: Portuguese
+- it: Italian
+- nl: Dutch
+- pl: Polish
+- ru: Russian
+- ar: Arabic
+- ja: Japanese
+- ko: Korean
+- zh: Chinese
 
 Respond ONLY with valid JSON in this exact format:
 {
-  "moderation": {
-    "flagged": false,
-    "reason": "acceptable",
-    "severity": "none"
-  },
-  "translation": {
-    "sourceLanguage": "en",
-    "shouldTranslate": true,
-    "translations": {
-      "de": "German translation here",
-      "fr": "French translation here"
-    }
-  }
-}
-
-If the message is too short to translate or only contains emojis, set shouldTranslate to false and translations to {}.
-Only include translations for languages DIFFERENT from the source language.
-
-Available languages for translation: ${languagesList}`;
+  "flagged": false,
+  "reason": "acceptable",
+  "severity": "none",
+  "sourceLanguage": "en"
+}`;
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -106,13 +106,13 @@ Available languages for translation: ${languagesList}`;
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Analyze and translate this message: "${messageContent}"` }
+          { role: 'user', content: `Analyze this message: "${messageContent}"` }
         ],
         temperature: 0.5,
-        max_tokens: 500,
+        max_tokens: 150,
         frequency_penalty: 0.3
       })
     });
@@ -121,8 +121,10 @@ Available languages for translation: ${languagesList}`;
       const errorData = await response.json().catch(() => ({}));
       console.error('OpenAI API error:', response.status, errorData);
       return {
-        moderation: { flagged: false, reason: 'API error', severity: 'none' },
-        translation: null
+        flagged: false,
+        reason: 'API error',
+        severity: 'none',
+        sourceLanguage: 'unknown'
       };
     }
 
@@ -132,32 +134,109 @@ Available languages for translation: ${languagesList}`;
     try {
       const result = JSON.parse(content);
 
-      if (typeof result.moderation?.flagged !== 'boolean') {
+      if (typeof result.flagged !== 'boolean') {
         console.error('Invalid AI response format:', content);
         return {
-          moderation: { flagged: false, reason: 'Invalid response', severity: 'none' },
-          translation: null
+          flagged: false,
+          reason: 'Invalid response',
+          severity: 'none',
+          sourceLanguage: 'unknown'
         };
+      }
+
+      if (result.reason === 'acceptable' && result.flagged === true) {
+        console.warn('AI returned contradictory response (flagged=true but reason=acceptable), correcting to flagged=false');
+        result.flagged = false;
+        result.severity = 'none';
       }
 
       return result;
     } catch (parseError) {
       console.error('Failed to parse AI response:', content);
       return {
-        moderation: { flagged: false, reason: 'Parse error', severity: 'none' },
-        translation: null
+        flagged: false,
+        reason: 'Parse error',
+        severity: 'none',
+        sourceLanguage: 'unknown'
       };
     }
 
   } catch (error) {
     console.error('ChatGPT analysis error:', error);
     return {
-      moderation: { flagged: false, reason: 'Network error', severity: 'none' },
-      translation: null
+      flagged: false,
+      reason: 'Network error',
+      severity: 'none',
+      sourceLanguage: 'unknown'
     };
   }
 }
 
+async function translateMessage(messageContent, targetLanguage) {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    console.error('OPENAI_API_KEY not found in environment variables');
+    return null;
+  }
+
+  const languageNames = {
+    en: 'English',
+    de: 'German',
+    fr: 'French',
+    es: 'Spanish'
+  };
+
+  const targetLanguageName = languageNames[targetLanguage] || targetLanguage;
+
+  const systemPrompt = `You are a professional translator. Translate the given message to ${targetLanguageName}.
+
+Rules:
+- Translate naturally as if written by a native speaker
+- Preserve tone, emotion, and intent
+- Keep slang and informal language informal in translation
+- Use cultural equivalents for idioms, not literal translations
+- Maintain the same level of formality
+- If the message contains Discord mentions (@user, #channel), keep them unchanged
+
+Respond ONLY with the translated text, no explanations or preamble.`;
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: messageContent }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('OpenAI API error:', response.status, errorData);
+      return null;
+    }
+
+    const data = await response.json();
+    const translation = data.choices[0].message.content.trim();
+
+    return translation;
+
+  } catch (error) {
+    console.error('Translation error:', error);
+    return null;
+  }
+}
+
 module.exports = {
-  analyzeAndTranslateMessage
+  analyzeMessageForModeration,
+  translateMessage
 };

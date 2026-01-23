@@ -1,8 +1,8 @@
 /**
- * Main message handler for automod system
+ * Main message handler for automod system with reaction-based translation
  */
 
-const { analyzeAndTranslateMessage } = require('../utils/chatgptAnalyzer');
+const { analyzeMessageForModeration } = require('../utils/chatgptAnalyzer');
 const { logModerationAction, sendLogToChannel } = require('../utils/moderationLogger');
 const {
   addWarning,
@@ -28,6 +28,63 @@ function isChannelMonitored({ channelId, settings }) {
   }
 
   return settings.enabledChannelIds.includes(channelId);
+}
+
+function shouldAddTranslationReactions(message) {
+  const content = message.content.trim();
+
+  if (!content || content.length === 0) {
+    return false;
+  }
+
+  if (message.attachments.size > 0 && !content) {
+    return false;
+  }
+
+  const urlRegex = /^https?:\/\/[^\s]+$/i;
+  if (urlRegex.test(content)) {
+    return false;
+  }
+
+  const emojiOnlyRegex = /^[\p{Emoji}\s]+$/u;
+  if (emojiOnlyRegex.test(content)) {
+    return false;
+  }
+
+  const words = content.split(/\s+/).filter(word => word.length > 0);
+  if (words.length === 1) {
+    return false;
+  }
+
+  return true;
+}
+
+async function addTranslationReactionsToMessage(message, sourceLanguage, settings) {
+  const enabledLanguages = settings.translationLanguages || ['en', 'de', 'fr', 'es'];
+
+  const languageFlags = {
+    en: '🇬🇧',
+    de: '🇩🇪',
+    fr: '🇫🇷',
+    es: '🇪🇸'
+  };
+
+  const reactionsToAdd = enabledLanguages
+    .filter(lang => lang !== sourceLanguage)
+    .map(lang => languageFlags[lang])
+    .filter(Boolean);
+
+  for (const emoji of reactionsToAdd) {
+    try {
+      await message.react(emoji);
+    } catch (error) {
+      console.error(`Failed to add reaction ${emoji}:`, error);
+    }
+  }
+
+  if (reactionsToAdd.length > 0) {
+    console.log(`Added translation reactions to message from ${message.author.tag}: ${reactionsToAdd.join(' ')}`);
+  }
 }
 
 async function takeModerationAction({ message, reason, severity, settings, collections, client }) {
@@ -197,60 +254,6 @@ async function takeModerationAction({ message, reason, severity, settings, colle
   }
 }
 
-async function sendTranslation({ message, translation, settings }) {
-  if (!translation || !translation.shouldTranslate) {
-    return;
-  }
-
-  const { sourceLanguage, translations } = translation;
-
-  if (!translations || Object.keys(translations).length === 0) {
-    return;
-  }
-
-  const languageFlags = {
-    en: '🇬🇧',
-    de: '🇩🇪',
-    fr: '🇫🇷'
-  };
-
-  const languageNames = {
-    en: 'English',
-    de: 'German',
-    fr: 'French'
-  };
-
-  const translationLines = Object.entries(translations).map(([lang, text]) => {
-    const flag = languageFlags[lang] || '🌐';
-    const name = languageNames[lang] || lang.toUpperCase();
-    return `${flag} **${name}:** ${text}`;
-  });
-
-  const translationMode = settings.translationMode || 'reply';
-
-  try {
-    if (translationMode === 'reply') {
-      await message.reply({
-        content: `🌐 **Translations**\n${translationLines.join('\n')}`,
-        allowedMentions: { repliedUser: false }
-      });
-    } else if (translationMode === 'thread') {
-      const thread = await message.startThread({
-        name: '🌐 Translations',
-        autoArchiveDuration: 60
-      });
-
-      await thread.send({
-        content: translationLines.join('\n')
-      });
-    }
-
-    console.log(`Translation sent for message from ${message.author.tag} (${sourceLanguage} → ${Object.keys(translations).join(', ')})`);
-  } catch (error) {
-    console.error('Failed to send translation:', error);
-  }
-}
-
 async function handleAutoModCheck({ message, collections, client }) {
   if (message.author.bot) return;
   if (!message.guild) return;
@@ -279,34 +282,31 @@ async function handleAutoModCheck({ message, collections, client }) {
 
     console.log(`Analyzing message from ${message.author.tag}: "${message.content.substring(0, 100)}..."`);
 
-    const enabledLanguages = settings.translationLanguages || ['de', 'fr', 'en'];
-    const result = await analyzeAndTranslateMessage(message.content, enabledLanguages);
+    const analysis = await analyzeMessageForModeration(message.content);
 
-    const { moderation, translation } = result;
-
-    if (moderation.flagged) {
-      console.log(`Message flagged: ${moderation.reason} (Severity: ${moderation.severity})`);
+    if (analysis.flagged) {
+      console.log(`Message flagged: ${analysis.reason} (Severity: ${analysis.severity})`);
 
       const severityThreshold = settings.severityThreshold || 'low';
       const severityLevels = { none: 0, low: 1, medium: 2, high: 3 };
 
-      if (severityLevels[moderation.severity] >= severityLevels[severityThreshold]) {
+      if (severityLevels[analysis.severity] >= severityLevels[severityThreshold]) {
         await takeModerationAction({
           message,
-          reason: moderation.reason,
-          severity: moderation.severity,
+          reason: analysis.reason,
+          severity: analysis.severity,
           settings,
           collections,
           client
         });
       } else {
-        console.log(`Message flagged but below severity threshold (${moderation.severity} < ${severityThreshold})`);
+        console.log(`Message flagged but below severity threshold (${analysis.severity} < ${severityThreshold})`);
       }
     } else {
-      console.log(`Message passed: ${moderation.reason}`);
+      console.log(`Message passed: ${analysis.reason}`);
 
-      if (settings.translationEnabled && translation) {
-        await sendTranslation({ message, translation, settings });
+      if (settings.translationEnabled && shouldAddTranslationReactions(message)) {
+        await addTranslationReactionsToMessage(message, analysis.sourceLanguage, settings);
       }
     }
 

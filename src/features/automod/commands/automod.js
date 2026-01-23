@@ -52,10 +52,6 @@ async function handleAutoMod({ interaction, collections }) {
     return handleTranslation({ interaction, collections });
   }
 
-  if (subcommand === 'translationmode') {
-    return handleTranslationMode({ interaction, collections });
-  }
-
   if (subcommand === 'translationlanguages') {
     return handleTranslationLanguages({ interaction, collections });
   }
@@ -87,8 +83,7 @@ async function handleSetup({ interaction, collections }) {
         timeoutUser: true,
         logChannelId: null,
         translationEnabled: false,
-        translationMode: 'reply',
-        translationLanguages: ['de', 'fr', 'en'],
+        translationLanguages: ['en', 'de', 'fr', 'es'],
         createdAt: new Date()
       }
     },
@@ -104,8 +99,8 @@ async function handleSetup({ interaction, collections }) {
                    '• 3 warnings in 24 hours = Automatic timeout\n' +
                    '• Serious violations (slurs, threats) = Immediate timeout\n\n' +
                    '**Translation Feature:**\n' +
-                   '• Automatically translate messages between languages\n' +
-                   '• Supports: 🇬🇧 English, 🇩🇪 German, 🇫🇷 French\n' +
+                   '• React with flag emojis to translate messages\n' +
+                   '• Supports: 🇬🇧 English, 🇩🇪 German, 🇫🇷 French, 🇪🇸 Spanish\n' +
                    '• Enable with `/automod translation on`')
     .addFields(
       { name: '📍 Monitor Channels', value: '`/automod channels add #channel` - Add channels to monitor', inline: false },
@@ -114,7 +109,7 @@ async function handleSetup({ interaction, collections }) {
       { name: '⏱️ Timeout Duration', value: '`/automod timeout 5` - Set timeout duration (in minutes)', inline: false },
       { name: '⚠️ View Warnings', value: '`/automod warnings @user` - Check user warnings', inline: false },
       { name: '🧹 Clear Warnings', value: '`/automod clearwarnings @user` - Reset warnings', inline: false },
-      { name: '🌐 Translation', value: '`/automod translation on` - Enable auto-translation', inline: false },
+      { name: '🌐 Translation', value: '`/automod translation on` - Enable reaction-based translation', inline: false },
       { name: '✅ Enable AutoMod', value: '`/automod toggle on` - Enable the system', inline: false },
       { name: '📊 View Status', value: '`/automod status` - View current configuration', inline: false }
     )
@@ -401,12 +396,12 @@ async function handleStatus({ interaction, collections }) {
   }
 
   const translationStatus = settings.translationEnabled 
-    ? `✅ **ENABLED** (Mode: ${settings.translationMode || 'reply'})`
+    ? `✅ **ENABLED** (React with flags)`
     : '❌ **DISABLED**';
 
-  const languages = settings.translationLanguages || ['de', 'fr', 'en'];
+  const languages = settings.translationLanguages || ['en', 'de', 'fr', 'es'];
   const languageFlags = languages.map(lang => {
-    const flags = { en: '🇬🇧', de: '🇩🇪', fr: '🇫🇷' };
+    const flags = { en: '🇬🇧', de: '🇩🇪', fr: '🇫🇷', es: '🇪🇸' };
     return flags[lang] || lang;
   }).join(' ');
 
@@ -552,57 +547,28 @@ async function handleTranslation({ interaction, collections }) {
   );
 
   if (enabled) {
-    const mode = settings.translationMode || 'reply';
-    const languages = settings.translationLanguages || ['de', 'fr', 'en'];
+    const languages = settings.translationLanguages || ['en', 'de', 'fr', 'es'];
     const languageFlags = languages.map(lang => {
-      const flags = { en: '🇬🇧', de: '🇩🇪', fr: '🇫🇷' };
+      const flags = { en: '🇬🇧', de: '🇩🇪', fr: '🇫🇷', es: '🇪🇸' };
       return flags[lang] || lang;
     }).join(' ');
 
     return interaction.reply({
       content: `✅ **Translation is now ENABLED**\n\n` +
-               `**Mode:** ${mode}\n` +
                `**Languages:** ${languageFlags} ${languages.join(', ').toUpperCase()}\n\n` +
-               `Messages will be automatically translated between enabled languages.\n` +
-               `Use \`/automod translationmode\` to change display mode.\n` +
+               `**How it works:**\n` +
+               `• Messages get flag reactions automatically\n` +
+               `• Click a flag to get translation in DM\n` +
+               `• Translations are cached for instant delivery\n\n` +
                `Use \`/automod translationlanguages\` to change languages.`,
       flags: [64]
     });
   } else {
     return interaction.reply({
-      content: '❌ **Translation is now DISABLED**\n\nMessages will no longer be translated.',
+      content: '❌ **Translation is now DISABLED**\n\nNo translation reactions will be added to messages.',
       flags: [64]
     });
   }
-}
-
-async function handleTranslationMode({ interaction, collections }) {
-  const { automodSettings } = collections;
-  const mode = interaction.options.getString('mode');
-
-  const settings = await automodSettings.findOne({ guildId: interaction.guildId });
-
-  if (!settings) {
-    return interaction.reply({
-      content: '❌ AutoMod is not set up yet. Run `/automod setup` first.',
-      flags: [64]
-    });
-  }
-
-  await automodSettings.updateOne(
-    { guildId: interaction.guildId },
-    { $set: { translationMode: mode } }
-  );
-
-  const modeDescriptions = {
-    reply: 'Translations will be posted as replies to the original message',
-    thread: 'Translations will be posted in a thread attached to the message'
-  };
-
-  return interaction.reply({
-    content: `✅ **Translation mode set to: ${mode}**\n\n${modeDescriptions[mode]}`,
-    flags: [64]
-  });
 }
 
 async function handleTranslationLanguages({ interaction, collections }) {
@@ -610,12 +576,12 @@ async function handleTranslationLanguages({ interaction, collections }) {
   const languagesString = interaction.options.getString('languages');
 
   const requestedLanguages = languagesString.toLowerCase().split(',').map(l => l.trim());
-  const supportedLanguages = ['en', 'de', 'fr'];
+  const supportedLanguages = ['en', 'de', 'fr', 'es'];
 
   const invalidLanguages = requestedLanguages.filter(lang => !supportedLanguages.includes(lang));
   if (invalidLanguages.length > 0) {
     return interaction.reply({
-      content: `❌ Invalid language(s): ${invalidLanguages.join(', ')}\n\nSupported languages: en, de, fr`,
+      content: `❌ Invalid language(s): ${invalidLanguages.join(', ')}\n\nSupported languages: en, de, fr, es`,
       flags: [64]
     });
   }
@@ -642,12 +608,12 @@ async function handleTranslationLanguages({ interaction, collections }) {
   );
 
   const languageFlags = requestedLanguages.map(lang => {
-    const flags = { en: '🇬🇧', de: '🇩🇪', fr: '🇫🇷' };
+    const flags = { en: '🇬🇧', de: '🇩🇪', fr: '🇫🇷', es: '🇪🇸' };
     return flags[lang] || lang;
   }).join(' ');
 
   return interaction.reply({
-    content: `✅ **Translation languages updated**\n\n${languageFlags} ${requestedLanguages.join(', ').toUpperCase()}\n\nMessages will be translated between these languages.`,
+    content: `✅ **Translation languages updated**\n\n${languageFlags} ${requestedLanguages.join(', ').toUpperCase()}\n\nMessages will show flag reactions for these languages.`,
     flags: [64]
   });
 }

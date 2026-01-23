@@ -24,78 +24,48 @@ function getClient() {
 
 function getCollections(db = _db) {
   return {
-    // Guild settings (shared by all features)
     guildSettings: db.collection('guildSettings'),
-
-    // Raid system
     raidEvents: db.collection('raidEvents'),
-
-    // Party system
     partyPlayers: db.collection('partyPlayers'),
     parties: db.collection('parties'),
     partyPanels: db.collection('partyPanels'),
     guildRosters: db.collection('guildRosters'),
-
-    // DM context tracking
     dmContexts: db.collection('dmContexts'),
-
-    // PvP system
     pvpEvents: db.collection('pvpEvents'),
     pvpBonuses: db.collection('pvpBonuses'),
     pvpActivityRanking: db.collection('pvpActivityRanking'),
     pvpCalendars: db.collection('pvpCalendars'),
-
-    // Item Roll system
     itemRolls: db.collection('itemRolls'),
-
-    // Application system
     applicationPanels: db.collection('applicationPanels'),
     applicationTickets: db.collection('applicationTickets'),
     applicationResponses: db.collection('applicationResponses'),
     applicationNotes: db.collection('applicationNotes'),
     applicationBlacklist: db.collection('applicationBlacklist'),
     applicationCooldowns: db.collection('applicationCooldowns'),
-
-    // Gambling system
     gamblingBalances: db.collection('gamblingBalances'),
     gamblingFunds: db.collection('gamblingFunds'),
     gamblingGames: db.collection('gamblingGames'),
     blackjackGames: db.collection('blackjackGames'),
-    gamblingRaids: db.collection('gamblingRaids'), // NEW: Gambling raid system
-
-    // Trivia system
+    gamblingRaids: db.collection('gamblingRaids'),
     triviaStats: db.collection('triviaStats'),
     triviaSessions: db.collection('triviaSessions'),
-
-    // Rob system
     robCooldowns: db.collection('robCooldowns'),
     robStats: db.collection('robStats'),
-
-    // Kill system
     killCooldowns: db.collection('killCooldowns'),
     killStats: db.collection('killStats'),
     killBiases: db.collection('killBiases'),
-
-    // Transfer system
     transferHistory: db.collection('transferHistory'),
-
-    // Broadcast system
     broadcastSessions: db.collection('broadcastSessions'),
     broadcastUsers: db.collection('broadcastUsers'),
-
-    // Wishlist system
     wishlistSubmissions: db.collection('wishlistSubmissions'),
     wishlistPanels: db.collection('wishlistPanels'),
     wishlistSettings: db.collection('wishlistSettings'),
     wishlistGivenItems: db.collection('wishlistGivenItems'),
-
-    // Poll system
     guildPolls: db.collection('guildPolls'),
-
-    // AutoMod system
     automodSettings: db.collection('automodSettings'),
     automodLogs: db.collection('automodLogs'),
-    automodWarnings: db.collection('automodWarnings') // NEW: Warning tracking
+    automodWarnings: db.collection('automodWarnings'),
+    messageTranslations: db.collection('messageTranslations')
   };
 }
 
