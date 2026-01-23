@@ -1,5 +1,5 @@
 /**
- * Main message handler for automod system with button-based translation
+ * Main message handler for automod system with reaction-based translation
  */
 
 const { analyzeMessageForModeration } = require('../utils/chatgptAnalyzer');
@@ -13,7 +13,6 @@ const {
   clearWarnings,
   WARNINGS_BEFORE_TIMEOUT
 } = require('../utils/warningManager');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 function isUserExempt({ member, settings }) {
   if (!settings || !settings.exemptRoleIds || settings.exemptRoleIds.length === 0) {
@@ -31,7 +30,7 @@ function isChannelMonitored({ channelId, settings }) {
   return settings.enabledChannelIds.includes(channelId);
 }
 
-function shouldAddTranslationButtons(message) {
+function shouldAddTranslationReactions(message) {
   const content = message.content.trim();
 
   if (!content || content.length === 0) {
@@ -60,45 +59,31 @@ function shouldAddTranslationButtons(message) {
   return true;
 }
 
-async function addTranslationButtonsToMessage(message, sourceLanguage, settings) {
+async function addTranslationReactionsToMessage(message, sourceLanguage, settings) {
   const enabledLanguages = settings.translationLanguages || ['en', 'de', 'fr', 'es'];
 
-  const languageData = {
-    en: { flag: '🇬🇧', name: 'EN' },
-    de: { flag: '🇩🇪', name: 'DE' },
-    fr: { flag: '🇫🇷', name: 'FR' },
-    es: { flag: '🇪🇸', name: 'ES' }
+  const languageFlags = {
+    en: '🇬🇧',
+    de: '🇩🇪',
+    fr: '🇫🇷',
+    es: '🇪🇸'
   };
 
-  const buttonsToAdd = enabledLanguages
+  const reactionsToAdd = enabledLanguages
     .filter(lang => lang !== sourceLanguage)
-    .map(lang => {
-      const data = languageData[lang];
-      if (!data) return null;
-
-      return new ButtonBuilder()
-        .setCustomId(`translate_${lang}_${message.id}`)
-        .setLabel(`${data.flag} ${data.name}`)
-        .setStyle(ButtonStyle.Secondary);
-    })
+    .map(lang => languageFlags[lang])
     .filter(Boolean);
 
-  if (buttonsToAdd.length === 0) {
-    return;
+  for (const emoji of reactionsToAdd) {
+    try {
+      await message.react(emoji);
+    } catch (error) {
+      console.error(`Failed to add reaction ${emoji}:`, error);
+    }
   }
 
-  const row = new ActionRowBuilder().addComponents(buttonsToAdd);
-
-  try {
-    await message.reply({
-      content: '🌐 **Translation**',
-      components: [row],
-      allowedMentions: { repliedUser: false }
-    });
-
-    console.log(`Added translation buttons to message from ${message.author.tag}`);
-  } catch (error) {
-    console.error('Failed to add translation buttons:', error);
+  if (reactionsToAdd.length > 0) {
+    console.log(`Added translation reactions to message from ${message.author.tag}: ${reactionsToAdd.join(' ')}`);
   }
 }
 
@@ -320,8 +305,8 @@ async function handleAutoModCheck({ message, collections, client }) {
     } else {
       console.log(`Message passed: ${analysis.reason}`);
 
-      if (settings.translationEnabled && shouldAddTranslationButtons(message)) {
-        await addTranslationButtonsToMessage(message, analysis.sourceLanguage, settings);
+      if (settings.translationEnabled && shouldAddTranslationReactions(message)) {
+        await addTranslationReactionsToMessage(message, analysis.sourceLanguage, settings);
       }
     }
 
