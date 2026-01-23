@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { Client, GatewayIntentBits, Partials } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 const { connectMongo, getCollections } = require('./db/mongo');
 const { ensureIndexes } = require('./db/indexes');
 const { registerSlashCommands } = require('./bot/commands');
@@ -15,7 +15,6 @@ const { streamServer } = require('./features/broadcast/server/streamServer');
 const { broadcastManager } = require('./features/broadcast/utils/broadcastManager');
 const { handleGearUpload } = require('./features/parties/handlers/gearUploadHandler');
 const { handleAutoModCheck } = require('./features/automod/handlers/messageHandler');
-const { handleTranslationReaction } = require('./features/automod/handlers/reactionHandler');
 
 const client = new Client({
   intents: [
@@ -24,13 +23,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.DirectMessages,
-    GatewayIntentBits.GuildMessageReactions
-  ],
-  partials: [
-    Partials.Message,
-    Partials.Channel,
-    Partials.Reaction
+    GatewayIntentBits.DirectMessages
   ]
 });
 
@@ -83,25 +76,6 @@ const client = new Client({
         }
       } catch (err) {
         console.error('Error handling message:', err);
-      }
-    });
-
-    client.on('messageReactionAdd', async (reaction, user) => {
-      if (user.bot) return;
-
-      try {
-        if (reaction.partial) {
-          try {
-            await reaction.fetch();
-          } catch (error) {
-            console.error('Error fetching reaction:', error);
-            return;
-          }
-        }
-
-        await handleTranslationReaction({ reaction, user, collections, client });
-      } catch (err) {
-        console.error('Error handling reaction:', err);
       }
     });
 
