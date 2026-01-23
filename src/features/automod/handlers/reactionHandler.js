@@ -42,10 +42,6 @@ async function handleTranslationReaction({ reaction, user, collections, client }
       return;
     }
 
-    await user.send('⏳ Translating...').then(msg => {
-      setTimeout(() => msg.delete().catch(() => {}), 3000);
-    }).catch(() => {});
-
     let cachedTranslation = await messageTranslations.findOne({
       guildId: message.guild.id,
       messageId: message.id
@@ -61,7 +57,10 @@ async function handleTranslationReaction({ reaction, user, collections, client }
       translation = await translateMessage(message.content, targetLanguage);
 
       if (!translation) {
-        await user.send('❌ Translation failed. Please try again later.').catch(() => {});
+        await message.channel.send({
+          content: `${user}, ❌ Translation failed. Please try again later.`,
+          reply: { messageReference: message.id }
+        }).then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000));
         return;
       }
 
@@ -90,15 +89,20 @@ async function handleTranslationReaction({ reaction, user, collections, client }
     const languageName = LANGUAGE_NAMES[targetLanguage] || targetLanguage.toUpperCase();
     const flag = Object.keys(LANGUAGE_FLAGS).find(key => LANGUAGE_FLAGS[key] === targetLanguage);
 
-    await user.send({
-      content: `${flag} **${languageName} Translation:**\n>>> ${translation}\n\n*Original message by ${message.author.tag} in #${message.channel.name}*`
-    }).catch(err => {
-      console.error(`Failed to send translation DM to ${user.tag}:`, err);
+    await message.channel.send({
+      content: `${user}, ${flag} **${languageName}:**\n>>> ${translation}`,
+      reply: { messageReference: message.id },
+      allowedMentions: { users: [user.id] }
+    }).then(msg => {
+      setTimeout(() => msg.delete().catch(() => {}), 30000);
     });
 
   } catch (error) {
     console.error('Translation reaction error:', error);
-    await user.send('❌ An error occurred while translating. Please try again.').catch(() => {});
+    await message.channel.send({
+      content: `${user}, ❌ An error occurred while translating.`,
+      reply: { messageReference: message.id }
+    }).then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000));
   }
 }
 
