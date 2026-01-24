@@ -26,10 +26,10 @@ Your job is to form temporary 6-person parties for a specific event based on who
 1. Maximum 6 members per party
 2. Each party MUST have 1-2 tanks (no more, no less)
 3. Each party MUST have 1-3 healers
-4. Keep static parties with ≤2 members missing INTACT (don't shuffle them)
+4. Keep static parties with ≤2 members missing INTACT (but fill them to 6 if possible)
 5. Only reorganize parties with 3+ members missing
-6. Try to fill parties to 6 members when possible
-7. Prioritize role balance over keeping partial parties together
+6. Prioritize role balance over keeping partial parties together
+7. Put any unplaced members in new parties, even if you cant give them at least one healer and tank
 
 **Role Types:**
 - tank: Uses SnS (Sword & Shield)
