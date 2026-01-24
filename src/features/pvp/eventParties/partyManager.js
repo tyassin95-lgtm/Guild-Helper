@@ -127,12 +127,23 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
 
 /**
  * Fetch member data with roles
+ * CRITICAL: This function must return valid Discord user IDs (snowflakes)
  */
 async function fetchMembersWithRoles(userIds, guildId, guild, partyPlayers) {
   const members = [];
 
+  console.log(`\n=== Fetching ${userIds.length} members ===`);
+
   for (const userId of userIds) {
     try {
+      // CRITICAL: Validate that userId is a valid Discord snowflake
+      if (!userId || !/^\d+$/.test(userId)) {
+        console.error(`❌ Invalid user ID format: "${userId}" (type: ${typeof userId})`);
+        continue;
+      }
+
+      console.log(`Fetching user ${userId}...`);
+
       // Fetch player info from database
       const playerInfo = await partyPlayers.findOne({ userId, guildId });
 
@@ -141,27 +152,37 @@ async function fetchMembersWithRoles(userIds, guildId, guild, partyPlayers) {
 
       if (!playerInfo || !playerInfo.weapon1 || !playerInfo.weapon2) {
         // Member hasn't set up party info, skip them
-        console.warn(`User ${userId} has no party info, skipping`);
+        console.warn(`⚠️ User ${userId} has no party info, skipping`);
+        continue;
+      }
+
+      if (!discordMember) {
+        console.warn(`⚠️ User ${userId} not found in guild, skipping`);
         continue;
       }
 
       // Determine role
       const role = playerInfo.role || getRoleFromWeapons(playerInfo.weapon1, playerInfo.weapon2);
 
-      members.push({
-        userId,
-        displayName: discordMember?.displayName || playerInfo.displayName || 'Unknown',
+      const memberData = {
+        userId: userId, // CRITICAL: Ensure this is the actual Discord user ID
+        displayName: discordMember.displayName || playerInfo.displayName || 'Unknown',
         weapon1: playerInfo.weapon1,
         weapon2: playerInfo.weapon2,
         role,
         cp: playerInfo.cp || 0,
         isLeader: playerInfo.isPartyLeader || false
-      });
+      };
+
+      console.log(`✅ Added member: ${memberData.displayName} (ID: ${userId})`);
+      members.push(memberData);
+
     } catch (error) {
-      console.error(`Failed to fetch member ${userId}:`, error);
+      console.error(`❌ Failed to fetch member ${userId}:`, error);
     }
   }
 
+  console.log(`=== Fetched ${members.length} members successfully ===\n`);
   return members;
 }
 
@@ -176,10 +197,16 @@ async function enrichStaticPartiesWithAttendance(staticParties, attendingMembers
 
     for (const member of party.members || []) {
       try {
+        // CRITICAL: Validate user ID
+        if (!member.userId || !/^\d+$/.test(member.userId)) {
+          console.error(`❌ Invalid user ID in static party: "${member.userId}"`);
+          continue;
+        }
+
         const discordMember = await guild.members.fetch(member.userId).catch(() => null);
 
         enrichedMembers.push({
-          userId: member.userId,
+          userId: member.userId, // CRITICAL: Preserve original user ID
           displayName: discordMember?.displayName || 'Unknown',
           weapon1: member.weapon1,
           weapon2: member.weapon2,
@@ -256,12 +283,17 @@ async function handleApproveParties({ interaction, eventId, collections, client 
       eventTime: event.eventTime
     };
 
+    console.log('\n=== Starting DM send process ===');
+    console.log(`Parties to send: ${formation.temporaryParties.length}`);
+
     // Send DMs to all party members
     const dmResults = await sendPartyAssignmentDMs(
       formation.temporaryParties,
       eventInfo,
       client
     );
+
+    console.log('=== DM send process complete ===\n');
 
     // Mark as approved
     await eventParties.updateOne(
@@ -297,10 +329,10 @@ async function handleApproveParties({ interaction, eventId, collections, client 
     confirmMessage += `• Successfully sent: ${successCount} member${successCount !== 1 ? 's' : ''}\n`;
 
     if (failCount > 0) {
-      confirmMessage += `• Failed to send: ${failCount} member${failCount !== 1 ? 's' : ''} (DMs disabled)\n\n`;
+      confirmMessage += `• Failed to send: ${failCount} member${failCount !== 1 ? 's' : ''}\n\n`;
       confirmMessage += `**Failed DMs:**\n`;
       dmResults.failed.forEach(f => {
-        confirmMessage += `• ${f.displayName}\n`;
+        confirmMessage += `• ${f.displayName} - ${f.error}\n`;
       });
     }
 
@@ -322,6 +354,7 @@ async function handleApproveParties({ interaction, eventId, collections, client 
 
 /**
  * Send party assignment DMs to all members
+ * CRITICAL: This function MUST receive valid Discord user IDs (snowflakes)
  */
 async function sendPartyAssignmentDMs(temporaryParties, eventInfo, client) {
   const results = {
@@ -329,9 +362,26 @@ async function sendPartyAssignmentDMs(temporaryParties, eventInfo, client) {
     failed: []
   };
 
+  console.log(`\n=== Sending DMs to ${temporaryParties.reduce((sum, p) => sum + p.members.length, 0)} members ===`);
+
   for (const party of temporaryParties) {
+    console.log(`\nProcessing Party ${party.tempPartyNumber} (${party.members.length} members):`);
+
     for (const member of party.members) {
       try {
+        // CRITICAL: Validate that userId is a valid Discord snowflake (numeric string)
+        if (!member.userId || !/^\d+$/.test(member.userId)) {
+          console.error(`❌ Invalid user ID for ${member.displayName}: "${member.userId}" (type: ${typeof member.userId})`);
+          results.failed.push({
+            userId: member.userId || 'unknown',
+            displayName: member.displayName,
+            error: 'Invalid user ID format (expected numeric Discord ID, got username or invalid value)'
+          });
+          continue;
+        }
+
+        console.log(`  Sending DM to ${member.displayName} (${member.userId})...`);
+
         const user = await client.users.fetch(member.userId);
         const dmMessage = createPartyAssignmentDM(member, party, eventInfo);
 
@@ -342,10 +392,13 @@ async function sendPartyAssignmentDMs(temporaryParties, eventInfo, client) {
           displayName: member.displayName
         });
 
+        console.log(`  ✅ DM sent successfully`);
+
         // Small delay to avoid rate limits
         await new Promise(resolve => setTimeout(resolve, 500));
+
       } catch (error) {
-        console.error(`Failed to send DM to ${member.displayName}:`, error.message);
+        console.error(`  ❌ Failed to send DM: ${error.message}`);
         results.failed.push({
           userId: member.userId,
           displayName: member.displayName,
@@ -354,6 +407,8 @@ async function sendPartyAssignmentDMs(temporaryParties, eventInfo, client) {
       }
     }
   }
+
+  console.log(`\n=== DM Summary: ${results.successful.length} successful, ${results.failed.length} failed ===\n`);
 
   return results;
 }
