@@ -23,7 +23,7 @@ const { handlePvPButtons } = require('../../features/pvp/handlers/buttons');
 const { handlePvPSelects } = require('../../features/pvp/handlers/selects');
 const { handlePvPModals } = require('../../features/pvp/handlers/modals');
 
-// Event Party imports (NEW)
+// Event Party imports
 const {
   handleApproveParties,
   handleCancelParties
@@ -35,7 +35,8 @@ const {
   handleBackToEdit,
   handleAddMemberToParty,
   handleRemoveMemberFromParty,
-  handleBackToParty
+  handleBackToParty,
+  handleSwapMembers
 } = require('../../features/pvp/eventParties/partyEditor');
 
 // Item Roll system imports
@@ -232,7 +233,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         return handleResetBonusesConfirmation({ interaction, collections });
       }
 
-      // Event party buttons (NEW SECTION)
+      // Event party buttons
       if (interaction.customId.startsWith('event_party_approve:')) {
         const eventId = interaction.customId.split(':')[1];
         return handleApproveParties({ interaction, eventId, collections, client });
@@ -270,6 +271,13 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         const eventId = parts[1];
         const partyNumber = parts[2];
         return handleRemoveMemberFromParty({ interaction, eventId, partyNumber: parseInt(partyNumber), collections });
+      }
+
+      if (interaction.customId.startsWith('event_party_swap_members:')) {
+        const parts = interaction.customId.split(':');
+        const eventId = parts[1];
+        const partyNumber = parts[2];
+        return handleSwapMembers({ interaction, eventId, partyNumber: parseInt(partyNumber), collections });
       }
 
       if (interaction.customId.startsWith('event_party_back_to_party:')) {
@@ -421,13 +429,8 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         return handleRaidSelects({ interaction, collections });
       }
 
-      // PvP system selects
-      if (interaction.customId.startsWith('pvp_')) {
-        return handlePvPSelects({ interaction, collections });
-      }
-
-      // Event party selects (NEW)
-      if (interaction.customId.startsWith('event_party_')) {
+      // PvP system selects (includes event party selects)
+      if (interaction.customId.startsWith('pvp_') || interaction.customId.startsWith('event_party_')) {
         return handlePvPSelects({ interaction, collections });
       }
 

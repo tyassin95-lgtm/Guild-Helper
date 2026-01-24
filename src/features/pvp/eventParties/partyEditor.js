@@ -145,6 +145,69 @@ async function handlePartySelectForEdit({ interaction, eventId, collections }) {
 }
 
 /**
+ * Show party edit view directly (helper function for after add/remove)
+ */
+async function showPartyEditView({ interaction, eventId, partyNumber, collections }) {
+  const { eventParties } = collections;
+
+  const formation = await eventParties.findOne({ eventId: new ObjectId(eventId) });
+  const party = formation.temporaryParties.find(p => p.tempPartyNumber === partyNumber);
+
+  if (!party) {
+    return interaction.editReply({
+      content: '❌ Party not found.',
+      components: []
+    });
+  }
+
+  // Show edit options for this party
+  const actionRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`event_party_add_member:${eventId}:${partyNumber}`)
+      .setLabel('Add Member')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('➕')
+      .setDisabled(party.members.length >= 6),
+    new ButtonBuilder()
+      .setCustomId(`event_party_remove_member:${eventId}:${partyNumber}`)
+      .setLabel('Remove Member')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('➖')
+      .setDisabled(party.members.length === 0),
+    new ButtonBuilder()
+      .setCustomId(`event_party_swap_members:${eventId}:${partyNumber}`)
+      .setLabel('Swap Between Parties')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('🔄')
+  );
+
+  const backRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`event_party_back_to_edit:${eventId}`)
+      .setLabel('Back to Party Selection')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('◀️')
+  );
+
+  const memberList = party.members.map((m, i) => {
+    const roleIcon = getRoleEmoji(m.role);
+    const leaderCrown = m.isLeader ? '👑 ' : '';
+    return `${i + 1}. ${roleIcon} ${leaderCrown}${m.displayName} (${m.weapon1}/${m.weapon2})`;
+  }).join('\n');
+
+  const content = 
+    `**Editing Party ${partyNumber}**\n\n` +
+    `**Members (${party.members.length}/6):**\n${memberList || '*No members*'}\n\n` +
+    `**Composition:** ${party.composition.tank} Tank, ${party.composition.healer} Healer, ${party.composition.dps} DPS\n\n` +
+    `Choose an action:`;
+
+  return interaction.editReply({
+    content,
+    components: [actionRow, backRow]
+  });
+}
+
+/**
  * Handle back to review button
  */
 async function handleBackToReview({ interaction, eventId, collections }) {
@@ -202,11 +265,6 @@ async function handleAddMemberToParty({ interaction, eventId, partyNumber, colle
       components: []
     });
   }
-
-  // Get all members already placed in any party
-  const placedUserIds = new Set(
-    formation.temporaryParties.flatMap(p => p.members.map(m => m.userId))
-  );
 
   // Get all available members (unplaced)
   const availableMembers = formation.unplacedMembers || [];
@@ -342,12 +400,7 @@ async function processAddMember({ interaction, eventId, partyNumber, userId, col
   );
 
   // Return to party edit view
-  return handlePartySelectForEdit({ 
-    interaction, 
-    eventId, 
-    collections,
-    values: [`party_${partyNumber}`]
-  });
+  return showPartyEditView({ interaction, eventId, partyNumber, collections });
 }
 
 /**
@@ -403,12 +456,7 @@ async function processRemoveMember({ interaction, eventId, partyNumber, userId, 
   );
 
   // Return to party edit view
-  return handlePartySelectForEdit({ 
-    interaction, 
-    eventId, 
-    collections,
-    values: [`party_${partyNumber}`]
-  });
+  return showPartyEditView({ interaction, eventId, partyNumber, collections });
 }
 
 /**
@@ -416,12 +464,21 @@ async function processRemoveMember({ interaction, eventId, partyNumber, userId, 
  */
 async function handleBackToParty({ interaction, eventId, partyNumber, collections }) {
   await interaction.deferUpdate();
+  return showPartyEditView({ interaction, eventId, partyNumber, collections });
+}
 
-  return handlePartySelectForEdit({
-    interaction,
-    eventId,
-    collections,
-    values: [`party_${partyNumber}`]
+/**
+ * Handle swap members button (placeholder - not fully implemented yet)
+ */
+async function handleSwapMembers({ interaction, eventId, partyNumber, collections }) {
+  await interaction.deferUpdate();
+
+  return interaction.editReply({
+    content: '⚠️ **Swap Members Feature**\n\nThis feature is not yet implemented. For now, please use:\n\n' +
+             '1. **Remove Member** - Remove from current party\n' +
+             '2. **Add Member** - Add to different party\n\n' +
+             'This achieves the same result as swapping.',
+    components: []
   });
 }
 
@@ -434,5 +491,6 @@ module.exports = {
   handleRemoveMemberFromParty,
   processAddMember,
   processRemoveMember,
-  handleBackToParty
+  handleBackToParty,
+  handleSwapMembers
 };
