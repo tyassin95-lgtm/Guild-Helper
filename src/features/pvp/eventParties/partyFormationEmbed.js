@@ -26,15 +26,30 @@ function createPartyFormationEmbed(aiResponse, eventInfo) {
   const location = eventInfo.location ? ` - ${eventInfo.location}` : '';
   const timestamp = Math.floor(eventInfo.eventTime.getTime() / 1000);
 
-  embed.setDescription(
-    `**Event:** ${eventName}${location}\n` +
+  // Build summary description with new fields
+  let summaryText = `**Event:** ${eventName}${location}\n` +
     `**Time:** <t:${timestamp}:F>\n\n` +
     `📊 **Summary:**\n` +
     `• ${summary.totalAttending} attending members\n` +
-    `• ${summary.partiesFormed} parties formed\n` +
-    `• ${summary.membersPlaced} members placed\n` +
-    `• ${summary.membersUnplaced} unplaced (reserve/bench)`
-  );
+    `• ${summary.partiesFormed} parties formed`;
+
+  // Add fullParties/partialParties if available
+  if (summary.fullParties !== undefined && summary.partialParties !== undefined) {
+    summaryText += ` (${summary.fullParties} full, ${summary.partialParties} partial)`;
+  }
+
+  summaryText += `\n• ${summary.membersPlaced} members placed`;
+
+  // Add average party size if available
+  if (summary.avgPartySize !== undefined) {
+    summaryText += `\n• ${summary.avgPartySize.toFixed(1)} avg party size`;
+  }
+
+  if (summary.membersUnplaced > 0) {
+    summaryText += `\n• ${summary.membersUnplaced} unplaced (see below)`;
+  }
+
+  embed.setDescription(summaryText);
 
   // Show warnings if any
   if (warnings && warnings.length > 0) {
@@ -45,7 +60,7 @@ function createPartyFormationEmbed(aiResponse, eventInfo) {
     });
   }
 
-  // Show each temporary party
+  // Show each temporary party with new status indicators
   for (const party of temporaryParties) {
     const memberList = party.members.map(m => {
       const roleIcon = getRoleEmoji(m.role);
@@ -58,12 +73,32 @@ function createPartyFormationEmbed(aiResponse, eventInfo) {
       ? ` (From Static ${party.sourceParties.map(p => `Party ${p}`).join(' & ')})`
       : ' (New Formation)';
 
-    const statusEmoji = party.members.length === 6 ? '✅' : '⚠️';
+    // Use new status field for emoji
+    let statusEmoji = '✅';
+    if (party.status === 'needs_filling') {
+      statusEmoji = party.members.length >= 5 ? '⚠️' : '🔶';
+    } else if (party.status === 'reorganized') {
+      statusEmoji = '🔄';
+    }
+
+    // Add filling strategy to title if available
+    let strategyText = '';
+    if (party.fillingStrategy) {
+      const strategyMap = {
+        'kept_intact': ' [Kept Intact]',
+        'added_dps': ' [+DPS]',
+        'added_tank': ' [+Tank]',
+        'added_healer': ' [+Healer]',
+        'reorganized': ' [Reorganized]'
+      };
+      strategyText = strategyMap[party.fillingStrategy] || '';
+    }
 
     embed.addFields({
-      name: `${statusEmoji} Party ${party.tempPartyNumber}${sourceInfo}`,
+      name: `${statusEmoji} Party ${party.tempPartyNumber}${sourceInfo}${strategyText}`,
       value: `${memberList}\n\n` +
-             `**Composition:** ${party.composition.tank} Tank, ${party.composition.healer} Healer, ${party.composition.dps} DPS\n` +
+             `**Composition:** ${party.composition.tank} Tank, ${party.composition.healer} Healer, ${party.composition.dps} DPS` +
+             ` (${party.members.length}/6 members)\n` +
              `*${party.notes}*`,
       inline: false
     });
@@ -77,7 +112,7 @@ function createPartyFormationEmbed(aiResponse, eventInfo) {
     }).join('\n');
 
     embed.addFields({
-      name: '📦 Unplaced Members (Reserve/Bench)',
+      name: '📦 Unplaced Members (Unable to Place)',
       value: unplacedList,
       inline: false
     });

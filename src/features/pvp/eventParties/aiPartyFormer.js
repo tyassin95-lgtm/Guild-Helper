@@ -22,14 +22,38 @@ async function formPartiesWithAI({ staticParties, attendingMembers, maybeMembers
 
 Your job is to form temporary 6-person parties for a specific event based on who is attending.
 
-**CRITICAL RULES:**
-1. Maximum 6 members per party
-2. Each party MUST have 1-2 tanks (no more, no less)
-3. Each party MUST have 1-3 healers
-4. Keep static parties with ≤2 members missing INTACT (don't shuffle them)
-5. Only reorganize parties with 3+ members missing
-6. Try to fill parties to 6 members when possible
-7. Prioritize role balance over keeping partial parties together
+**CRITICAL RULES - TIERED APPROACH:**
+
+**TIER 1 - NEVER TOUCH (Highest Priority):**
+- Parties with ALL 6 members attending/maybe = Keep 100% INTACT
+- Do not reorganize, do not shuffle, do not change anything
+
+**TIER 2 - SMART FILLING (4-5 Members Present):**
+- Parties with 4-5 members attending = Keep existing members together, only ADD to fill
+- Default strategy: Fill empty slots with DPS
+- Exception: If party is missing a tank, prioritize adding a tank first
+- Exception: If party is missing a healer, prioritize adding a healer first
+- When filling with DPS, use weapon synergy (see below)
+
+**TIER 3 - REORGANIZE (≤3 Members Present):**
+- Parties with 3 or fewer members attending = Can be completely reorganized
+- Combine with other small parties or unassigned members
+- Aim for balanced 1-2 tanks, 1-3 healers per party
+
+**WEAPON SYNERGY FOR DPS FILLING:**
+When adding DPS to fill parties, prefer grouping similar weapon combinations:
+- Bow users together (Bow/Dagger, Bow/Staff, Bow/Wand)
+- Melee users together (GS/Dagger, GS/Sword, Dagger/Sword, GS/SnS)
+- Magic users together (Staff/Wand combinations)
+- Crossbow users together (XBow/anything)
+This improves coordination and strategy overlap.
+
+**CRITICAL - NO RESERVES/BENCH:**
+- Every attending/maybe member MUST be placed in a party
+- NEVER put anyone in unplacedMembers unless absolutely impossible
+- If you can't make perfect 6-person parties, create smaller parties (3, 4, or 5 members)
+- Warn about imbalanced parties, but don't exclude people
+- Only use unplacedMembers if there's literally nowhere to put someone (this should be extremely rare)
 
 **Role Types:**
 - tank: Uses SnS (Sword & Shield)
@@ -64,6 +88,8 @@ Your job is to form temporary 6-person parties for a specific event based on who
         "healer": number,
         "dps": number
       },
+      "status": "full|needs_filling|reorganized",
+      "fillingStrategy": "added_dps|added_tank|added_healer|kept_intact|reorganized",
       "sourceParties": [1, 2],
       "notes": "Brief explanation of why this party was formed this way"
     }
@@ -73,24 +99,25 @@ Your job is to form temporary 6-person parties for a specific event based on who
       "userId": "123456789012345678",
       "displayName": "PlayerName",
       "role": "string",
-      "reason": "Why they couldn't be placed"
+      "reason": "Why they couldn't be placed (should be very rare)"
     }
   ],
   "summary": {
     "totalAttending": number,
     "partiesFormed": number,
+    "fullParties": number,
+    "partialParties": number,
     "membersPlaced": number,
-    "membersUnplaced": number
+    "membersUnplaced": number,
+    "avgPartySize": number
   },
-  "warnings": ["Any issues or constraints that affected formation"]
+  "warnings": ["Any issues like imbalanced parties, missing roles, etc."]
 }
 
 **Important Notes:**
-- If a static party has 4+ members attending, try to keep them together
-- If a static party has ≤3 members attending, they can be shuffled
 - "Maybe" attendees should be treated as attending for planning purposes
-- Ensure every party has proper tank/healer balance
-- If there aren't enough tanks/healers, mention this in warnings
+- Prioritize getting everyone into a party over perfect role balance
+- Use warnings to flag composition issues, don't exclude people
 - Respond ONLY with valid JSON, no markdown formatting or code blocks
 - **CRITICAL**: Always use the actual userId value provided in the member data, NEVER use displayName in the userId field`;
 
