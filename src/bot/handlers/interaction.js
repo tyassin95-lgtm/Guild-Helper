@@ -23,6 +23,21 @@ const { handlePvPButtons } = require('../../features/pvp/handlers/buttons');
 const { handlePvPSelects } = require('../../features/pvp/handlers/selects');
 const { handlePvPModals } = require('../../features/pvp/handlers/modals');
 
+// Event Party imports (NEW)
+const {
+  handleApproveParties,
+  handleCancelParties
+} = require('../../features/pvp/eventParties/partyManager');
+
+const {
+  handleEditParties,
+  handleBackToReview,
+  handleBackToEdit,
+  handleAddMemberToParty,
+  handleRemoveMemberFromParty,
+  handleBackToParty
+} = require('../../features/pvp/eventParties/partyEditor');
+
 // Item Roll system imports
 const { handleItemRoll } = require('../../features/itemroll/commands/itemroll');
 const { handleItemRollButtons } = require('../../features/itemroll/handlers/itemRollButtons');
@@ -217,6 +232,53 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         return handleResetBonusesConfirmation({ interaction, collections });
       }
 
+      // Event party buttons (NEW SECTION)
+      if (interaction.customId.startsWith('event_party_approve:')) {
+        const eventId = interaction.customId.split(':')[1];
+        return handleApproveParties({ interaction, eventId, collections, client });
+      }
+
+      if (interaction.customId.startsWith('event_party_cancel:')) {
+        const eventId = interaction.customId.split(':')[1];
+        return handleCancelParties({ interaction, eventId, collections });
+      }
+
+      if (interaction.customId.startsWith('event_party_edit:')) {
+        const eventId = interaction.customId.split(':')[1];
+        return handleEditParties({ interaction, eventId, collections });
+      }
+
+      if (interaction.customId.startsWith('event_party_back_to_review:')) {
+        const eventId = interaction.customId.split(':')[1];
+        return handleBackToReview({ interaction, eventId, collections });
+      }
+
+      if (interaction.customId.startsWith('event_party_back_to_edit:')) {
+        const eventId = interaction.customId.split(':')[1];
+        return handleBackToEdit({ interaction, eventId, collections });
+      }
+
+      if (interaction.customId.startsWith('event_party_add_member:')) {
+        const parts = interaction.customId.split(':');
+        const eventId = parts[1];
+        const partyNumber = parts[2];
+        return handleAddMemberToParty({ interaction, eventId, partyNumber: parseInt(partyNumber), collections });
+      }
+
+      if (interaction.customId.startsWith('event_party_remove_member:')) {
+        const parts = interaction.customId.split(':');
+        const eventId = parts[1];
+        const partyNumber = parts[2];
+        return handleRemoveMemberFromParty({ interaction, eventId, partyNumber: parseInt(partyNumber), collections });
+      }
+
+      if (interaction.customId.startsWith('event_party_back_to_party:')) {
+        const parts = interaction.customId.split(':');
+        const eventId = parts[1];
+        const partyNumber = parts[2];
+        return handleBackToParty({ interaction, eventId, partyNumber: parseInt(partyNumber), collections });
+      }
+
       // Gambling blackjack buttons
       if (interaction.customId.startsWith('bj_')) {
         return handleBlackjackButtons({ interaction, collections });
@@ -361,6 +423,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
       // PvP system selects
       if (interaction.customId.startsWith('pvp_')) {
+        return handlePvPSelects({ interaction, collections });
+      }
+
+      // Event party selects (NEW)
+      if (interaction.customId.startsWith('event_party_')) {
         return handlePvPSelects({ interaction, collections });
       }
 

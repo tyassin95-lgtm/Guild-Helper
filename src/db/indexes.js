@@ -40,7 +40,8 @@ async function ensureIndexes({
   automodSettings,
   automodLogs,
   automodWarnings,
-  messageTranslations
+  messageTranslations,
+  eventParties
 }) {
   await guildSettings.createIndex({ guildId: 1 }, { unique: true });
 
@@ -228,6 +229,13 @@ async function ensureIndexes({
   await messageTranslations.createIndex({ guildId: 1 });
   await messageTranslations.createIndex({ channelId: 1 });
   await messageTranslations.createIndex({ translatedAt: -1 });
+
+  // Event Parties indexes (NEW)
+  await eventParties.createIndex({ eventId: 1 }, { unique: true });
+  await eventParties.createIndex({ guildId: 1 });
+  await eventParties.createIndex({ status: 1 });
+  await eventParties.createIndex({ approved: 1 });
+  await eventParties.createIndex({ createdAt: -1 });
 
   console.log('All indexes created successfully');
 }

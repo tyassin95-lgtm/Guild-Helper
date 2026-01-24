@@ -108,6 +108,16 @@ async function createEventEmbed(event, client, collections) {
     });
   }
 
+  // Add party formation status if parties have been formed
+  if (event.partiesFormed) {
+    const timestamp = Math.floor(event.partiesFormedAt.getTime() / 1000);
+    embed.addFields({
+      name: '👥 Event Parties',
+      value: `✅ Parties formed and sent (<t:${timestamp}:R>)`,
+      inline: false
+    });
+  }
+
   // Add status field
   embed.addFields({
     name: '📊 Status',
@@ -158,7 +168,12 @@ async function createEventEmbed(event, client, collections) {
         .setCustomId(`pvp_close_attendance:${event._id}`)
         .setLabel('Close Event')
         .setStyle(ButtonStyle.Danger)
-        .setEmoji('🔒')
+        .setEmoji('🔒'),
+      new ButtonBuilder()
+        .setCustomId(`pvp_form_parties:${event._id}`)
+        .setLabel('Form Event Parties')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('👥')
     );
 
     components.push(rsvpRow, attendanceRow, adminRow);
@@ -174,7 +189,12 @@ async function createEventEmbed(event, client, collections) {
         .setCustomId(`pvp_view_code:${event._id}`)
         .setLabel('View Code')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🔐')
+        .setEmoji('🔐'),
+      new ButtonBuilder()
+        .setCustomId(`pvp_form_parties:${event._id}`)
+        .setLabel('Form Event Parties')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('👥')
     );
 
     components.push(closedAdminRow);

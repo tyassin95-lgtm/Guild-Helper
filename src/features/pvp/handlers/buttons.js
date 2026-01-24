@@ -2,9 +2,16 @@ const { PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, Act
 const { ObjectId } = require('mongodb');
 const { updateEventEmbed, cleanupOrphanedEvent } = require('../embed');
 const { updateCalendar } = require('../calendar/calendarUpdate');
+const { handleFormEventParties } = require('../eventParties/partyManager');
 
 async function handlePvPButtons({ interaction, collections }) {
   const { pvpEvents, pvpBonuses, guildSettings } = collections;
+
+  // Form Event Parties button (NEW)
+  if (interaction.customId.startsWith('pvp_form_parties:')) {
+    const eventId = interaction.customId.split(':')[1];
+    return handleFormEventParties({ interaction, eventId, collections });
+  }
 
   // View Code button (for authorized users)
   if (interaction.customId.startsWith('pvp_view_code:')) {
@@ -250,6 +257,7 @@ async function handleViewCode(interaction, eventId, collections) {
     riftstone: 'Riftstone Fight',
     boonstone: 'Boonstone Fight',
     wargames: 'Wargames',
+    warboss: 'War Boss',
     guildevent: 'Guild Event'
   };
 
