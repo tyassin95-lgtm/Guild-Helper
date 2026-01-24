@@ -24,10 +24,19 @@ async function createEventEmbed(event, client, collections) {
   const typeName = eventTypeNames[event.eventType] || event.eventType;
   const bonusPoints = event.bonusPoints || 10;
 
+  // Calculate signup deadline (20 minutes before event)
+  const signupDeadline = new Date(event.eventTime.getTime() - (20 * 60 * 1000));
+  const signupDeadlineTimestamp = Math.floor(signupDeadline.getTime() / 1000);
+  const isSignupClosed = new Date() >= signupDeadline;
+
   const embed = new EmbedBuilder()
     .setColor(event.closed ? '#95a5a6' : '#e74c3c')
     .setTitle(`${emoji} ${typeName}`)
-    .setDescription(event.message)
+    .setDescription(
+      `${event.message}\n\n` +
+      `⏰ **Signup Deadline:** <t:${signupDeadlineTimestamp}:F> (<t:${signupDeadlineTimestamp}:R>)\n` +
+      `${isSignupClosed ? '🔒 **Signups are now CLOSED** - You must have signed up to record attendance' : '✅ Signups are open'}`
+    )
     .setTimestamp();
 
   // Only set image if URL exists and is not empty
@@ -119,9 +128,14 @@ async function createEventEmbed(event, client, collections) {
   }
 
   // Add status field
+  let statusText = event.closed ? '🔒 **Event Closed**' : '✅ **Event Open**';
+  if (!event.closed && isSignupClosed) {
+    statusText += '\n🔒 **Signups Closed** (20 min before event)';
+  }
+
   embed.addFields({
     name: '📊 Status',
-    value: event.closed ? '🔒 **Event Closed**' : '✅ **Event Open**',
+    value: statusText,
     inline: false
   });
 
@@ -129,23 +143,26 @@ async function createEventEmbed(event, client, collections) {
   const components = [];
 
   if (!event.closed) {
-    // Row 1: RSVP buttons
+    // Row 1: RSVP buttons (disabled if signup deadline passed)
     const rsvpRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`pvp_rsvp_attending:${event._id}`)
         .setLabel('Attending')
         .setStyle(ButtonStyle.Success)
-        .setEmoji('✅'),
+        .setEmoji('✅')
+        .setDisabled(isSignupClosed),
       new ButtonBuilder()
         .setCustomId(`pvp_rsvp_not_attending:${event._id}`)
         .setLabel('Not Attending')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('❌'),
+        .setEmoji('❌')
+        .setDisabled(isSignupClosed),
       new ButtonBuilder()
         .setCustomId(`pvp_rsvp_maybe:${event._id}`)
         .setLabel('Maybe')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('❓')
+        .setDisabled(isSignupClosed)
     );
 
     // Row 2: Attendance recording button

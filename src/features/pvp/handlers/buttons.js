@@ -111,6 +111,24 @@ async function handlePvPButtons({ interaction, collections }) {
       return interaction.reply({ content: '❌ You\'ve already recorded attendance for this event.', flags: [64] });
     }
 
+    // NEW: Check if user signed up (attending, maybe, or not attending)
+    const rsvpAttending = event.rsvpAttending || [];
+    const rsvpMaybe = event.rsvpMaybe || [];
+    const rsvpNotAttending = event.rsvpNotAttending || [];
+
+    const hasSignedUp = rsvpAttending.includes(interaction.user.id) || 
+                        rsvpMaybe.includes(interaction.user.id) || 
+                        rsvpNotAttending.includes(interaction.user.id);
+
+    if (!hasSignedUp) {
+      return interaction.reply({ 
+        content: '❌ **You must sign up for this event before recording attendance!**\n\n' +
+                 'Please use the RSVP buttons (Attending/Maybe/Not Attending) before the signup deadline.\n\n' +
+                 '⚠️ Signups close 20 minutes before the event starts.',
+        flags: [64] 
+      });
+    }
+
     // Show password modal
     const modal = new ModalBuilder()
       .setCustomId(`pvp_password_modal:${eventId}`)
@@ -280,7 +298,7 @@ async function handleViewCode(interaction, eventId, collections) {
 }
 
 /**
- * Handle RSVP button clicks with automatic cleanup
+ * Handle RSVP button clicks with automatic cleanup and signup deadline enforcement
  */
 async function handleRSVP(interaction, eventId, rsvpType, collections) {
   const { pvpEvents } = collections;
@@ -300,6 +318,19 @@ async function handleRSVP(interaction, eventId, rsvpType, collections) {
     return interaction.followUp({ 
       content: '❌ Event is closed.', 
       flags: [64] 
+    });
+  }
+
+  // NEW: Check if signup deadline has passed (20 minutes before event)
+  const signupDeadline = new Date(event.eventTime.getTime() - (20 * 60 * 1000));
+  const isSignupClosed = new Date() >= signupDeadline;
+
+  if (isSignupClosed) {
+    return interaction.followUp({
+      content: '❌ **Signups are closed!**\n\n' +
+               'The signup deadline has passed (20 minutes before event start).\n' +
+               'You can no longer change your RSVP status.',
+      flags: [64]
     });
   }
 
