@@ -36,6 +36,13 @@ Your job is to form temporary 6-person parties for a specific event based on who
 - healer: Uses Orb/Wand or Wand/Bow
 - dps: Everything else
 
+**CRITICAL - USER ID FORMAT:**
+- The userId field MUST contain the Discord user ID (a long numeric string like "151758929557323777")
+- NEVER put displayName values in the userId field
+- userId and displayName are DIFFERENT fields with DIFFERENT values
+- Example CORRECT: "userId": "151758929557323777", "displayName": "JohnDoe"
+- Example WRONG: "userId": "JohnDoe", "displayName": "JohnDoe"
+
 **Your response MUST be valid JSON in this exact format:**
 {
   "temporaryParties": [
@@ -43,8 +50,8 @@ Your job is to form temporary 6-person parties for a specific event based on who
       "tempPartyNumber": 1,
       "members": [
         {
-          "userId": "string",
-          "displayName": "string",
+          "userId": "123456789012345678",
+          "displayName": "PlayerName",
           "role": "tank|healer|dps",
           "weapon1": "string",
           "weapon2": "string",
@@ -63,8 +70,8 @@ Your job is to form temporary 6-person parties for a specific event based on who
   ],
   "unplacedMembers": [
     {
-      "userId": "string",
-      "displayName": "string",
+      "userId": "123456789012345678",
+      "displayName": "PlayerName",
       "role": "string",
       "reason": "Why they couldn't be placed"
     }
@@ -84,7 +91,8 @@ Your job is to form temporary 6-person parties for a specific event based on who
 - "Maybe" attendees should be treated as attending for planning purposes
 - Ensure every party has proper tank/healer balance
 - If there aren't enough tanks/healers, mention this in warnings
-- Respond ONLY with valid JSON, no markdown formatting or code blocks`;
+- Respond ONLY with valid JSON, no markdown formatting or code blocks
+- **CRITICAL**: Always use the actual userId value provided in the member data, NEVER use displayName in the userId field`;
 
   const userPrompt = `Form temporary parties for this PvP event:
 
@@ -93,9 +101,13 @@ Your job is to form temporary 6-person parties for a specific event based on who
 
 ${partyData}
 
-Form the best possible balanced parties following all the rules.`;
+Form the best possible balanced parties following all the rules.
+
+REMINDER: Use the actual userId values from the data above - these are the long numeric Discord IDs, NOT the display names!`;
 
   try {
+    console.log('\n=== Calling OpenAI API for party formation ===');
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -137,7 +149,35 @@ Form the best possible balanced parties following all the rules.`;
       throw new Error('AI returned invalid party formation structure.');
     }
 
-    console.log(`AI formed ${result.temporaryParties.length} parties from ${result.summary?.totalAttending || 0} attendees`);
+    // CRITICAL: Validate that all userIds are valid Discord snowflakes
+    console.log('\n=== Validating AI response ===');
+    let invalidUserIds = 0;
+
+    for (const party of result.temporaryParties) {
+      for (const member of party.members) {
+        if (!member.userId || !/^\d+$/.test(member.userId)) {
+          console.error(`❌ AI returned invalid userId: "${member.userId}" for ${member.displayName}`);
+          invalidUserIds++;
+        }
+      }
+    }
+
+    if (result.unplacedMembers) {
+      for (const member of result.unplacedMembers) {
+        if (!member.userId || !/^\d+$/.test(member.userId)) {
+          console.error(`❌ AI returned invalid userId in unplaced: "${member.userId}" for ${member.displayName}`);
+          invalidUserIds++;
+        }
+      }
+    }
+
+    if (invalidUserIds > 0) {
+      throw new Error(`AI returned ${invalidUserIds} invalid user IDs. The AI used display names instead of Discord user IDs. Please try again.`);
+    }
+
+    console.log(`✅ AI formed ${result.temporaryParties.length} parties from ${result.summary?.totalAttending || 0} attendees`);
+    console.log('=== AI response validated successfully ===\n');
+
     return result;
 
   } catch (error) {
@@ -148,6 +188,7 @@ Form the best possible balanced parties following all the rules.`;
 
 /**
  * Build formatted data string for AI prompt
+ * CRITICAL: Include both userId AND displayName for each member
  */
 function buildPartyFormationData(staticParties, attendingMembers, maybeMembers) {
   let data = `**STATIC PARTIES & ATTENDANCE:**\n\n`;
@@ -165,13 +206,15 @@ function buildPartyFormationData(staticParties, attendingMembers, maybeMembers) 
     data += `${partyLabel} (${party.members.length} total members):\n`;
     data += `  ✅ Attending (${attending.length}):\n`;
     attending.forEach(m => {
-      data += `    - ${m.displayName}: ${m.role} (${m.weapon1}/${m.weapon2}) - ${m.cp} CP${m.isLeader ? ' [LEADER]' : ''}\n`;
+      // CRITICAL: Include userId in the data
+      data += `    - userId: ${m.userId}, displayName: ${m.displayName}, role: ${m.role} (${m.weapon1}/${m.weapon2}), CP: ${m.cp}${m.isLeader ? ' [LEADER]' : ''}\n`;
     });
 
     if (maybe.length > 0) {
       data += `  ❓ Maybe (${maybe.length}):\n`;
       maybe.forEach(m => {
-        data += `    - ${m.displayName}: ${m.role} (${m.weapon1}/${m.weapon2}) - ${m.cp} CP${m.isLeader ? ' [LEADER]' : ''}\n`;
+        // CRITICAL: Include userId in the data
+        data += `    - userId: ${m.userId}, displayName: ${m.displayName}, role: ${m.role} (${m.weapon1}/${m.weapon2}), CP: ${m.cp}${m.isLeader ? ' [LEADER]' : ''}\n`;
       });
     }
 
@@ -190,14 +233,16 @@ function buildPartyFormationData(staticParties, attendingMembers, maybeMembers) 
     if (unassignedAttending.length > 0) {
       data += `✅ Attending (${unassignedAttending.length}):\n`;
       unassignedAttending.forEach(m => {
-        data += `  - ${m.displayName}: ${m.role} (${m.weapon1}/${m.weapon2}) - ${m.cp} CP\n`;
+        // CRITICAL: Include userId in the data
+        data += `  - userId: ${m.userId}, displayName: ${m.displayName}, role: ${m.role} (${m.weapon1}/${m.weapon2}), CP: ${m.cp}\n`;
       });
     }
 
     if (unassignedMaybe.length > 0) {
       data += `❓ Maybe (${unassignedMaybe.length}):\n`;
       unassignedMaybe.forEach(m => {
-        data += `  - ${m.displayName}: ${m.role} (${m.weapon1}/${m.weapon2}) - ${m.cp} CP\n`;
+        // CRITICAL: Include userId in the data
+        data += `  - userId: ${m.userId}, displayName: ${m.displayName}, role: ${m.role} (${m.weapon1}/${m.weapon2}), CP: ${m.cp}\n`;
       });
     }
     data += '\n';

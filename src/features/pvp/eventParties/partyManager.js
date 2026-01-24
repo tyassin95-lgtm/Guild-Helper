@@ -330,10 +330,20 @@ async function handleApproveParties({ interaction, eventId, collections, client 
 
     if (failCount > 0) {
       confirmMessage += `• Failed to send: ${failCount} member${failCount !== 1 ? 's' : ''}\n\n`;
-      confirmMessage += `**Failed DMs:**\n`;
-      dmResults.failed.forEach(f => {
-        confirmMessage += `• ${f.displayName} - ${f.error}\n`;
+
+      // Only show first 10 failed members to avoid hitting Discord's 2000 char limit
+      const maxToShow = 10;
+      confirmMessage += `**Failed DMs${failCount > maxToShow ? ` (showing ${maxToShow} of ${failCount})` : ''}:**\n`;
+
+      dmResults.failed.slice(0, maxToShow).forEach(f => {
+        // Truncate error message if too long
+        const errorMsg = f.error.length > 50 ? f.error.substring(0, 47) + '...' : f.error;
+        confirmMessage += `• ${f.displayName} - ${errorMsg}\n`;
       });
+
+      if (failCount > maxToShow) {
+        confirmMessage += `\n*... and ${failCount - maxToShow} more. Check bot logs for full list.*`;
+      }
     }
 
     return interaction.editReply({
