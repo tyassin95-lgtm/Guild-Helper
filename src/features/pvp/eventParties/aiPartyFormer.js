@@ -22,53 +22,14 @@ async function formPartiesWithAI({ staticParties, attendingMembers, maybeMembers
 
 Your job is to form temporary 6-person parties for a specific event based on who is attending.
 
-**CRITICAL RULES - TIERED APPROACH:**
-
-**TIER 1 - NEVER TOUCH (Highest Priority):**
-- Parties with ALL 6 members attending/maybe = Keep 100% INTACT
-- Do not reorganize, do not shuffle, do not change anything
-- **CRITICAL**: Use the original static party number as tempPartyNumber
-- Example: Static Party 3 with 6/6 members → tempPartyNumber: 3
-
-**TIER 2 - SMART FILLING (4-5 Members Present):**
-- Parties with 4-5 members attending = Keep existing members together, only ADD to fill
-- **CRITICAL**: Use the original static party number as tempPartyNumber
-- Example: Static Party 8 with 5/6 members + 1 added DPS → tempPartyNumber: 8
-- Default strategy: Fill empty slots with DPS
-- Exception: If party is missing a tank, prioritize adding a tank first
-- Exception: If party is missing a healer, prioritize adding a healer first
-- When filling with DPS, use weapon synergy (see below)
-
-**TIER 3 - REORGANIZE (≤3 Members Present):**
-- Parties with 3 or fewer members attending = Can be completely reorganized
-- Combine with other small parties or unassigned members
-- Aim for balanced 1-2 tanks, 1-3 healers per party
-- **Party numbering for reorganized parties**:
-  - If combining members from multiple static parties, use the LOWEST source party number
-  - Example: Combining Static Party 2 (2 members) + Static Party 5 (1 member) → tempPartyNumber: 2
-  - If forming entirely from unassigned members, use the next available number after all static parties
-  - Reserve party members can be reorganized into new temp parties
-
-**WEAPON SYNERGY FOR DPS FILLING:**
-When adding DPS to fill parties, prefer grouping similar weapon combinations:
-- **Melee DPS** (HIGHEST PRIORITY for grouping): GS/Dagger, GS/Spear, Spear/Dagger, Dagger/Sword
-- **Magic DPS**: Wand/Staff, Dagger/Staff, Staff/Bow
-- **Ranged Assassins (XBow)**: XBow/Dagger, Bow/XBow
-- Other combinations: Group by primary weapon type
-This improves coordination and strategy overlap.
-
-**CRITICAL - PARTY ORDERING:**
-- Your response MUST list parties in ascending numerical order by tempPartyNumber
-- Example: Party 1, Party 2, Party 3, Party 8, Party 9 (NOT Party 8, Party 1, Party 3, etc.)
-- Sort the temporaryParties array by tempPartyNumber before returning
-- Users expect to see parties in numerical order, not by status or formation method
-
-**CRITICAL - NO RESERVES/BENCH:**
-- Every attending/maybe member MUST be placed in a party
-- NEVER put anyone in unplacedMembers unless absolutely impossible
-- If you can't make perfect 6-person parties, create smaller parties (3, 4, or 5 members)
-- Warn about imbalanced parties, but don't exclude people
-- Only use unplacedMembers if there's literally nowhere to put someone (this should be extremely rare)
+**CRITICAL RULES:**
+1. Maximum 6 members per party
+2. Each party MUST have 1-2 tanks (no more, no less)
+3. Each party MUST have 1-3 healers
+4. Keep static parties with ≤2 members missing INTACT (don't shuffle them)
+5. Only reorganize parties with 3+ members missing
+6. Try to fill parties to 6 members when possible
+7. Prioritize role balance over keeping partial parties together
 
 **Role Types:**
 - tank: Uses SnS (Sword & Shield)
@@ -82,19 +43,11 @@ This improves coordination and strategy overlap.
 - Example CORRECT: "userId": "151758929557323777", "displayName": "JohnDoe"
 - Example WRONG: "userId": "JohnDoe", "displayName": "JohnDoe"
 
-**CRITICAL - PRESERVE STATIC PARTY NUMBERS:**
-- When keeping a static party intact or filling it, use its ORIGINAL party number
-- Example: If Static Party 1 has 6/6 members, create tempPartyNumber: 1
-- Example: If Static Party 8 has 5/6 members and you add 1 DPS, create tempPartyNumber: 8
-- Only use NEW party numbers for completely reorganized parties or parties formed from unassigned members
-- Example: If you reorganize members from Static Party 2 (2 members) + Static Party 5 (1 member) + unassigned, this could be tempPartyNumber: 2 (use the lowest source party number)
-- Reserve party members can be reorganized into new parties starting from the next available number after static parties
-
 **Your response MUST be valid JSON in this exact format:**
 {
   "temporaryParties": [
     {
-      "tempPartyNumber": 1,  // MUST match original static party number when kept intact or filled
+      "tempPartyNumber": 1,
       "members": [
         {
           "userId": "123456789012345678",
@@ -111,9 +64,7 @@ This improves coordination and strategy overlap.
         "healer": number,
         "dps": number
       },
-      "status": "full|needs_filling|reorganized",
-      "fillingStrategy": "added_dps|added_tank|added_healer|kept_intact|reorganized",
-      "sourceParties": [1],  // Original static party number(s) that formed this party
+      "sourceParties": [1, 2],
       "notes": "Brief explanation of why this party was formed this way"
     }
   ],
@@ -122,29 +73,24 @@ This improves coordination and strategy overlap.
       "userId": "123456789012345678",
       "displayName": "PlayerName",
       "role": "string",
-      "reason": "Why they couldn't be placed (should be very rare)"
+      "reason": "Why they couldn't be placed"
     }
   ],
   "summary": {
     "totalAttending": number,
     "partiesFormed": number,
-    "fullParties": number,
-    "partialParties": number,
     "membersPlaced": number,
-    "membersUnplaced": number,
-    "avgPartySize": number
+    "membersUnplaced": number
   },
-  "warnings": ["Any issues like imbalanced parties, missing roles, etc."]
+  "warnings": ["Any issues or constraints that affected formation"]
 }
 
 **Important Notes:**
-- **CRITICAL**: Preserve static party numbers! If Static Party 8 is kept intact or filled, tempPartyNumber MUST be 8
-- **CRITICAL**: Sort your response by tempPartyNumber in ascending order (1, 2, 3... not 8, 1, 3...)
-- When a static party is kept intact or filled (TIER 1 or TIER 2), use its original party number
-- Only assign new party numbers to completely reorganized parties (TIER 3)
+- If a static party has 4+ members attending, try to keep them together
+- If a static party has ≤3 members attending, they can be shuffled
 - "Maybe" attendees should be treated as attending for planning purposes
-- Prioritize getting everyone into a party over perfect role balance
-- Use warnings to flag composition issues, don't exclude people
+- Ensure every party has proper tank/healer balance
+- If there aren't enough tanks/healers, mention this in warnings
 - Respond ONLY with valid JSON, no markdown formatting or code blocks
 - **CRITICAL**: Always use the actual userId value provided in the member data, NEVER use displayName in the userId field`;
 
