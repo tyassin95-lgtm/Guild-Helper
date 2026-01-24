@@ -51,11 +51,17 @@ Your job is to form temporary 6-person parties for a specific event based on who
 
 **WEAPON SYNERGY FOR DPS FILLING:**
 When adding DPS to fill parties, prefer grouping similar weapon combinations:
-- Bow users together (Bow/Dagger, Bow/Staff, Bow/Wand)
-- Melee users together (GS/Dagger, GS/Sword, Dagger/Sword, GS/SnS)
-- Magic users together (Staff/Wand combinations)
-- Crossbow users together (XBow/anything)
+- **Melee DPS** (HIGHEST PRIORITY for grouping): GS/Dagger, GS/Spear, Spear/Dagger, Dagger/Sword
+- **Magic DPS**: Wand/Staff, Dagger/Staff, Staff/Bow
+- **Ranged Assassins (XBow)**: XBow/Dagger, Bow/XBow
+- Other combinations: Group by primary weapon type
 This improves coordination and strategy overlap.
+
+**CRITICAL - PARTY ORDERING:**
+- Your response MUST list parties in ascending numerical order by tempPartyNumber
+- Example: Party 1, Party 2, Party 3, Party 8, Party 9 (NOT Party 8, Party 1, Party 3, etc.)
+- Sort the temporaryParties array by tempPartyNumber before returning
+- Users expect to see parties in numerical order, not by status or formation method
 
 **CRITICAL - NO RESERVES/BENCH:**
 - Every attending/maybe member MUST be placed in a party
@@ -133,6 +139,7 @@ This improves coordination and strategy overlap.
 
 **Important Notes:**
 - **CRITICAL**: Preserve static party numbers! If Static Party 8 is kept intact or filled, tempPartyNumber MUST be 8
+- **CRITICAL**: Sort your response by tempPartyNumber in ascending order (1, 2, 3... not 8, 1, 3...)
 - When a static party is kept intact or filled (TIER 1 or TIER 2), use its original party number
 - Only assign new party numbers to completely reorganized parties (TIER 3)
 - "Maybe" attendees should be treated as attending for planning purposes
