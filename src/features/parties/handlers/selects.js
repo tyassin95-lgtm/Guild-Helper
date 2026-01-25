@@ -8,27 +8,21 @@ const {
 } = require('discord.js');
 const { createPlayerInfoEmbed, createPartiesOverviewEmbed } = require('../embed');
 const { PARTY_SIZE, RESERVE_PARTY_SIZE } = require('../constants');
-const { updatePlayerRole, getRoleEmoji } = require('../roleDetection');
-const { updateGuildRoster } = require('../commands/guildroster');
+const { getRoleEmoji } = require('../roleDetection');
 
 async function handlePartySelects({ interaction, collections }) {
-  const { partyPlayers, parties } = collections;
+  const { partyPlayers, parties, dmContexts } = collections;
 
-  // =========================
-  // WEAPON SELECTION (supports DMs)
-  // =========================
   if (interaction.customId === 'party_select_weapon1' || interaction.customId === 'party_select_weapon2') {
     await interaction.deferUpdate();
 
     const isWeapon1 = interaction.customId === 'party_select_weapon1';
     const weapon = interaction.values[0];
 
-    // Get guild context (supports DM)
     let guildId = interaction.guildId;
     let guild = interaction.guild;
 
     if (!guildId) {
-      const { dmContexts } = collections;
       const context = await dmContexts.findOne({ 
         userId: interaction.user.id,
         expiresAt: { $gt: new Date() }
@@ -47,59 +41,44 @@ async function handlePartySelects({ interaction, collections }) {
     }
 
     try {
-      const playerBefore = await partyPlayers.findOne({
-        userId: interaction.user.id,
-        guildId: guildId
-      });
-
-      const oldRole = playerBefore?.role;
-
-      // Update weapon
-      await partyPlayers.updateOne(
-        { userId: interaction.user.id, guildId: guildId },
-        { $set: { [isWeapon1 ? 'weapon1' : 'weapon2']: weapon, updatedAt: new Date() } },
-        { upsert: true }
-      );
-
       const playerInfo = await partyPlayers.findOne({
         userId: interaction.user.id,
         guildId: guildId
       });
 
-      // Update role if both weapons are set
-      if (playerInfo.weapon1 && playerInfo.weapon2) {
-        const newRole = await updatePlayerRole(
-          interaction.user.id,
-          guildId,
-          playerInfo.weapon1,
-          playerInfo.weapon2,
-          collections
-        );
+      const currentWeapon1 = playerInfo?.weapon1;
+      const currentWeapon2 = playerInfo?.weapon2;
 
-        // If in a party and role changed, update party composition
-        if (oldRole && newRole !== oldRole) {
-          const partyQuery = playerInfo.inReserve
-            ? { guildId, isReserve: true, 'members.userId': interaction.user.id }
-            : { guildId, partyNumber: playerInfo.partyNumber, 'members.userId': interaction.user.id };
+      const pendingChanges = await dmContexts.findOne({
+        userId: interaction.user.id,
+        type: 'pending_party_info',
+        guildId: guildId
+      }) || { changes: {} };
 
-          await parties.updateOne(
-            partyQuery,
-            {
-              $set: { 
-                'members.$.role': newRole,
-                'members.$.weapon1': playerInfo.weapon1,
-                'members.$.weapon2': playerInfo.weapon2
-              },
-              $inc: {
-                [`roleComposition.${oldRole}`]: -1,
-                [`roleComposition.${newRole}`]: 1
-              }
-            }
-          );
-        }
-      }
+      const newWeapon1 = isWeapon1 ? weapon : (pendingChanges.changes?.weapon1 || currentWeapon1);
+      const newWeapon2 = isWeapon1 ? (pendingChanges.changes?.weapon2 || currentWeapon2) : weapon;
 
-      // Fetch member for embed
+      const weaponChanged = (isWeapon1 && weapon !== currentWeapon1) || (!isWeapon1 && weapon !== currentWeapon2);
+
+      await dmContexts.updateOne(
+        { userId: interaction.user.id, type: 'pending_party_info', guildId: guildId },
+        { 
+          $set: { 
+            [`changes.${isWeapon1 ? 'weapon1' : 'weapon2'}`]: weapon,
+            gearCheckComplete: weaponChanged ? false : (pendingChanges.gearCheckComplete || false),
+            updatedAt: new Date(),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+          } 
+        },
+        { upsert: true }
+      );
+
+      const updatedPendingChanges = await dmContexts.findOne({
+        userId: interaction.user.id,
+        type: 'pending_party_info',
+        guildId: guildId
+      });
+
       let member = interaction.member;
       if (!member && guild) {
         member = await guild.members.fetch(interaction.user.id).catch(() => ({
@@ -108,9 +87,12 @@ async function handlePartySelects({ interaction, collections }) {
         }));
       }
 
-      const embed = await createPlayerInfoEmbed(playerInfo, member, collections);
+      const embed = await createPlayerInfoEmbed(playerInfo, member, collections, updatedPendingChanges);
 
-      const row = new ActionRowBuilder().addComponents(
+      const hasPendingChanges = updatedPendingChanges && updatedPendingChanges.changes && Object.keys(updatedPendingChanges.changes).length > 0;
+      const gearCheckComplete = updatedPendingChanges?.gearCheckComplete || false;
+
+      const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId('party_set_weapon1')
           .setLabel('Set Primary Weapon')
@@ -128,21 +110,39 @@ async function handlePartySelects({ interaction, collections }) {
           .setEmoji('💪')
       );
 
-      // Update guild roster if it exists
-      if (guild) {
-        const { guildRosters } = collections;
-        const rosterRecord = await guildRosters.findOne({ guildId: guild.id });
-        if (rosterRecord && rosterRecord.channelId) {
-          updateGuildRoster(guild, rosterRecord.channelId, collections).catch(err => {
-            console.error('Error auto-updating guild roster:', err);
-          });
-        }
+      const gearCheckButton = gearCheckComplete
+        ? new ButtonBuilder()
+            .setCustomId('party_gear_check')
+            .setLabel('Gear Check Complete')
+            .setStyle(ButtonStyle.Success)
+            .setEmoji('✅')
+        : new ButtonBuilder()
+            .setCustomId('party_gear_check')
+            .setLabel('Gear Check')
+            .setStyle(ButtonStyle.Danger)
+            .setEmoji('🔴');
+
+      const submitButton = new ButtonBuilder()
+        .setCustomId('party_submit_changes')
+        .setLabel('Submit Changes')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('📝')
+        .setDisabled(!hasPendingChanges || !gearCheckComplete);
+
+      const row2 = new ActionRowBuilder().addComponents(
+        gearCheckButton,
+        submitButton
+      );
+
+      let content = `✅ ${isWeapon1 ? 'Primary' : 'Secondary'} weapon set to **${weapon}** (pending)`;
+      if (weaponChanged && !gearCheckComplete) {
+        content += '\n⚠️ **Weapon changed - complete a new Gear Check to submit**';
       }
 
       return interaction.editReply({
-        content: `✅ ${isWeapon1 ? 'Primary' : 'Secondary'} weapon set to **${weapon}**!`,
+        content,
         embeds: [embed],
-        components: [row]
+        components: [row1, row2]
       });
     } catch (err) {
       console.error('Error in weapon select:', err);
@@ -154,12 +154,10 @@ async function handlePartySelects({ interaction, collections }) {
     }
   }
 
-  // All other handlers require guild context
   if (!interaction.guildId) {
     return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
   }
 
-  // Permission check for admin actions
   const requiresAdmin = [
     'party_add_selected:',
     'party_manage_select',
@@ -176,9 +174,6 @@ async function handlePartySelects({ interaction, collections }) {
     }
   }
 
-  // =========================
-  // ADD SELECTED PLAYERS
-  // =========================
   if (interaction.customId.startsWith('party_add_selected:')) {
     await interaction.deferUpdate();
 
@@ -209,7 +204,6 @@ async function handlePartySelects({ interaction, collections }) {
       });
     }
 
-    // Process players
     const addedPlayers = [];
     const failedPlayers = [];
 
@@ -222,8 +216,8 @@ async function handlePartySelects({ interaction, collections }) {
         continue;
       }
 
-      // Ensure player has role
       if (!playerInfo.role) {
+        const { updatePlayerRole } = require('../roleDetection');
         await updatePlayerRole(userId, interaction.guildId, playerInfo.weapon1, playerInfo.weapon2, collections);
         const updatedPlayer = await partyPlayers.findOne({ userId, guildId: interaction.guildId });
         playerInfo.role = updatedPlayer.role;
@@ -266,13 +260,11 @@ async function handlePartySelects({ interaction, collections }) {
       addedPlayers.push(member?.displayName || userId);
     }
 
-    // Build success message
     let message = `✅ Added **${addedPlayers.length}** player(s) to ${partyLabel}`;
     if (failedPlayers.length > 0) {
       message += `\n⚠️ Failed to add **${failedPlayers.length}** (incomplete info)`;
     }
 
-    // Get updated party info to show in continuation UI
     const updatedParty = isReserve
       ? await parties.findOne({ guildId: interaction.guildId, isReserve: true })
       : await parties.findOne({ guildId: interaction.guildId, partyNumber: parseInt(partyIdentifier) });
@@ -280,7 +272,6 @@ async function handlePartySelects({ interaction, collections }) {
     const newCurrentSize = updatedParty?.members?.length || 0;
     const newAvailableSlots = maxSize - newCurrentSize;
 
-    // Check if we should continue showing UI
     if (newAvailableSlots === 0) {
       return interaction.editReply({
         content: `🎉 **${partyLabel} is now full!**\n\n${message}`,
@@ -288,7 +279,6 @@ async function handlePartySelects({ interaction, collections }) {
       });
     }
 
-    // Get remaining available players
     const allPlayers = await partyPlayers.find({ 
       guildId: interaction.guildId,
       weapon1: { $exists: true },
@@ -306,13 +296,9 @@ async function handlePartySelects({ interaction, collections }) {
 
     allPlayers.sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
-    // Continue showing add UI
     return showAddMembersUI(interaction, allPlayers, 0, partyIdentifier, updatedParty, collections, message);
   }
 
-  // =========================
-  // MANAGE PARTY SELECT
-  // =========================
   if (interaction.customId === 'party_manage_select') {
     const partyIdentifier = interaction.values[0];
     const isReserve = partyIdentifier === 'reserve';
@@ -350,9 +336,6 @@ async function handlePartySelects({ interaction, collections }) {
     });
   }
 
-  // =========================
-  // REMOVE PLAYERS
-  // =========================
   if (interaction.customId.startsWith('party_remove_player:')) {
     await interaction.deferUpdate();
 
@@ -409,9 +392,6 @@ async function handlePartySelects({ interaction, collections }) {
     });
   }
 
-  // =========================
-  // MOVE PLAYER (SELECT MEMBER)
-  // =========================
   if (interaction.customId.startsWith('party_move_player:')) {
     const [, fromIdentifier] = interaction.customId.split(':');
     const userId = interaction.values[0];
@@ -455,9 +435,6 @@ async function handlePartySelects({ interaction, collections }) {
     return interaction.update({ content: 'Select destination party:', components: [row] });
   }
 
-  // =========================
-  // MOVE PLAYER (SELECT DESTINATION)
-  // =========================
   if (interaction.customId.startsWith('party_move_destination:')) {
     await interaction.deferUpdate();
 
@@ -493,7 +470,6 @@ async function handlePartySelects({ interaction, collections }) {
 
     const fromLabel = isFromReserve ? 'Reserve' : `Party ${fromIdentifier}`;
 
-    // Remove from source
     const sourceQuery = isFromReserve
       ? { guildId: interaction.guildId, isReserve: true }
       : { guildId: interaction.guildId, partyNumber: parseInt(fromIdentifier) };
@@ -509,7 +485,6 @@ async function handlePartySelects({ interaction, collections }) {
       }
     );
 
-    // Add to destination
     const destQuery = isToReserve
       ? { guildId: interaction.guildId, isReserve: true }
       : { guildId: interaction.guildId, partyNumber: parseInt(toIdentifier) };
@@ -525,7 +500,6 @@ async function handlePartySelects({ interaction, collections }) {
       }
     );
 
-    // Update player record
     const playerUpdate = isToReserve
       ? { $set: { inReserve: true }, $unset: { partyNumber: '' } }
       : { $set: { partyNumber: parseInt(toIdentifier) }, $unset: { inReserve: '' } };
@@ -548,9 +522,6 @@ async function handlePartySelects({ interaction, collections }) {
     });
   }
 
-  // =========================
-  // DELETE PARTY
-  // =========================
   if (interaction.customId === 'party_delete_confirm') {
     await interaction.deferUpdate();
 
@@ -590,9 +561,6 @@ async function handlePartySelects({ interaction, collections }) {
     });
   }
 
-  // =========================
-  // SET PARTY LEADER
-  // =========================
   if (interaction.customId.startsWith('party_select_leader:')) {
     await interaction.deferUpdate();
 
@@ -611,25 +579,21 @@ async function handlePartySelects({ interaction, collections }) {
       return interaction.editReply({ content: '❌ Party not found!', components: [] });
     }
 
-    // Remove leader status from all members
     await parties.updateOne(
       updateQuery,
       { $set: { 'members.$[].isLeader': false } }
     );
 
-    // Set new leader
     await parties.updateOne(
       { ...updateQuery, 'members.userId': newLeaderId },
       { $set: { 'members.$.isLeader': true } }
     );
 
-    // Update player record
     await partyPlayers.updateOne(
       { userId: newLeaderId, guildId: interaction.guildId },
       { $set: { isPartyLeader: true } }
     );
 
-    // Remove isPartyLeader from other members
     const otherMemberIds = party.members
       .filter(m => m.userId !== newLeaderId)
       .map(m => m.userId);
@@ -655,9 +619,6 @@ async function handlePartySelects({ interaction, collections }) {
   }
 }
 
-/**
- * Show add members UI with continuation support
- */
 async function showAddMembersUI(interaction, allPlayers, page, partyIdentifier, party, collections, previousMessage = null) {
   const pageSize = 25;
   const totalPages = Math.ceil(allPlayers.length / pageSize);
@@ -683,7 +644,6 @@ async function showAddMembersUI(interaction, allPlayers, page, partyIdentifier, 
 
   const components = [];
 
-  // Multi-select menu
   components.push(
     new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -695,7 +655,6 @@ async function showAddMembersUI(interaction, allPlayers, page, partyIdentifier, 
     )
   );
 
-  // Pagination
   if (totalPages > 1) {
     components.push(
       new ActionRowBuilder().addComponents(
@@ -718,7 +677,6 @@ async function showAddMembersUI(interaction, allPlayers, page, partyIdentifier, 
     );
   }
 
-  // Action buttons
   components.push(
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -751,7 +709,6 @@ async function showAddMembersUI(interaction, allPlayers, page, partyIdentifier, 
     content = `${previousMessage}\n\n${content}`;
   }
 
-  // Use editReply since this is called after deferUpdate
   return interaction.editReply({
     content,
     components
