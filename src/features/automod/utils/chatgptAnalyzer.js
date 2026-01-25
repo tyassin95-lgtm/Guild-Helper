@@ -1,6 +1,8 @@
 /**
- * ChatGPT API integration for message moderation and translation
+ * ChatGPT API integration for message moderation
  */
+
+const { translateMessage, detectLanguage } = require('./translator');
 
 async function analyzeMessageForModeration(messageContent) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -180,71 +182,10 @@ Respond ONLY with valid JSON in this exact format:
   }
 }
 
-async function translateMessage(messageContent, targetLanguage) {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    console.error('OPENAI_API_KEY not found in environment variables');
-    return null;
-  }
-
-  const languageNames = {
-    en: 'English',
-    de: 'German',
-    fr: 'French',
-    es: 'Spanish'
-  };
-
-  const targetLanguageName = languageNames[targetLanguage] || targetLanguage;
-
-  const systemPrompt = `You are a professional translator. Translate the given message to ${targetLanguageName}.
-
-Rules:
-- Translate naturally as if written by a native speaker
-- Preserve tone, emotion, and intent
-- Keep slang and informal language informal in translation
-- Use cultural equivalents for idioms, not literal translations
-- Maintain the same level of formality
-- If the message contains Discord mentions (@user, #channel), keep them unchanged
-
-Respond ONLY with the translated text, no explanations or preamble.`;
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: messageContent }
-        ],
-        temperature: 0.7,
-        max_tokens: 500
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('OpenAI API error:', response.status, errorData);
-      return null;
-    }
-
-    const data = await response.json();
-    const translation = data.choices[0].message.content.trim();
-
-    return translation;
-
-  } catch (error) {
-    console.error('Translation error:', error);
-    return null;
-  }
-}
-
+// Export the DeepL translation functions
+// This maintains backward compatibility with existing code
 module.exports = {
   analyzeMessageForModeration,
-  translateMessage
+  translateMessage,
+  detectLanguage 
 };
