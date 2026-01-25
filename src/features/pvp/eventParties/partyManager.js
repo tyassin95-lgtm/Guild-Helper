@@ -1,6 +1,5 @@
 const { ObjectId } = require('mongodb');
 const { PermissionFlagsBits } = require('discord.js');
-const { formPartiesWithAI } = require('./aiPartyFormer');
 const { 
   createPartyFormationEmbed, 
   createPartyFormationButtons,
@@ -34,42 +33,88 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
       });
     }
 
-    // Get all attending and maybe members
-    const attendingUserIds = event.rsvpAttending || [];
-    const maybeUserIds = event.rsvpMaybe || [];
+    // Get attendance data
+    const notAttendingSet = new Set(event.rsvpNotAttending || []);
+    const attendingSet = new Set([
+      ...(event.rsvpAttending || []),
+      ...(event.rsvpMaybe || [])
+    ]);
 
-    if (attendingUserIds.length === 0 && maybeUserIds.length === 0) {
+    if (attendingSet.size === 0) {
       return interaction.editReply({
         content: '❌ No members have RSVP\'d as attending or maybe for this event.\n\n' +
                  'Event parties can only be formed when people have signed up.'
       });
     }
 
-    // Fetch all static parties
-    const staticParties = await parties.find({ guildId: interaction.guildId }).toArray();
+    console.log(`\n=== Forming Event Parties ===`);
+    console.log(`Attending/Maybe: ${attendingSet.size}`);
+    console.log(`Not Attending: ${notAttendingSet.size}`);
 
-    // Fetch player info for attending members
-    const attendingMembers = await fetchMembersWithRoles(
-      attendingUserIds,
-      interaction.guildId,
-      interaction.guild,
-      partyPlayers
+    // Fetch all static parties (exclude reserve)
+    const staticParties = await parties.find({ 
+      guildId: interaction.guildId,
+      isReserve: { $ne: true }
+    }).sort({ partyNumber: 1 }).toArray();
+
+    console.log(`Static parties found: ${staticParties.length}`);
+
+    // Process each static party
+    const processedParties = [];
+    const availableMembers = [];
+
+    for (const party of staticParties) {
+      const result = await processStaticParty(
+        party,
+        notAttendingSet,
+        interaction.guild,
+        partyPlayers
+      );
+
+      if (result.status === 'disbanded') {
+        // Add remaining members to available pool
+        availableMembers.push(...result.remainingMembers.map(m => ({
+          ...m,
+          source: `Party ${party.partyNumber} (disbanded)`
+        })));
+      } else {
+        processedParties.push(result);
+      }
+    }
+
+    console.log(`Processed parties: ${processedParties.length}`);
+    console.log(`Available from disbanded: ${availableMembers.length}`);
+
+    // Find unassigned attendees
+    const assignedUserIds = new Set(
+      processedParties.flatMap(p => p.members.map(m => m.userId))
     );
 
-    const maybeMembers = await fetchMembersWithRoles(
-      maybeUserIds,
-      interaction.guildId,
-      interaction.guild,
-      partyPlayers
-    );
+    const availableFromDisbanded = new Set(availableMembers.map(m => m.userId));
 
-    // Enrich static parties with attendance data
-    const enrichedStaticParties = await enrichStaticPartiesWithAttendance(
-      staticParties,
-      attendingMembers,
-      maybeMembers,
-      interaction.guild
-    );
+    for (const userId of attendingSet) {
+      if (!assignedUserIds.has(userId) && !availableFromDisbanded.has(userId)) {
+        const memberData = await fetchMemberData(userId, interaction.guild, partyPlayers);
+        if (memberData) {
+          availableMembers.push({
+            ...memberData,
+            source: 'Unassigned'
+          });
+        }
+      }
+    }
+
+    console.log(`Total available for placement: ${availableMembers.length}`);
+
+    // Calculate summary statistics
+    const summary = {
+      totalAttending: attendingSet.size,
+      partiesIntact: processedParties.filter(p => p.status === 'intact').length,
+      partiesModified: processedParties.filter(p => p.status === 'modified').length,
+      partiesDisbanded: staticParties.length - processedParties.length,
+      membersRemoved: processedParties.reduce((sum, p) => sum + p.removedMembers.length, 0),
+      membersAvailable: availableMembers.length
+    };
 
     // Prepare event info
     const eventInfo = {
@@ -78,28 +123,17 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
       eventTime: event.eventTime
     };
 
-    console.log(`Forming parties for ${attendingMembers.length} attending + ${maybeMembers.length} maybe members...`);
-
-    // Call AI to form parties
-    const aiResponse = await formPartiesWithAI({
-      staticParties: enrichedStaticParties,
-      attendingMembers,
-      maybeMembers,
-      eventInfo
-    });
-
-    // Store the formation temporarily (will be finalized on approval)
+    // Store the formation
     await eventParties.updateOne(
       { eventId: new ObjectId(eventId) },
       {
         $set: {
           eventId: new ObjectId(eventId),
           guildId: interaction.guildId,
-          temporaryParties: aiResponse.temporaryParties,
-          unplacedMembers: aiResponse.unplacedMembers || [],
-          summary: aiResponse.summary,
-          warnings: aiResponse.warnings || [],
-          status: 'pending', // pending, approved, cancelled
+          processedParties,
+          availableMembers,
+          summary,
+          status: 'pending',
           createdBy: interaction.user.id,
           createdAt: new Date(),
           approved: false
@@ -108,8 +142,10 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
       { upsert: true }
     );
 
+    console.log(`=== Formation Complete ===\n`);
+
     // Create and send the review embed
-    const embed = createPartyFormationEmbed(aiResponse, eventInfo);
+    const embed = createPartyFormationEmbed(processedParties, availableMembers, summary, eventInfo);
     const buttons = createPartyFormationButtons(eventId);
 
     return interaction.editReply({
@@ -126,107 +162,129 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
 }
 
 /**
- * Fetch member data with roles
- * CRITICAL: This function must return valid Discord user IDs (snowflakes)
+ * Process a static party against attendance data
  */
-async function fetchMembersWithRoles(userIds, guildId, guild, partyPlayers) {
-  const members = [];
+async function processStaticParty(party, notAttendingSet, guild, partyPlayers) {
+  const removedMembers = [];
+  const remainingMembers = [];
 
-  console.log(`\n=== Fetching ${userIds.length} members ===`);
+  console.log(`\nProcessing Party ${party.partyNumber} (${party.members?.length || 0} members)...`);
 
-  for (const userId of userIds) {
-    try {
-      // CRITICAL: Validate that userId is a valid Discord snowflake
-      if (!userId || !/^\d+$/.test(userId)) {
-        console.error(`❌ Invalid user ID format: "${userId}" (type: ${typeof userId})`);
-        continue;
-      }
+  for (const member of party.members || []) {
+    const enrichedMember = await enrichMemberData(member, guild, partyPlayers);
 
-      console.log(`Fetching user ${userId}...`);
-
-      // Fetch player info from database
-      const playerInfo = await partyPlayers.findOne({ userId, guildId });
-
-      // Fetch Discord member
-      const discordMember = await guild.members.fetch(userId).catch(() => null);
-
-      if (!playerInfo || !playerInfo.weapon1 || !playerInfo.weapon2) {
-        // Member hasn't set up party info, skip them
-        console.warn(`⚠️ User ${userId} has no party info, skipping`);
-        continue;
-      }
-
-      if (!discordMember) {
-        console.warn(`⚠️ User ${userId} not found in guild, skipping`);
-        continue;
-      }
-
-      // Determine role
-      const role = playerInfo.role || getRoleFromWeapons(playerInfo.weapon1, playerInfo.weapon2);
-
-      const memberData = {
-        userId: userId, // CRITICAL: Ensure this is the actual Discord user ID
-        displayName: discordMember.displayName || playerInfo.displayName || 'Unknown',
-        weapon1: playerInfo.weapon1,
-        weapon2: playerInfo.weapon2,
-        role,
-        cp: playerInfo.cp || 0,
-        isLeader: playerInfo.isPartyLeader || false
-      };
-
-      console.log(`✅ Added member: ${memberData.displayName} (ID: ${userId})`);
-      members.push(memberData);
-
-    } catch (error) {
-      console.error(`❌ Failed to fetch member ${userId}:`, error);
+    if (notAttendingSet.has(member.userId)) {
+      removedMembers.push(enrichedMember);
+      console.log(`  ❌ Removed: ${enrichedMember.displayName} (not attending)`);
+    } else {
+      remainingMembers.push(enrichedMember);
+      console.log(`  ✅ Kept: ${enrichedMember.displayName}`);
     }
   }
 
-  console.log(`=== Fetched ${members.length} members successfully ===\n`);
-  return members;
+  // Decide if party should be disbanded (less than 3 members remaining)
+  if (remainingMembers.length < 3) {
+    console.log(`  🔴 DISBANDED - Only ${remainingMembers.length} member(s) remaining`);
+
+    return {
+      partyNumber: party.partyNumber,
+      status: 'disbanded',
+      removedMembers,
+      remainingMembers,
+      reason: `Only ${remainingMembers.length} of 6 members available`
+    };
+  }
+
+  const status = removedMembers.length > 0 ? 'modified' : 'intact';
+  console.log(`  ${status === 'intact' ? '✅ INTACT' : '⚠️ MODIFIED'} - ${remainingMembers.length}/6 members`);
+
+  return {
+    partyNumber: party.partyNumber,
+    status,
+    members: remainingMembers,
+    removedMembers,
+    composition: calculateComposition(remainingMembers)
+  };
 }
 
 /**
- * Enrich static parties with attendance information
+ * Enrich member data with Discord info
  */
-async function enrichStaticPartiesWithAttendance(staticParties, attendingMembers, maybeMembers, guild) {
-  const enriched = [];
+async function enrichMemberData(member, guild, partyPlayers) {
+  try {
+    const discordMember = await guild.members.fetch(member.userId).catch(() => null);
+    const playerInfo = await partyPlayers.findOne({ 
+      userId: member.userId, 
+      guildId: guild.id 
+    });
 
-  for (const party of staticParties) {
-    const enrichedMembers = [];
+    return {
+      userId: member.userId,
+      displayName: discordMember?.displayName || 'Unknown',
+      weapon1: member.weapon1 || playerInfo?.weapon1,
+      weapon2: member.weapon2 || playerInfo?.weapon2,
+      role: member.role || playerInfo?.role || 'dps',
+      cp: member.cp || playerInfo?.cp || 0,
+      isLeader: member.isLeader || false
+    };
+  } catch (error) {
+    console.error(`Failed to enrich member ${member.userId}:`, error);
+    return {
+      userId: member.userId,
+      displayName: 'Unknown',
+      weapon1: member.weapon1,
+      weapon2: member.weapon2,
+      role: member.role || 'dps',
+      cp: member.cp || 0,
+      isLeader: false
+    };
+  }
+}
 
-    for (const member of party.members || []) {
-      try {
-        // CRITICAL: Validate user ID
-        if (!member.userId || !/^\d+$/.test(member.userId)) {
-          console.error(`❌ Invalid user ID in static party: "${member.userId}"`);
-          continue;
-        }
+/**
+ * Fetch member data for unassigned attendees
+ */
+async function fetchMemberData(userId, guild, partyPlayers) {
+  try {
+    const discordMember = await guild.members.fetch(userId).catch(() => null);
+    const playerInfo = await partyPlayers.findOne({ 
+      userId, 
+      guildId: guild.id 
+    });
 
-        const discordMember = await guild.members.fetch(member.userId).catch(() => null);
-
-        enrichedMembers.push({
-          userId: member.userId, // CRITICAL: Preserve original user ID
-          displayName: discordMember?.displayName || 'Unknown',
-          weapon1: member.weapon1,
-          weapon2: member.weapon2,
-          role: member.role,
-          cp: member.cp || 0,
-          isLeader: member.isLeader || false
-        });
-      } catch (error) {
-        console.error(`Failed to fetch member ${member.userId}:`, error);
-      }
+    if (!playerInfo || !playerInfo.weapon1 || !playerInfo.weapon2) {
+      console.warn(`⚠️ User ${userId} has no party info, skipping`);
+      return null;
     }
 
-    enriched.push({
-      partyNumber: party.partyNumber,
-      isReserve: party.isReserve || false,
-      members: enrichedMembers
-    });
+    const role = playerInfo.role || getRoleFromWeapons(playerInfo.weapon1, playerInfo.weapon2);
+
+    return {
+      userId,
+      displayName: discordMember?.displayName || 'Unknown',
+      weapon1: playerInfo.weapon1,
+      weapon2: playerInfo.weapon2,
+      role,
+      cp: playerInfo.cp || 0,
+      isLeader: false
+    };
+  } catch (error) {
+    console.error(`Failed to fetch member ${userId}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Calculate role composition
+ */
+function calculateComposition(members) {
+  const composition = { tank: 0, healer: 0, dps: 0 };
+
+  for (const member of members) {
+    composition[member.role]++;
   }
 
-  return enriched;
+  return composition;
 }
 
 /**
@@ -284,11 +342,11 @@ async function handleApproveParties({ interaction, eventId, collections, client 
     };
 
     console.log('\n=== Starting DM send process ===');
-    console.log(`Parties to send: ${formation.temporaryParties.length}`);
+    console.log(`Parties to send: ${formation.processedParties.length}`);
 
     // Send DMs to all party members
     const dmResults = await sendPartyAssignmentDMs(
-      formation.temporaryParties,
+      formation.processedParties,
       eventInfo,
       client
     );
@@ -331,12 +389,10 @@ async function handleApproveParties({ interaction, eventId, collections, client 
     if (failCount > 0) {
       confirmMessage += `• Failed to send: ${failCount} member${failCount !== 1 ? 's' : ''}\n\n`;
 
-      // Only show first 10 failed members to avoid hitting Discord's 2000 char limit
       const maxToShow = 10;
       confirmMessage += `**Failed DMs${failCount > maxToShow ? ` (showing ${maxToShow} of ${failCount})` : ''}:**\n`;
 
       dmResults.failed.slice(0, maxToShow).forEach(f => {
-        // Truncate error message if too long
         const errorMsg = f.error.length > 50 ? f.error.substring(0, 47) + '...' : f.error;
         confirmMessage += `• ${f.displayName} - ${errorMsg}\n`;
       });
@@ -364,28 +420,26 @@ async function handleApproveParties({ interaction, eventId, collections, client 
 
 /**
  * Send party assignment DMs to all members
- * CRITICAL: This function MUST receive valid Discord user IDs (snowflakes)
  */
-async function sendPartyAssignmentDMs(temporaryParties, eventInfo, client) {
+async function sendPartyAssignmentDMs(processedParties, eventInfo, client) {
   const results = {
     successful: [],
     failed: []
   };
 
-  console.log(`\n=== Sending DMs to ${temporaryParties.reduce((sum, p) => sum + p.members.length, 0)} members ===`);
+  console.log(`\n=== Sending DMs to ${processedParties.reduce((sum, p) => sum + p.members.length, 0)} members ===`);
 
-  for (const party of temporaryParties) {
-    console.log(`\nProcessing Party ${party.tempPartyNumber} (${party.members.length} members):`);
+  for (const party of processedParties) {
+    console.log(`\nProcessing Party ${party.partyNumber} (${party.members.length} members):`);
 
     for (const member of party.members) {
       try {
-        // CRITICAL: Validate that userId is a valid Discord snowflake (numeric string)
         if (!member.userId || !/^\d+$/.test(member.userId)) {
-          console.error(`❌ Invalid user ID for ${member.displayName}: "${member.userId}" (type: ${typeof member.userId})`);
+          console.error(`❌ Invalid user ID for ${member.displayName}: "${member.userId}"`);
           results.failed.push({
             userId: member.userId || 'unknown',
             displayName: member.displayName,
-            error: 'Invalid user ID format (expected numeric Discord ID, got username or invalid value)'
+            error: 'Invalid user ID format'
           });
           continue;
         }
@@ -404,7 +458,6 @@ async function sendPartyAssignmentDMs(temporaryParties, eventInfo, client) {
 
         console.log(`  ✅ DM sent successfully`);
 
-        // Small delay to avoid rate limits
         await new Promise(resolve => setTimeout(resolve, 500));
 
       } catch (error) {
@@ -431,7 +484,6 @@ async function handleCancelParties({ interaction, eventId, collections }) {
 
   await interaction.deferUpdate();
 
-  // Delete the pending formation
   await eventParties.deleteOne({ eventId: new ObjectId(eventId) });
 
   return interaction.editReply({

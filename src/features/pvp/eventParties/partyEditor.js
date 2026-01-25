@@ -1,8 +1,7 @@
 const { ObjectId } = require('mongodb');
 const { 
   ActionRowBuilder, 
-  StringSelectMenuBuilder, 
-  UserSelectMenuBuilder,
+  StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
   PermissionFlagsBits 
@@ -39,9 +38,9 @@ async function handleEditParties({ interaction, eventId, collections }) {
     }
 
     // Show party selection menu
-    const options = formation.temporaryParties.map(party => ({
-      label: `Party ${party.tempPartyNumber} (${party.members.length}/6)`,
-      value: `party_${party.tempPartyNumber}`,
+    const options = formation.processedParties.map(party => ({
+      label: `Party ${party.partyNumber} (${party.members.length}/6)`,
+      value: `party_${party.partyNumber}`,
       description: `${party.composition.tank}T ${party.composition.healer}H ${party.composition.dps}D`,
       emoji: party.members.length === 6 ? '✅' : '⚠️'
     }));
@@ -88,7 +87,7 @@ async function handlePartySelectForEdit({ interaction, eventId, collections }) {
   const partyNumber = parseInt(partyValue.split('_')[1]);
 
   const formation = await eventParties.findOne({ eventId: new ObjectId(eventId) });
-  const party = formation.temporaryParties.find(p => p.tempPartyNumber === partyNumber);
+  const party = formation.processedParties.find(p => p.partyNumber === partyNumber);
 
   if (!party) {
     return interaction.editReply({
@@ -110,12 +109,7 @@ async function handlePartySelectForEdit({ interaction, eventId, collections }) {
       .setLabel('Remove Member')
       .setStyle(ButtonStyle.Danger)
       .setEmoji('➖')
-      .setDisabled(party.members.length === 0),
-    new ButtonBuilder()
-      .setCustomId(`event_party_swap_members:${eventId}:${partyNumber}`)
-      .setLabel('Swap Between Parties')
-      .setStyle(ButtonStyle.Primary)
-      .setEmoji('🔄')
+      .setDisabled(party.members.length === 0)
   );
 
   const backRow = new ActionRowBuilder().addComponents(
@@ -151,7 +145,7 @@ async function showPartyEditView({ interaction, eventId, partyNumber, collection
   const { eventParties } = collections;
 
   const formation = await eventParties.findOne({ eventId: new ObjectId(eventId) });
-  const party = formation.temporaryParties.find(p => p.tempPartyNumber === partyNumber);
+  const party = formation.processedParties.find(p => p.partyNumber === partyNumber);
 
   if (!party) {
     return interaction.editReply({
@@ -173,12 +167,7 @@ async function showPartyEditView({ interaction, eventId, partyNumber, collection
       .setLabel('Remove Member')
       .setStyle(ButtonStyle.Danger)
       .setEmoji('➖')
-      .setDisabled(party.members.length === 0),
-    new ButtonBuilder()
-      .setCustomId(`event_party_swap_members:${eventId}:${partyNumber}`)
-      .setLabel('Swap Between Parties')
-      .setStyle(ButtonStyle.Primary)
-      .setEmoji('🔄')
+      .setDisabled(party.members.length === 0)
   );
 
   const backRow = new ActionRowBuilder().addComponents(
@@ -224,14 +213,12 @@ async function handleBackToReview({ interaction, eventId, collections }) {
     eventTime: event.eventTime
   };
 
-  const aiResponse = {
-    temporaryParties: formation.temporaryParties,
-    unplacedMembers: formation.unplacedMembers,
-    summary: formation.summary,
-    warnings: formation.warnings
-  };
-
-  const embed = createPartyFormationEmbed(aiResponse, eventInfo);
+  const embed = createPartyFormationEmbed(
+    formation.processedParties,
+    formation.availableMembers,
+    formation.summary,
+    eventInfo
+  );
   const buttons = createPartyFormationButtons(eventId);
 
   return interaction.editReply({
@@ -252,12 +239,12 @@ async function handleBackToEdit({ interaction, eventId, collections }) {
  * Handle add member to party
  */
 async function handleAddMemberToParty({ interaction, eventId, partyNumber, collections }) {
-  const { eventParties, partyPlayers } = collections;
+  const { eventParties } = collections;
 
   await interaction.deferUpdate();
 
   const formation = await eventParties.findOne({ eventId: new ObjectId(eventId) });
-  const party = formation.temporaryParties.find(p => p.tempPartyNumber === partyNumber);
+  const party = formation.processedParties.find(p => p.partyNumber === partyNumber);
 
   if (party.members.length >= 6) {
     return interaction.editReply({
@@ -266,12 +253,12 @@ async function handleAddMemberToParty({ interaction, eventId, partyNumber, colle
     });
   }
 
-  // Get all available members (unplaced)
-  const availableMembers = formation.unplacedMembers || [];
+  // Get all available members
+  const availableMembers = formation.availableMembers || [];
 
   if (availableMembers.length === 0) {
     return interaction.editReply({
-      content: '❌ No unplaced members available to add.\n\nAll attending members are already in parties.',
+      content: '❌ No available members to add.\n\nAll attending members are already in parties.',
       components: []
     });
   }
@@ -285,7 +272,7 @@ async function handleAddMemberToParty({ interaction, eventId, partyNumber, colle
         availableMembers.map(m => ({
           label: m.displayName,
           value: m.userId,
-          description: `${m.role} (${getRoleEmoji(m.role)})`,
+          description: `${m.role} (${getRoleEmoji(m.role)}) - ${m.source || 'Available'}`,
           emoji: getRoleEmoji(m.role)
         }))
       )
@@ -300,7 +287,7 @@ async function handleAddMemberToParty({ interaction, eventId, partyNumber, colle
   );
 
   return interaction.editReply({
-    content: `**Add Member to Party ${partyNumber}**\n\nSelect a member from the unplaced list:`,
+    content: `**Add Member to Party ${partyNumber}**\n\nSelect a member from the available list:`,
     components: [selectRow, backRow]
   });
 }
@@ -314,7 +301,7 @@ async function handleRemoveMemberFromParty({ interaction, eventId, partyNumber, 
   await interaction.deferUpdate();
 
   const formation = await eventParties.findOne({ eventId: new ObjectId(eventId) });
-  const party = formation.temporaryParties.find(p => p.tempPartyNumber === partyNumber);
+  const party = formation.processedParties.find(p => p.partyNumber === partyNumber);
 
   if (party.members.length === 0) {
     return interaction.editReply({
@@ -361,14 +348,14 @@ async function processAddMember({ interaction, eventId, partyNumber, userId, col
   await interaction.deferUpdate();
 
   const formation = await eventParties.findOne({ eventId: new ObjectId(eventId) });
-  const party = formation.temporaryParties.find(p => p.tempPartyNumber === partyNumber);
+  const party = formation.processedParties.find(p => p.partyNumber === partyNumber);
 
-  // Find member in unplaced list
-  const memberToAdd = formation.unplacedMembers.find(m => m.userId === userId);
+  // Find member in available list
+  const memberToAdd = formation.availableMembers.find(m => m.userId === userId);
 
   if (!memberToAdd) {
     return interaction.editReply({
-      content: '❌ Member not found in unplaced list.',
+      content: '❌ Member not found in available list.',
       components: []
     });
   }
@@ -379,20 +366,19 @@ async function processAddMember({ interaction, eventId, partyNumber, userId, col
   // Update composition
   party.composition[memberToAdd.role]++;
 
-  // Remove from unplaced
-  formation.unplacedMembers = formation.unplacedMembers.filter(m => m.userId !== userId);
+  // Remove from available (remove source field when adding to party)
+  formation.availableMembers = formation.availableMembers.filter(m => m.userId !== userId);
 
   // Update summary
-  formation.summary.membersPlaced++;
-  formation.summary.membersUnplaced--;
+  formation.summary.membersAvailable--;
 
   // Save to database
   await eventParties.updateOne(
     { eventId: new ObjectId(eventId) },
     {
       $set: {
-        temporaryParties: formation.temporaryParties,
-        unplacedMembers: formation.unplacedMembers,
+        processedParties: formation.processedParties,
+        availableMembers: formation.availableMembers,
         summary: formation.summary,
         lastModified: new Date()
       }
@@ -412,7 +398,7 @@ async function processRemoveMember({ interaction, eventId, partyNumber, userId, 
   await interaction.deferUpdate();
 
   const formation = await eventParties.findOne({ eventId: new ObjectId(eventId) });
-  const party = formation.temporaryParties.find(p => p.tempPartyNumber === partyNumber);
+  const party = formation.processedParties.find(p => p.partyNumber === partyNumber);
 
   // Find member in party
   const memberToRemove = party.members.find(m => m.userId === userId);
@@ -430,25 +416,22 @@ async function processRemoveMember({ interaction, eventId, partyNumber, userId, 
   // Update composition
   party.composition[memberToRemove.role]--;
 
-  // Add to unplaced
-  formation.unplacedMembers.push({
-    userId: memberToRemove.userId,
-    displayName: memberToRemove.displayName,
-    role: memberToRemove.role,
-    reason: 'Manually removed by admin'
+  // Add to available (with source)
+  formation.availableMembers.push({
+    ...memberToRemove,
+    source: 'Manually removed'
   });
 
   // Update summary
-  formation.summary.membersPlaced--;
-  formation.summary.membersUnplaced++;
+  formation.summary.membersAvailable++;
 
   // Save to database
   await eventParties.updateOne(
     { eventId: new ObjectId(eventId) },
     {
       $set: {
-        temporaryParties: formation.temporaryParties,
-        unplacedMembers: formation.unplacedMembers,
+        processedParties: formation.processedParties,
+        availableMembers: formation.availableMembers,
         summary: formation.summary,
         lastModified: new Date()
       }
@@ -467,21 +450,6 @@ async function handleBackToParty({ interaction, eventId, partyNumber, collection
   return showPartyEditView({ interaction, eventId, partyNumber, collections });
 }
 
-/**
- * Handle swap members button (placeholder - not fully implemented yet)
- */
-async function handleSwapMembers({ interaction, eventId, partyNumber, collections }) {
-  await interaction.deferUpdate();
-
-  return interaction.editReply({
-    content: '⚠️ **Swap Members Feature**\n\nThis feature is not yet implemented. For now, please use:\n\n' +
-             '1. **Remove Member** - Remove from current party\n' +
-             '2. **Add Member** - Add to different party\n\n' +
-             'This achieves the same result as swapping.',
-    components: []
-  });
-}
-
 module.exports = {
   handleEditParties,
   handlePartySelectForEdit,
@@ -491,6 +459,5 @@ module.exports = {
   handleRemoveMemberFromParty,
   processAddMember,
   processRemoveMember,
-  handleBackToParty,
-  handleSwapMembers
+  handleBackToParty
 };
