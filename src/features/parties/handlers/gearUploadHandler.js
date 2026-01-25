@@ -160,17 +160,75 @@ async function handleGearUpload({ message, collections }) {
       console.warn('Could not delete processing message:', err.message);
     }
 
+    const playerInfo = await partyPlayers.findOne({
+      userId: message.author.id,
+      guildId: guildId
+    });
+
+    const updatedPendingChanges = await dmContexts.findOne({
+      userId: message.author.id,
+      type: 'pending_party_info',
+      guildId: guildId
+    });
+
+    const { createPlayerInfoEmbed } = require('../embed');
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+    const embed = await createPlayerInfoEmbed(playerInfo, member, collections, updatedPendingChanges);
+
+    const hasPendingChanges = updatedPendingChanges && updatedPendingChanges.changes && Object.keys(updatedPendingChanges.changes).length > 0;
+    const gearCheckComplete = updatedPendingChanges?.gearCheckComplete || false;
+
+    const row1 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('party_set_weapon1')
+        .setLabel('Set Primary Weapon')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('⚔️'),
+      new ButtonBuilder()
+        .setCustomId('party_set_weapon2')
+        .setLabel('Set Secondary Weapon')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🗡️'),
+      new ButtonBuilder()
+        .setCustomId('party_set_cp')
+        .setLabel('Set Combat Power')
+        .setStyle(ButtonStyle.Success)
+        .setEmoji('💪')
+    );
+
+    const gearCheckButton = gearCheckComplete
+      ? new ButtonBuilder()
+          .setCustomId('party_gear_check')
+          .setLabel('Gear Check Complete')
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('✅')
+      : new ButtonBuilder()
+          .setCustomId('party_gear_check')
+          .setLabel('Gear Check')
+          .setStyle(ButtonStyle.Danger)
+          .setEmoji('🔴');
+
+    const submitButton = new ButtonBuilder()
+      .setCustomId('party_submit_changes')
+      .setLabel('Submit Changes')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('📝')
+      .setDisabled(!hasPendingChanges || !gearCheckComplete);
+
+    const row2 = new ActionRowBuilder().addComponents(
+      gearCheckButton,
+      submitButton
+    );
+
     try {
       await message.author.send({
-        content: '✅ **Gear check completed successfully!**\n\n' +
-                 `• Your QuestLog build: ${context.questlogUrl}\n` +
-                 '• Gear screenshot uploaded and posted to your thread\n' +
-                 '• You can now submit your changes with `/myinfo`!\n\n' +
-                 `View your thread: ${gearThread.url}`
+        embeds: [embed],
+        components: [row1, row2]
       });
     } catch (dmError) {
       return message.channel.send({
-        content: `✅ <@${message.author.id}> Gear check completed! View your thread: ${gearThread.url}`
+        content: `✅ <@${message.author.id}> Gear check completed!`
       }).then(msg => {
         setTimeout(() => msg.delete().catch(() => {}), 5000);
       });

@@ -168,7 +168,7 @@ async function handlePartyModals({ interaction, collections }) {
             channelId: interaction.channelId,
             guildName: guild?.name || 'Unknown',
             sentAt: new Date(),
-            expiresAt: new Date(Date.now() + 60 * 1000)
+            expiresAt: new Date(Date.now() + 120 * 1000)
           } 
         },
         { upsert: true }
@@ -180,7 +180,7 @@ async function handlePartyModals({ interaction, collections }) {
                  '• Accepted formats: PNG, JPG, JPEG, WEBP\n' +
                  '• Maximum size: 8MB\n' +
                  '• This will be posted in your gear check thread\n\n' +
-                 '**Send the image now!** (You have 60 seconds)'
+                 '**Send the image now!** (You have 2 minutes)'
       });
 
     } catch (err) {
