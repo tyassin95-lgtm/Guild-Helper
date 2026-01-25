@@ -3,8 +3,9 @@ const { WEAPONS, MAX_PARTIES, RESERVE_PARTY_SIZE } = require('../constants');
 const { createPlayerInfoEmbed, createPartiesOverviewEmbed } = require('../embed');
 
 async function handlePartyButtons({ interaction, collections }) {
-  const { partyPlayers, parties, dmContexts, guildSettings } = collections;
+  const { partyPlayers, parties, dmContexts } = collections;
 
+  // Set weapon 1
   if (interaction.customId === 'party_set_weapon1') {
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -20,6 +21,7 @@ async function handlePartyButtons({ interaction, collections }) {
     return interaction.reply({ content: 'Select your primary weapon:', components: [row], flags: [64] });
   }
 
+  // Set weapon 2
   if (interaction.customId === 'party_set_weapon2') {
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -35,6 +37,7 @@ async function handlePartyButtons({ interaction, collections }) {
     return interaction.reply({ content: 'Select your secondary weapon:', components: [row], flags: [64] });
   }
 
+  // Set CP modal
   if (interaction.customId === 'party_set_cp') {
     const modal = new ModalBuilder()
       .setCustomId('party_cp_modal')
@@ -55,181 +58,58 @@ async function handlePartyButtons({ interaction, collections }) {
     return interaction.showModal(modal);
   }
 
-  if (interaction.customId === 'party_gear_check') {
-    const settings = await guildSettings.findOne({ guildId: interaction.guildId });
-
-    if (!settings || !settings.gearCheckChannelId) {
-      return interaction.reply({
-        content: '❌ Gear check channel not configured! Ask an admin to set it up with `/gearcheck action:Set Channel`.',
-        flags: [64]
-      });
-    }
-
-    const modal = new ModalBuilder()
-      .setCustomId('party_gear_check_modal')
-      .setTitle('Gear Check - QuestLog Link');
-
-    const urlInput = new TextInputBuilder()
-      .setCustomId('questlog_url')
-      .setLabel('Enter your QuestLog.gg build URL')
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder('https://questlog.gg/throne-and-liberty/...')
-      .setRequired(true)
-      .setMinLength(10)
-      .setMaxLength(500);
-
-    const row = new ActionRowBuilder().addComponents(urlInput);
-    modal.addComponents(row);
-
-    return interaction.showModal(modal);
-  }
-
-  if (interaction.customId === 'party_submit_changes') {
-    await interaction.deferReply({ flags: [64] });
-
-    const pendingChanges = await dmContexts.findOne({
-      userId: interaction.user.id,
-      type: 'pending_party_info',
-      guildId: interaction.guildId
+  // Upload gear screenshot
+  if (interaction.customId === 'party_upload_gear') {
+    await interaction.reply({
+      content: '📸 **Upload your gear screenshot:**\n\n' +
+               'Please send your gear screenshot as an image in your **next message**.\n\n' +
+               '• Accepted formats: PNG, JPG, JPEG, WEBP\n' +
+               '• Maximum size: 8MB\n' +
+               '• This will be visible in the guild roster\n\n' +
+               '**Send the image now!** (You have 60 seconds)',
+      flags: [64] // Ephemeral flag (64 = MessageFlags.Ephemeral)
     });
 
-    if (!pendingChanges || !pendingChanges.changes || Object.keys(pendingChanges.changes).length === 0) {
-      return interaction.editReply({
-        content: '❌ No pending changes to submit!'
-      });
-    }
+    // Get guild context - for DM support
+    let guildId = interaction.guildId;
+    let guild = interaction.guild;
 
-    if (!pendingChanges.gearCheckComplete) {
-      return interaction.editReply({
-        content: '❌ You must complete a gear check before submitting changes!'
-      });
-    }
-
-    try {
-      const changes = pendingChanges.changes;
-      const playerBefore = await partyPlayers.findOne({
+    if (!guildId) {
+      const context = await dmContexts.findOne({ 
         userId: interaction.user.id,
-        guildId: interaction.guildId
+        expiresAt: { $gt: new Date() }
       });
 
-      const oldRole = playerBefore?.role;
-      const weaponsChanged = changes.weapon1 || changes.weapon2;
-
-      await partyPlayers.updateOne(
-        { userId: interaction.user.id, guildId: interaction.guildId },
-        { 
-          $set: { 
-            ...changes,
-            updatedAt: new Date()
-          } 
-        },
-        { upsert: true }
-      );
-
-      const playerAfter = await partyPlayers.findOne({
-        userId: interaction.user.id,
-        guildId: interaction.guildId
-      });
-
-      if (weaponsChanged && playerAfter.weapon1 && playerAfter.weapon2) {
-        const { updatePlayerRole } = require('../roleDetection');
-        const newRole = await updatePlayerRole(
-          interaction.user.id,
-          interaction.guildId,
-          playerAfter.weapon1,
-          playerAfter.weapon2,
-          collections
-        );
-
-        if (oldRole && newRole !== oldRole && playerAfter.partyNumber) {
-          await parties.updateOne(
-            { 
-              guildId: interaction.guildId, 
-              partyNumber: playerAfter.partyNumber,
-              'members.userId': interaction.user.id
-            },
-            {
-              $set: { 
-                'members.$.role': newRole,
-                'members.$.weapon1': playerAfter.weapon1,
-                'members.$.weapon2': playerAfter.weapon2,
-                'members.$.cp': playerAfter.cp || 0
-              },
-              $inc: {
-                [`roleComposition.${oldRole}`]: -1,
-                [`roleComposition.${newRole}`]: 1
-              }
-            }
-          );
-        } else if (playerAfter.partyNumber) {
-          await parties.updateOne(
-            { 
-              guildId: interaction.guildId, 
-              partyNumber: playerAfter.partyNumber,
-              'members.userId': interaction.user.id
-            },
-            {
-              $set: { 
-                'members.$.weapon1': playerAfter.weapon1,
-                'members.$.weapon2': playerAfter.weapon2,
-                'members.$.cp': playerAfter.cp || 0
-              }
-            }
-          );
-        }
-      } else if (changes.cp !== undefined && playerAfter.partyNumber) {
-        await parties.updateOne(
-          { 
-            guildId: interaction.guildId, 
-            partyNumber: playerAfter.partyNumber,
-            'members.userId': interaction.user.id
-          },
-          { $set: { 'members.$.cp': playerAfter.cp || 0 } }
-        );
-      }
-
-      if (playerAfter.partyNumber) {
-        const party = await parties.findOne({
-          guildId: interaction.guildId,
-          partyNumber: playerAfter.partyNumber
-        });
-
-        if (party) {
-          const totalCP = (party.members || []).reduce((sum, m) => sum + (m.cp || 0), 0);
-          await parties.updateOne(
-            { _id: party._id },
-            { $set: { totalCP } }
-          );
-        }
-      }
-
-      await dmContexts.deleteOne({
-        userId: interaction.user.id,
-        type: 'pending_party_info',
-        guildId: interaction.guildId
-      });
-
-      const { updateGuildRoster } = require('../commands/guildroster');
-      const { guildRosters } = collections;
-      const rosterRecord = await guildRosters.findOne({ guildId: interaction.guild.id });
-      if (rosterRecord && rosterRecord.channelId) {
-        updateGuildRoster(interaction.guild, rosterRecord.channelId, collections).catch(err => {
-          console.error('Error auto-updating guild roster:', err);
+      if (!context) {
+        return interaction.editReply({
+          content: '❌ This DM link has expired (24 hours). Please use `/myinfo` in the server to upload your gear screenshot.'
         });
       }
 
-      return interaction.editReply({
-        content: '✅ **Changes submitted successfully!**\n\nYour party information has been updated.'
-      });
-
-    } catch (err) {
-      console.error('Error submitting changes:', err);
-      return interaction.editReply({
-        content: '❌ An error occurred while submitting your changes. Please try again.'
-      });
+      guildId = context.guildId;
+      guild = await interaction.client.guilds.fetch(guildId).catch(() => null);
     }
+
+    // Store upload context with expiration + the channel ID for cleanup
+    await dmContexts.updateOne(
+      { userId: interaction.user.id },
+      { 
+        $set: { 
+          type: 'gear_upload',
+          guildId: guildId,
+          guildName: guild?.name || 'Unknown',
+          channelId: interaction.channelId, // Store channel for cleanup
+          sentAt: new Date(),
+          expiresAt: new Date(Date.now() + 60 * 1000) // 60 seconds
+        } 
+      },
+      { upsert: true }
+    );
+
+    return;
   }
 
+  // Create party (admin only - guild context required)
   if (interaction.customId === 'party_create') {
     if (!interaction.guildId) {
       return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
@@ -239,6 +119,7 @@ async function handlePartyButtons({ interaction, collections }) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
 
+    // Check if reserve party exists
     const reserveParty = await parties.findOne({ guildId: interaction.guildId, isReserve: true });
     const existingParties = await parties.find({ 
       guildId: interaction.guildId, 
@@ -252,6 +133,7 @@ async function handlePartyButtons({ interaction, collections }) {
       });
     }
 
+    // Find next available party number
     const usedNumbers = new Set(existingParties.map(p => p.partyNumber));
     let nextNumber = 1;
     while (usedNumbers.has(nextNumber)) {
@@ -277,6 +159,7 @@ async function handlePartyButtons({ interaction, collections }) {
     return interaction.update({ embeds: [embed] });
   }
 
+  // Create reserve party
   if (interaction.customId === 'party_create_reserve') {
     if (!interaction.guildId) {
       return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
@@ -286,6 +169,7 @@ async function handlePartyButtons({ interaction, collections }) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
     }
 
+    // Check if reserve already exists
     const existingReserve = await parties.findOne({ 
       guildId: interaction.guildId, 
       isReserve: true 
@@ -319,6 +203,7 @@ async function handlePartyButtons({ interaction, collections }) {
     });
   }
 
+  // Manage parties (admin only - guild context required)
   if (interaction.customId === 'party_manage') {
     if (!interaction.guildId) {
       return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
@@ -360,6 +245,7 @@ async function handlePartyButtons({ interaction, collections }) {
     return interaction.reply({ content: 'Select a party to manage:', components: [row], flags: [64] });
   }
 
+  // Delete party (admin only - guild context required)
   if (interaction.customId === 'party_delete') {
     if (!interaction.guildId) {
       return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });

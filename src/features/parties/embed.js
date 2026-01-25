@@ -1,7 +1,8 @@
 const { EmbedBuilder } = require('discord.js');
 const { RESERVE_PARTY_SIZE } = require('./constants');
 
-async function createPlayerInfoEmbed(playerInfo, member, collections, pendingChanges = null) {
+async function createPlayerInfoEmbed(playerInfo, member, collections) {
+  // Handle case where member might be null (DM context or fetch failure)
   const displayName = member?.displayName || 'Unknown User';
   const avatarURL = member?.user?.displayAvatarURL?.() || member?.displayAvatarURL?.() || null;
 
@@ -10,92 +11,42 @@ async function createPlayerInfoEmbed(playerInfo, member, collections, pendingCha
     .setTitle(`${displayName}'s Party Info`)
     .setTimestamp();
 
+  // Only set thumbnail if we have an avatar URL
   if (avatarURL) {
     embed.setThumbnail(avatarURL);
   }
 
-  const hasInfo = playerInfo && playerInfo.weapon1 && playerInfo.weapon2;
-  const hasPending = pendingChanges && pendingChanges.changes && Object.keys(pendingChanges.changes).length > 0;
-
-  if (!hasInfo && !hasPending) {
+  if (!playerInfo || !playerInfo.weapon1 || !playerInfo.weapon2) {
     embed.setDescription('❌ You haven\'t set up your party info yet!\n\nUse the buttons below to get started.');
     return embed;
   }
 
-  let description = '';
+  // Check if in reserve
+  if (playerInfo.inReserve && collections) {
+    embed.setColor('#FFA500'); // Orange for reserve
+    embed.setDescription('✅ Your party information is set up!\n\n📦 **Status: In Reserve Party**');
 
-  if (hasPending && !pendingChanges.gearCheckComplete) {
-    description += '⚠️ **Gear Check Required** - Complete gear check to submit changes\n\n';
-  } else if (hasPending && pendingChanges.gearCheckComplete) {
-    description += '✅ **Ready to Submit** - All changes ready for submission\n\n';
-  } else if (hasInfo) {
-    description += '✅ Your party information is set up!\n\n';
-  }
+    embed.addFields(
+      { name: '⚔️ Role', value: `${playerInfo.weapon1} / ${playerInfo.weapon2}`, inline: true },
+      { name: '💪 Combat Power', value: `${(playerInfo.cp || 0).toLocaleString()}`, inline: true }
+    );
 
-  if (playerInfo?.inReserve && collections) {
-    embed.setColor('#FFA500');
-    description += '📦 **Status: In Reserve Party**\n\n';
-  }
-
-  embed.setDescription(description);
-
-  const currentWeapon1 = playerInfo?.weapon1 || 'Not set';
-  const currentWeapon2 = playerInfo?.weapon2 || 'Not set';
-  const currentCP = playerInfo?.cp || 0;
-
-  const pendingWeapon1 = pendingChanges?.changes?.weapon1;
-  const pendingWeapon2 = pendingChanges?.changes?.weapon2;
-  const pendingCP = pendingChanges?.changes?.cp;
-
-  let weapon1Display = currentWeapon1;
-  let weapon2Display = currentWeapon2;
-  let cpDisplay = currentCP.toLocaleString();
-
-  if (hasPending) {
-    if (pendingWeapon1) {
-      weapon1Display = `~~${currentWeapon1}~~ → **${pendingWeapon1}**`;
+    // Add gear screenshot status
+    if (playerInfo.gearScreenshotUrl) {
+      embed.addFields({
+        name: '📸 Gear Screenshot',
+        value: `[View Gear](${playerInfo.gearScreenshotUrl})`,
+        inline: true
+      });
+    } else {
+      embed.addFields({
+        name: '📸 Gear Screenshot',
+        value: '❌ Not uploaded',
+        inline: true
+      });
     }
-    if (pendingWeapon2) {
-      weapon2Display = `~~${currentWeapon2}~~ → **${pendingWeapon2}**`;
-    }
-    if (pendingCP !== undefined) {
-      cpDisplay = `~~${currentCP.toLocaleString()}~~ → **${pendingCP.toLocaleString()}**`;
-    }
-  }
 
-  embed.addFields(
-    { 
-      name: '⚔️ Primary Weapon', 
-      value: weapon1Display, 
-      inline: true 
-    },
-    { 
-      name: '🗡️ Secondary Weapon', 
-      value: weapon2Display, 
-      inline: true 
-    },
-    { 
-      name: '💪 Combat Power', 
-      value: cpDisplay, 
-      inline: true 
-    }
-  );
-
-  if (playerInfo?.gearScreenshotUrl) {
-    embed.addFields({
-      name: '📸 Gear Screenshot',
-      value: `[View Gear](${playerInfo.gearScreenshotUrl})`,
-      inline: true
-    });
-  } else {
-    embed.addFields({
-      name: '📸 Gear Screenshot',
-      value: '❌ Not uploaded',
-      inline: true
-    });
-  }
-
-  if (playerInfo?.inReserve && collections) {
+    // Calculate reserve position
     const { partyPlayers, parties } = collections;
     if (partyPlayers && parties) {
       const reserveParty = await parties.findOne({ 
@@ -104,9 +55,11 @@ async function createPlayerInfoEmbed(playerInfo, member, collections, pendingCha
       });
 
       if (reserveParty && reserveParty.members) {
+        // Sort by CP descending to find position
         const sortedMembers = [...reserveParty.members].sort((a, b) => (b.cp || 0) - (a.cp || 0));
         const overallPosition = sortedMembers.findIndex(p => p.userId === playerInfo.userId) + 1;
 
+        // Role-specific position
         const roleMembers = sortedMembers.filter(p => p.role === playerInfo.role);
         const rolePosition = roleMembers.findIndex(p => p.userId === playerInfo.userId) + 1;
 
@@ -148,12 +101,30 @@ async function createPlayerInfoEmbed(playerInfo, member, collections, pendingCha
     return embed;
   }
 
-  if (playerInfo?.partyNumber) {
-    embed.addFields({ 
-      name: '👥 Assigned Party', 
-      value: `Party ${playerInfo.partyNumber}`, 
-      inline: false 
+  // Active player
+  embed.setDescription('✅ Your party information is set up!');
+  embed.addFields(
+    { name: '⚔️ Role', value: `${playerInfo.weapon1} / ${playerInfo.weapon2}`, inline: true },
+    { name: '💪 Combat Power', value: `${(playerInfo.cp || 0).toLocaleString()}`, inline: true }
+  );
+
+  // Add gear screenshot status
+  if (playerInfo.gearScreenshotUrl) {
+    embed.addFields({
+      name: '📸 Gear Screenshot',
+      value: `[View Gear](${playerInfo.gearScreenshotUrl})`,
+      inline: true
     });
+  } else {
+    embed.addFields({
+      name: '📸 Gear Screenshot',
+      value: '❌ Not uploaded',
+      inline: true
+    });
+  }
+
+  if (playerInfo.partyNumber) {
+    embed.addFields({ name: '👥 Assigned Party', value: `Party ${playerInfo.partyNumber}`, inline: false });
   }
 
   return embed;
@@ -170,9 +141,11 @@ function createPartiesOverviewEmbed(parties, guild) {
     return embed;
   }
 
+  // Separate regular parties and reserve
   const regularParties = parties.filter(p => !p.isReserve);
   const reserveParty = parties.find(p => p.isReserve);
 
+  // Add regular parties
   for (const party of regularParties) {
     const members = party.members || [];
 
@@ -199,6 +172,7 @@ function createPartiesOverviewEmbed(parties, guild) {
     });
   }
 
+  // Add reserve party at the end if it exists
   if (reserveParty) {
     const members = reserveParty.members || [];
 
@@ -209,6 +183,7 @@ function createPartiesOverviewEmbed(parties, guild) {
         inline: false
       });
     } else {
+      // Sort reserve by CP descending
       const sortedMembers = [...members].sort((a, b) => (b.cp || 0) - (a.cp || 0));
 
       const memberList = sortedMembers.slice(0, 10).map(m => {

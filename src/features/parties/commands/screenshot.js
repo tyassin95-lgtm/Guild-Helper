@@ -1,9 +1,10 @@
 const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { getStorageChannelInfo, deleteFromDiscordStorage } = require('../../../utils/discordStorage');
 
-async function handleGearCheck({ interaction, collections }) {
+async function handleScreenshot({ interaction, collections }) {
   const { partyPlayers, guildSettings } = collections;
 
+  // Check admin permissions
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({ 
       content: '❌ You need administrator permissions to use this command.', 
@@ -13,6 +14,9 @@ async function handleGearCheck({ interaction, collections }) {
 
   const action = interaction.options.getString('action');
 
+  // =========================
+  // SET STORAGE CHANNEL
+  // =========================
   if (action === 'set_channel') {
     const channel = interaction.options.getChannel('channel');
 
@@ -23,77 +27,15 @@ async function handleGearCheck({ interaction, collections }) {
       });
     }
 
-    if (channel.type !== 0) {
+    // Validate channel type
+    if (channel.type !== 0) { // 0 = GuildText
       return interaction.reply({
         content: '❌ Please select a text channel.',
         flags: [64]
       });
     }
 
-    const botPermissions = channel.permissionsFor(interaction.guild.members.me);
-    const requiredPermissions = [
-      PermissionFlagsBits.ViewChannel,
-      PermissionFlagsBits.SendMessages,
-      PermissionFlagsBits.CreatePublicThreads,
-      PermissionFlagsBits.SendMessagesInThreads,
-      PermissionFlagsBits.ReadMessageHistory
-    ];
-
-    const missingPermissions = requiredPermissions.filter(perm => !botPermissions.has(perm));
-
-    if (missingPermissions.length > 0) {
-      return interaction.reply({
-        content: '❌ I don\'t have the required permissions in that channel!\n\n' +
-                 '**Missing permissions:**\n' +
-                 missingPermissions.map(p => `• ${Object.keys(PermissionFlagsBits).find(key => PermissionFlagsBits[key] === p)}`).join('\n'),
-        flags: [64]
-      });
-    }
-
-    await guildSettings.updateOne(
-      { guildId: interaction.guildId },
-      { $set: { gearCheckChannelId: channel.id } },
-      { upsert: true }
-    );
-
-    const embed = new EmbedBuilder()
-      .setColor('#10B981')
-      .setTitle('✅ Gear Check Channel Set')
-      .setDescription(
-        `Gear check threads will now be created in ${channel}\n\n` +
-        '**What this means:**\n' +
-        '• Each user will get their own thread for gear checks\n' +
-        '• Threads will contain questlog.gg builds and screenshots\n' +
-        '• Admins can review all submissions in one place\n\n' +
-        '**Note:** Users must complete a gear check before submitting their party info.'
-      )
-      .addFields({
-        name: 'Channel Info',
-        value: `**Name:** ${channel.name}\n**ID:** ${channel.id}`,
-        inline: false
-      })
-      .setTimestamp();
-
-    return interaction.reply({ embeds: [embed], flags: [64] });
-  }
-
-  if (action === 'set_storage_channel') {
-    const channel = interaction.options.getChannel('channel');
-
-    if (!channel) {
-      return interaction.reply({
-        content: '❌ Please specify a channel.',
-        flags: [64]
-      });
-    }
-
-    if (channel.type !== 0) {
-      return interaction.reply({
-        content: '❌ Please select a text channel.',
-        flags: [64]
-      });
-    }
-
+    // Check bot permissions in the channel
     const botPermissions = channel.permissionsFor(interaction.guild.members.me);
     const requiredPermissions = [
       PermissionFlagsBits.ViewChannel,
@@ -114,6 +56,7 @@ async function handleGearCheck({ interaction, collections }) {
       });
     }
 
+    // Save to guild settings
     await guildSettings.updateOne(
       { guildId: interaction.guildId },
       { $set: { gearStorageChannelId: channel.id } },
@@ -141,10 +84,14 @@ async function handleGearCheck({ interaction, collections }) {
     return interaction.reply({ embeds: [embed], flags: [64] });
   }
 
+  // =========================
+  // CLEAN STORAGE
+  // =========================
   if (action === 'clean_storage') {
     await interaction.deferReply({ flags: [64] });
 
     try {
+      // Get storage channel info
       const storageInfo = await getStorageChannelInfo(interaction.guild);
 
       if (!storageInfo) {
@@ -153,6 +100,7 @@ async function handleGearCheck({ interaction, collections }) {
         });
       }
 
+      // Get all players with stored gear
       const playersWithGear = await partyPlayers.find({
         guildId: interaction.guildId,
         gearStorageMessageId: { $exists: true }
@@ -164,7 +112,9 @@ async function handleGearCheck({ interaction, collections }) {
         });
       }
 
+      // Ask for confirmation with options
       const ageOptions = interaction.options.getInteger('older_than_days') || 90;
+
       const cutoffDate = new Date(Date.now() - ageOptions * 24 * 60 * 60 * 1000);
 
       const oldPlayers = playersWithGear.filter(p => 
@@ -177,9 +127,11 @@ async function handleGearCheck({ interaction, collections }) {
         });
       }
 
+      // Check if confirm parameter is set
       const confirm = interaction.options.getBoolean('confirm');
 
       if (!confirm) {
+        // Show confirmation preview
         const embed = new EmbedBuilder()
           .setColor('#F59E0B')
           .setTitle('⚠️ Confirm Storage Cleanup')
@@ -209,6 +161,7 @@ async function handleGearCheck({ interaction, collections }) {
         });
       }
 
+      // Proceed with deletion
       let deletedCount = 0;
       let failedCount = 0;
 
@@ -221,6 +174,7 @@ async function handleGearCheck({ interaction, collections }) {
 
         if (success) {
           deletedCount++;
+          // Remove storage references from database
           await partyPlayers.updateOne(
             { _id: player._id },
             { 
@@ -236,6 +190,7 @@ async function handleGearCheck({ interaction, collections }) {
           failedCount++;
         }
 
+        // Add small delay to avoid rate limits
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
@@ -264,6 +219,9 @@ async function handleGearCheck({ interaction, collections }) {
     }
   }
 
+  // =========================
+  // STORAGE INFO
+  // =========================
   if (action === 'info') {
     await interaction.deferReply({ flags: [64] });
 
@@ -278,22 +236,8 @@ async function handleGearCheck({ interaction, collections }) {
 
       const embed = new EmbedBuilder()
         .setColor('#5865F2')
-        .setTitle('📊 Gear System Information')
+        .setTitle('📊 Gear Storage Information')
         .setTimestamp();
-
-      if (settings?.gearCheckChannelId) {
-        embed.addFields({
-          name: '📋 Gear Check Channel',
-          value: `<#${settings.gearCheckChannelId}>\nWhere gear check threads are created`,
-          inline: false
-        });
-      } else {
-        embed.addFields({
-          name: '⚠️ Gear Check Channel',
-          value: 'Not set - use `/gearcheck action:Set Channel`',
-          inline: false
-        });
-      }
 
       if (storageInfo) {
         embed.addFields(
@@ -311,29 +255,30 @@ async function handleGearCheck({ interaction, collections }) {
             inline: true
           }
         );
+
+        if (settings?.gearStorageChannelId) {
+          embed.addFields({
+            name: '⚙️ Settings',
+            value: `Custom storage channel: <#${settings.gearStorageChannelId}>`,
+            inline: false
+          });
+        }
+
+        embed.setDescription(
+          '✅ Storage system is active and working!\n\n' +
+          '**Available Commands:**\n' +
+          '• `/screenshot action:Set Storage Channel` - Set custom storage channel\n' +
+          '• `/screenshot action:Clean Old Storage` - Remove old screenshots\n' +
+          '• `/screenshot action:Storage Info` - View this information'
+        );
       } else {
-        embed.addFields({
-          name: '📁 Storage Channel',
-          value: 'Will be created automatically on first upload',
-          inline: false
-        });
+        embed.setDescription(
+          '⚠️ No storage channel found yet.\n\n' +
+          'The storage channel will be created automatically when a user uploads their first gear screenshot.\n\n' +
+          'Alternatively, you can set a custom channel with:\n' +
+          '`/screenshot action:Set Storage Channel`'
+        );
       }
-
-      if (settings?.gearStorageChannelId) {
-        embed.addFields({
-          name: '⚙️ Custom Storage',
-          value: `<#${settings.gearStorageChannelId}>`,
-          inline: false
-        });
-      }
-
-      embed.setDescription(
-        '**Available Commands:**\n' +
-        '• `/gearcheck action:Set Channel` - Set gear check threads channel\n' +
-        '• `/gearcheck action:Set Storage Channel` - Set custom storage channel\n' +
-        '• `/gearcheck action:Clean Old Storage` - Remove old screenshots\n' +
-        '• `/gearcheck action:Storage Info` - View this information'
-      );
 
       return interaction.editReply({ embeds: [embed] });
     } catch (err) {
@@ -345,4 +290,4 @@ async function handleGearCheck({ interaction, collections }) {
   }
 }
 
-module.exports = { handleGearCheck };
+module.exports = { handleScreenshot };
