@@ -100,13 +100,13 @@ async function handlePartySelectForEdit({ interaction, eventId, collections }) {
   const actionRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`event_party_add_member:${eventId}:${partyNumber}`)
-      .setLabel('Add Member')
+      .setLabel('Add Members')
       .setStyle(ButtonStyle.Success)
       .setEmoji('➕')
       .setDisabled(party.members.length >= 6),
     new ButtonBuilder()
       .setCustomId(`event_party_remove_member:${eventId}:${partyNumber}`)
-      .setLabel('Remove Member')
+      .setLabel('Remove Members')
       .setStyle(ButtonStyle.Danger)
       .setEmoji('➖')
       .setDisabled(party.members.length === 0)
@@ -158,13 +158,13 @@ async function showPartyEditView({ interaction, eventId, partyNumber, collection
   const actionRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`event_party_add_member:${eventId}:${partyNumber}`)
-      .setLabel('Add Member')
+      .setLabel('Add Members')
       .setStyle(ButtonStyle.Success)
       .setEmoji('➕')
       .setDisabled(party.members.length >= 6),
     new ButtonBuilder()
       .setCustomId(`event_party_remove_member:${eventId}:${partyNumber}`)
-      .setLabel('Remove Member')
+      .setLabel('Remove Members')
       .setStyle(ButtonStyle.Danger)
       .setEmoji('➖')
       .setDisabled(party.members.length === 0)
@@ -263,13 +263,19 @@ async function handleAddMemberToParty({ interaction, eventId, partyNumber, colle
     });
   }
 
-  // Show user select menu
+  // Calculate how many slots are available
+  const availableSlots = 6 - party.members.length;
+  const maxSelectable = Math.min(availableMembers.length, availableSlots, 25); // Discord limit is 25
+
+  // Show multi-select menu
   const selectRow = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(`event_party_select_add_member:${eventId}:${partyNumber}`)
-      .setPlaceholder('Select member to add')
+      .setPlaceholder(`Select members to add (up to ${maxSelectable})`)
+      .setMinValues(1)
+      .setMaxValues(maxSelectable)
       .addOptions(
-        availableMembers.map(m => ({
+        availableMembers.slice(0, 25).map(m => ({ // Discord max 25 options
           label: m.displayName,
           value: m.userId,
           description: `${m.role} (${getRoleEmoji(m.role)}) - ${m.source || 'Available'}`,
@@ -287,7 +293,10 @@ async function handleAddMemberToParty({ interaction, eventId, partyNumber, colle
   );
 
   return interaction.editReply({
-    content: `**Add Member to Party ${partyNumber}**\n\nSelect a member from the available list:`,
+    content: `**Add Members to Party ${partyNumber}**\n\n` +
+             `**Available slots:** ${availableSlots}\n` +
+             `**Available members:** ${availableMembers.length}\n\n` +
+             `Select one or more members to add:`,
     components: [selectRow, backRow]
   });
 }
@@ -310,13 +319,18 @@ async function handleRemoveMemberFromParty({ interaction, eventId, partyNumber, 
     });
   }
 
-  // Show member select menu
+  // Allow selecting multiple members to remove (up to all of them, max 25 due to Discord)
+  const maxSelectable = Math.min(party.members.length, 25);
+
+  // Show multi-select menu
   const selectRow = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(`event_party_select_remove_member:${eventId}:${partyNumber}`)
-      .setPlaceholder('Select member to remove')
+      .setPlaceholder(`Select members to remove (up to ${maxSelectable})`)
+      .setMinValues(1)
+      .setMaxValues(maxSelectable)
       .addOptions(
-        party.members.map(m => ({
+        party.members.slice(0, 25).map(m => ({ // Discord max 25 options
           label: m.displayName,
           value: m.userId,
           description: `${m.role} (${m.weapon1}/${m.weapon2})`,
@@ -334,13 +348,15 @@ async function handleRemoveMemberFromParty({ interaction, eventId, partyNumber, 
   );
 
   return interaction.editReply({
-    content: `**Remove Member from Party ${partyNumber}**\n\nSelect a member to remove:`,
+    content: `**Remove Members from Party ${partyNumber}**\n\n` +
+             `**Current members:** ${party.members.length}\n\n` +
+             `Select one or more members to remove:`,
     components: [selectRow, backRow]
   });
 }
 
 /**
- * Process adding a member
+ * Process adding multiple members
  */
 async function processAddMember({ interaction, eventId, partyNumber, userId, collections }) {
   const { eventParties } = collections;
@@ -350,27 +366,43 @@ async function processAddMember({ interaction, eventId, partyNumber, userId, col
   const formation = await eventParties.findOne({ eventId: new ObjectId(eventId) });
   const party = formation.processedParties.find(p => p.partyNumber === partyNumber);
 
-  // Find member in available list
-  const memberToAdd = formation.availableMembers.find(m => m.userId === userId);
+  // userId is now an array (from interaction.values)
+  const userIds = Array.isArray(userId) ? userId : [userId];
 
-  if (!memberToAdd) {
-    return interaction.editReply({
-      content: '❌ Member not found in available list.',
-      components: []
-    });
+  const addedMembers = [];
+  const failedAdds = [];
+
+  for (const uid of userIds) {
+    // Check if party is full
+    if (party.members.length >= 6) {
+      failedAdds.push({ userId: uid, reason: 'Party is full' });
+      continue;
+    }
+
+    // Find member in available list
+    const memberToAdd = formation.availableMembers.find(m => m.userId === uid);
+
+    if (!memberToAdd) {
+      failedAdds.push({ userId: uid, reason: 'Not found in available list' });
+      continue;
+    }
+
+    // Add to party (remove source field)
+    const { source, ...memberData } = memberToAdd;
+    party.members.push(memberData);
+
+    // Update composition
+    party.composition[memberToAdd.role]++;
+
+    // Track successful add
+    addedMembers.push(memberToAdd.displayName);
+
+    // Remove from available
+    formation.availableMembers = formation.availableMembers.filter(m => m.userId !== uid);
+
+    // Update summary
+    formation.summary.membersAvailable--;
   }
-
-  // Add to party
-  party.members.push(memberToAdd);
-
-  // Update composition
-  party.composition[memberToAdd.role]++;
-
-  // Remove from available (remove source field when adding to party)
-  formation.availableMembers = formation.availableMembers.filter(m => m.userId !== userId);
-
-  // Update summary
-  formation.summary.membersAvailable--;
 
   // Save to database
   await eventParties.updateOne(
@@ -385,12 +417,68 @@ async function processAddMember({ interaction, eventId, partyNumber, userId, col
     }
   );
 
-  // Return to party edit view
-  return showPartyEditView({ interaction, eventId, partyNumber, collections });
+  // Build result message
+  let resultMessage = '';
+  if (addedMembers.length > 0) {
+    resultMessage += `✅ **Added ${addedMembers.length} member(s):**\n`;
+    resultMessage += addedMembers.map(name => `• ${name}`).join('\n');
+    resultMessage += '\n\n';
+  }
+
+  if (failedAdds.length > 0) {
+    resultMessage += `❌ **Failed to add ${failedAdds.length} member(s):**\n`;
+    resultMessage += failedAdds.map(f => `• ${f.reason}`).join('\n');
+    resultMessage += '\n\n';
+  }
+
+  // Show updated party view with result message prepended
+  const updatedFormation = await eventParties.findOne({ eventId: new ObjectId(eventId) });
+  const updatedParty = updatedFormation.processedParties.find(p => p.partyNumber === partyNumber);
+
+  const actionRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`event_party_add_member:${eventId}:${partyNumber}`)
+      .setLabel('Add Members')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('➕')
+      .setDisabled(updatedParty.members.length >= 6),
+    new ButtonBuilder()
+      .setCustomId(`event_party_remove_member:${eventId}:${partyNumber}`)
+      .setLabel('Remove Members')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('➖')
+      .setDisabled(updatedParty.members.length === 0)
+  );
+
+  const backRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`event_party_back_to_edit:${eventId}`)
+      .setLabel('Back to Party Selection')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('◀️')
+  );
+
+  const memberList = updatedParty.members.map((m, i) => {
+    const roleIcon = getRoleEmoji(m.role);
+    const leaderCrown = m.isLeader ? '👑 ' : '';
+    return `${i + 1}. ${roleIcon} ${leaderCrown}${m.displayName} (${m.weapon1}/${m.weapon2})`;
+  }).join('\n');
+
+  const content = 
+    resultMessage +
+    `**Editing Party ${partyNumber}**\n\n` +
+    `**Members (${updatedParty.members.length}/6):**\n${memberList || '*No members*'}\n\n` +
+    `**Composition:** ${updatedParty.composition.tank} Tank, ${updatedParty.composition.healer} Healer, ${updatedParty.composition.dps} DPS\n\n` +
+    `Choose an action:`;
+
+  return interaction.editReply({
+    content,
+    components: [actionRow, backRow]
+  });
 }
 
 /**
- * Process removing a member
+ * Process removing multiple members
  */
 async function processRemoveMember({ interaction, eventId, partyNumber, userId, collections }) {
   const { eventParties } = collections;
@@ -400,30 +488,39 @@ async function processRemoveMember({ interaction, eventId, partyNumber, userId, 
   const formation = await eventParties.findOne({ eventId: new ObjectId(eventId) });
   const party = formation.processedParties.find(p => p.partyNumber === partyNumber);
 
-  // Find member in party
-  const memberToRemove = party.members.find(m => m.userId === userId);
+  // userId is now an array (from interaction.values)
+  const userIds = Array.isArray(userId) ? userId : [userId];
 
-  if (!memberToRemove) {
-    return interaction.editReply({
-      content: '❌ Member not found in party.',
-      components: []
+  const removedMembers = [];
+  const failedRemoves = [];
+
+  for (const uid of userIds) {
+    // Find member in party
+    const memberToRemove = party.members.find(m => m.userId === uid);
+
+    if (!memberToRemove) {
+      failedRemoves.push({ userId: uid, reason: 'Not found in party' });
+      continue;
+    }
+
+    // Remove from party
+    party.members = party.members.filter(m => m.userId !== uid);
+
+    // Update composition
+    party.composition[memberToRemove.role]--;
+
+    // Track successful remove
+    removedMembers.push(memberToRemove.displayName);
+
+    // Add to available (with source)
+    formation.availableMembers.push({
+      ...memberToRemove,
+      source: 'Manually removed'
     });
+
+    // Update summary
+    formation.summary.membersAvailable++;
   }
-
-  // Remove from party
-  party.members = party.members.filter(m => m.userId !== userId);
-
-  // Update composition
-  party.composition[memberToRemove.role]--;
-
-  // Add to available (with source)
-  formation.availableMembers.push({
-    ...memberToRemove,
-    source: 'Manually removed'
-  });
-
-  // Update summary
-  formation.summary.membersAvailable++;
 
   // Save to database
   await eventParties.updateOne(
@@ -438,8 +535,64 @@ async function processRemoveMember({ interaction, eventId, partyNumber, userId, 
     }
   );
 
-  // Return to party edit view
-  return showPartyEditView({ interaction, eventId, partyNumber, collections });
+  // Build result message
+  let resultMessage = '';
+  if (removedMembers.length > 0) {
+    resultMessage += `✅ **Removed ${removedMembers.length} member(s):**\n`;
+    resultMessage += removedMembers.map(name => `• ${name}`).join('\n');
+    resultMessage += '\n\n';
+  }
+
+  if (failedRemoves.length > 0) {
+    resultMessage += `❌ **Failed to remove ${failedRemoves.length} member(s):**\n`;
+    resultMessage += failedRemoves.map(f => `• ${f.reason}`).join('\n');
+    resultMessage += '\n\n';
+  }
+
+  // Show updated party view with result message prepended
+  const updatedFormation = await eventParties.findOne({ eventId: new ObjectId(eventId) });
+  const updatedParty = updatedFormation.processedParties.find(p => p.partyNumber === partyNumber);
+
+  const actionRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`event_party_add_member:${eventId}:${partyNumber}`)
+      .setLabel('Add Members')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('➕')
+      .setDisabled(updatedParty.members.length >= 6),
+    new ButtonBuilder()
+      .setCustomId(`event_party_remove_member:${eventId}:${partyNumber}`)
+      .setLabel('Remove Members')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('➖')
+      .setDisabled(updatedParty.members.length === 0)
+  );
+
+  const backRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`event_party_back_to_edit:${eventId}`)
+      .setLabel('Back to Party Selection')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('◀️')
+  );
+
+  const memberList = updatedParty.members.map((m, i) => {
+    const roleIcon = getRoleEmoji(m.role);
+    const leaderCrown = m.isLeader ? '👑 ' : '';
+    return `${i + 1}. ${roleIcon} ${leaderCrown}${m.displayName} (${m.weapon1}/${m.weapon2})`;
+  }).join('\n');
+
+  const content = 
+    resultMessage +
+    `**Editing Party ${partyNumber}**\n\n` +
+    `**Members (${updatedParty.members.length}/6):**\n${memberList || '*No members*'}\n\n` +
+    `**Composition:** ${updatedParty.composition.tank} Tank, ${updatedParty.composition.healer} Healer, ${updatedParty.composition.dps} DPS\n\n` +
+    `Choose an action:`;
+
+  return interaction.editReply({
+    content,
+    components: [actionRow, backRow]
+  });
 }
 
 /**

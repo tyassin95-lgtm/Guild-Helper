@@ -6,7 +6,7 @@ const {
 } = require('../eventParties/partyEditor');
 
 async function handlePvPSelects({ interaction, collections }) {
-  // Event party editing selects (NEW)
+  // Event party editing selects
   if (interaction.customId.startsWith('event_party_select_edit:')) {
     const eventId = interaction.customId.split(':')[1];
     return handlePartySelectForEdit({ interaction, eventId, collections });
@@ -16,16 +16,16 @@ async function handlePvPSelects({ interaction, collections }) {
     const parts = interaction.customId.split(':');
     const eventId = parts[1];
     const partyNumber = parts[2];
-    const userId = interaction.values[0];
-    return processAddMember({ interaction, eventId, partyNumber: parseInt(partyNumber), userId, collections });
+    const userIds = interaction.values; // Now an array of selected user IDs
+    return processAddMember({ interaction, eventId, partyNumber: parseInt(partyNumber), userId: userIds, collections });
   }
 
   if (interaction.customId.startsWith('event_party_select_remove_member:')) {
     const parts = interaction.customId.split(':');
     const eventId = parts[1];
     const partyNumber = parts[2];
-    const userId = interaction.values[0];
-    return processRemoveMember({ interaction, eventId, partyNumber: parseInt(partyNumber), userId, collections });
+    const userIds = interaction.values; // Now an array of selected user IDs
+    return processRemoveMember({ interaction, eventId, partyNumber: parseInt(partyNumber), userId: userIds, collections });
   }
 
   // Event type selection
