@@ -8,7 +8,7 @@ const { ObjectId } = require('mongodb');
 class WebServer {
   constructor() {
     this.app = express();
-    this.port = process.env.WEB_PORT || 3000;
+    this.port = process.env.WEB_PORT || 3001; // Changed to 3001 to avoid conflict with StreamServer (port 3000)
     this.activeTokens = new Map(); // In-memory token storage
     this.collections = null;
     this.client = null;
