@@ -142,8 +142,9 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
     const { webServer } = require('../../../web/server');
     const token = webServer.generateToken(eventId, interaction.user.id);
 
-    // Use your actual domain in production, localhost for development
-    const webUrl = `http://localhost:${process.env.WEB_PORT || 3000}/party-editor/${token}`;
+    // Use VM static IP or domain
+    const baseUrl = process.env.WEB_BASE_URL || 'http://34.170.220.22:3001';
+    const webUrl = `${baseUrl}/party-editor/${token}`;
 
     // Send ephemeral message with web link
     return interaction.editReply({
