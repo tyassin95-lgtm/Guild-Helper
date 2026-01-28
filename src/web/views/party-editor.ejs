@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Party Editor - <%= guildName %></title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      padding: 20px 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      color: #2d3748;
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    .event-info {
+      color: #718096;
+      font-size: 14px;
+    }
+
+    .event-info span {
+      margin-right: 20px;
+      display: inline-block;
+    }
+
+    .main-content {
+      display: grid;
+      grid-template-columns: 1fr 350px;
+      gap: 20px;
+    }
+
+    .parties-section {
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .available-section,
+    .actions-section {
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .count-badge {
+      background: #667eea;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .parties-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+
+    .party-card {
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 15px;
+      background: #f7fafc;
+      transition: all 0.2s;
+    }
+
+    .party-card.drag-over {
+      border-color: #667eea;
+      background: #edf2f7;
+      transform: scale(1.02);
+    }
+
+    .party-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    .party-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .party-status {
+      font-size: 13px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+
+    .status-full {
+      background: #48bb78;
+      color: white;
+    }
+
+    .status-partial {
+      background: #ed8936;
+      color: white;
+    }
+
+    .status-empty {
+      background: #cbd5e0;
+      color: #4a5568;
+    }
+
+    .party-composition {
+      font-size: 12px;
+      color: #718096;
+      margin-bottom: 10px;
+    }
+
+    .members-list {
+      min-height: 60px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .member-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px;
+      cursor: move;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .member-card:hover {
+      border-color: #667eea;
+      box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+    }
+
+    .member-card.dragging {
+      opacity: 0.5;
+      cursor: grabbing;
+    }
+
+    .role-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .member-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .member-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #2d3748;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .member-details {
+      font-size: 12px;
+      color: #718096;
+    }
+
+    .member-cp {
+      font-size: 13px;
+      color: #4a5568;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .available-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .available-list::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .available-list::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+
+    .available-list::-webkit-scrollbar-thumb {
+      background: #cbd5e0;
+      border-radius: 4px;
+    }
+
+    .available-list::-webkit-scrollbar-thumb:hover {
+      background: #a0aec0;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 30px;
+      color: #a0aec0;
+      font-size: 14px;
+    }
+
+    .drop-zone {
+      border: 2px dashed #cbd5e0;
+      border-radius: 8px;
+      padding: 15px;
+      text-align: center;
+      color: #a0aec0;
+      font-size: 13px;
+      margin-top: 8px;
+      transition: all 0.2s;
+    }
+
+    .drop-zone.drag-over {
+      border-color: #667eea;
+      background: #edf2f7;
+      color: #667eea;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5a67d8;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #4a5568;
+    }
+
+    .btn-secondary:hover {
+      background: #cbd5e0;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .actions-section .btn + .btn {
+      margin-top: 10px;
+    }
+
+    .summary-stats {
+      background: #edf2f7;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .summary-stats .stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 14px;
+    }
+
+    .stat-label {
+      color: #718096;
+    }
+
+    .stat-value {
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #2d3748;
+    }
+
+    .modal-body {
+      margin-bottom: 20px;
+    }
+
+    .dm-preview {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 15px;
+      white-space: pre-wrap;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .loading {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .loading.active {
+      display: flex;
+    }
+
+    .loading-content {
+      background: white;
+      padding: 30px 50px;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .source-tag {
+      font-size: 11px;
+      background: #fed7d7;
+      color: #c53030;
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-left: auto;
+    }
+
+    @media (max-width: 1200px) {
+      .main-content {
+        grid-template-columns: 1fr;
+      }
+
+      .parties-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>🎯 Event Party Manager</h1>
+      <div class="event-info">
+        <span><strong>Guild:</strong> <%= guildName %></span>
+        <span><strong>Event:</strong> <%= eventType %><%= eventLocation ? ' - ' + eventLocation : '' %></span>
+        <span><strong>Time:</strong> <span id="event-time"></span></span>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Parties Section -->
+      <div class="parties-section">
+        <div class="section-title">
+          <span>Parties</span>
+          <span class="count-badge" id="party-count">0</span>
+        </div>
+
+        <div class="summary-stats">
+          <div class="stat">
+            <span class="stat-label">Intact</span>
+            <span class="stat-value" id="stat-intact">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Modified</span>
+            <span class="stat-value" id="stat-modified">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Disbanded</span>
+            <span class="stat-value" id="stat-disbanded">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Total Members in Parties</span>
+            <span class="stat-value" id="stat-total">0</span>
+          </div>
+        </div>
+
+        <div class="parties-grid" id="parties-grid">
+          <!-- Parties will be rendered here -->
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <!-- Available Members -->
+        <div class="available-section">
+          <div class="section-title">
+            <span>Available Members</span>
+            <span class="count-badge" id="available-count">0</span>
+          </div>
+          <div class="available-list" id="available-list">
+            <!-- Available members will be rendered here -->
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions-section">
+          <div class="section-title">Actions</div>
+          <button class="btn btn-secondary" onclick="previewDMs()">
+            📋 Preview DM Messages
+          </button>
+          <button class="btn btn-primary" onclick="submitParties()">
+            ✅ Send DMs to All Members
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview Modal -->
+  <div class="modal" id="preview-modal">
+    <div class="modal-content">
+      <div class="modal-header">Preview DM Message</div>
+      <div class="modal-body">
+        <div class="dm-preview" id="dm-preview-content"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading" id="loading">
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <div>Sending DMs to all party members...</div>
+    </div>
+  </div>
+
+  <script>
+    // Global state
+    const TOKEN = '<%= token %>';
+    let parties = [];
+    let availableMembers = [];
+    let draggedMember = null;
+    let draggedFromParty = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadData();
+      formatEventTime();
+    });
+
+    // Format event time
+    function formatEventTime() {
+      const eventTime = new Date('<%= eventTime %>');
+      const formatted = eventTime.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      document.getElementById('event-time').textContent = formatted;
+    }
+
+    // Load initial data
+    function loadData() {
+      const formationData = <%- formation %>;
+      parties = formationData.processedParties || [];
+      availableMembers = formationData.availableMembers || [];
+      render();
+    }
+
+    // Render everything
+    function render() {
+      renderParties();
+      renderAvailable();
+      updateStats();
+    }
+
+    // Render parties
+    function renderParties() {
+      const grid = document.getElementById('parties-grid');
+      grid.innerHTML = '';
+
+      parties.forEach((party, partyIndex) => {
+        const card = createPartyCard(party, partyIndex);
+        grid.appendChild(card);
+      });
+
+      document.getElementById('party-count').textContent = parties.length;
+    }
+
+    // Create party card
+    function createPartyCard(party, partyIndex) {
+      const div = document.createElement('div');
+      div.className = 'party-card';
+      div.dataset.partyIndex = partyIndex;
+
+      // Add drag-over event listeners
+      div.addEventListener('dragover', handleDragOver);
+      div.addEventListener('drop', (e) => handleDrop(e, partyIndex));
+      div.addEventListener('dragleave', handleDragLeave);
+
+      const memberCount = party.members.length;
+      const statusClass = memberCount === 6 ? 'status-full' : memberCount > 0 ? 'status-partial' : 'status-empty';
+      const statusText = `${memberCount}/6`;
+
+      div.innerHTML = `
+        <div class="party-header">
+          <div class="party-title">Party ${party.partyNumber}</div>
+          <div class="party-status ${statusClass}">${statusText}</div>
+        </div>
+        <div class="party-composition">
+          🛡️ ${party.composition.tank} • 💚 ${party.composition.healer} • ⚔️ ${party.composition.dps}
+        </div>
+        <div class="members-list" id="party-${partyIndex}-members">
+          ${party.members.map((member, memberIndex) => 
+            createMemberCardHTML(member, partyIndex, memberIndex)
+          ).join('')}
+          ${memberCount < 6 ? '<div class="drop-zone">Drop members here</div>' : ''}
+        </div>
+      `;
+
+      return div;
+    }
+
+    // Create member card HTML
+    function createMemberCardHTML(member, partyIndex, memberIndex) {
+      const roleIcons = { tank: '🛡️', healer: '💚', dps: '⚔️' };
+      const roleIcon = roleIcons[member.role] || '❓';
+      const leaderCrown = member.isLeader ? '👑 ' : '';
+
+      return `
+        <div class="member-card" 
+             draggable="true" 
+             data-party-index="${partyIndex}"
+             data-member-index="${memberIndex}"
+             ondragstart="handleDragStart(event, ${partyIndex}, ${memberIndex})"
+             ondragend="handleDragEnd(event)">
+          <div class="role-icon">${roleIcon}</div>
+          <div class="member-info">
+            <div class="member-name">${leaderCrown}${member.displayName}</div>
+            <div class="member-details">${member.weapon1}/${member.weapon2}</div>
+          </div>
+          <div class="member-cp">${formatCP(member.cp)}</div>
+        </div>
+      `;
+    }
+
+    // Render available members
+    function renderAvailable() {
+      const list = document.getElementById('available-list');
+
+      if (availableMembers.length === 0) {
+        list.innerHTML = '<div class="empty-state">No members available for placement</div>';
+        document.getElementById('available-count').textContent = '0';
+        return;
+      }
+
+      list.innerHTML = availableMembers.map((member, index) => {
+        const roleIcons = { tank: '🛡️', healer: '💚', dps: '⚔️' };
+        const roleIcon = roleIcons[member.role] || '❓';
+        const sourceTag = member.source ? `<span class="source-tag">${member.source}</span>` : '';
+
+        return `
+          <div class="member-card" 
+               draggable="true"
+               data-available-index="${index}"
+               ondragstart="handleDragStartAvailable(event, ${index})"
+               ondragend="handleDragEnd(event)">
+            <div class="role-icon">${roleIcon}</div>
+            <div class="member-info">
+              <div class="member-name">${member.displayName}</div>
+              <div class="member-details">${member.weapon1}/${member.weapon2}</div>
+            </div>
+            <div class="member-cp">${formatCP(member.cp)}</div>
+            ${sourceTag}
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('available-count').textContent = availableMembers.length;
+    }
+
+    // Drag handlers
+    function handleDragStart(event, partyIndex, memberIndex) {
+      event.dataTransfer.effectAllowed = 'move';
+      draggedMember = parties[partyIndex].members[memberIndex];
+      draggedFromParty = partyIndex;
+      event.target.classList.add('dragging');
+    }
+
+    function handleDragStartAvailable(event, availableIndex) {
+      event.dataTransfer.effectAllowed = 'move';
+      draggedMember = availableMembers[availableIndex];
+      draggedFromParty = null;
+      event.target.classList.add('dragging');
+    }
+
+    function handleDragEnd(event) {
+      event.target.classList.remove('dragging');
+    }
+
+    function handleDragOver(event) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      const card = event.currentTarget;
+      card.classList.add('drag-over');
+    }
+
+    function handleDragLeave(event) {
+      const card = event.currentTarget;
+      card.classList.remove('drag-over');
+    }
+
+    function handleDrop(event, toPartyIndex) {
+      event.preventDefault();
+      event.currentTarget.classList.remove('drag-over');
+
+      if (!draggedMember) return;
+
+      const toParty = parties[toPartyIndex];
+
+      // Check if party is full
+      if (toParty.members.length >= 6) {
+        alert('Party is full (6/6 members)');
+        draggedMember = null;
+        draggedFromParty = null;
+        return;
+      }
+
+      // Remove from source
+      if (draggedFromParty !== null) {
+        // Remove from party
+        const fromParty = parties[draggedFromParty];
+        const memberIndex = fromParty.members.findIndex(m => m.userId === draggedMember.userId);
+        if (memberIndex !== -1) {
+          fromParty.members.splice(memberIndex, 1);
+          updatePartyComposition(draggedFromParty);
+        }
+      } else {
+        // Remove from available
+        const availableIndex = availableMembers.findIndex(m => m.userId === draggedMember.userId);
+        if (availableIndex !== -1) {
+          availableMembers.splice(availableIndex, 1);
+        }
+      }
+
+      // Add to target party (remove source field if exists)
+      const { source, ...memberData } = draggedMember;
+      toParty.members.push(memberData);
+      updatePartyComposition(toPartyIndex);
+
+      draggedMember = null;
+      draggedFromParty = null;
+
+      render();
+    }
+
+    // Update party composition
+    function updatePartyComposition(partyIndex) {
+      const party = parties[partyIndex];
+      party.composition = { tank: 0, healer: 0, dps: 0 };
+      party.members.forEach(m => {
+        party.composition[m.role]++;
+      });
+    }
+
+    // Update statistics
+    function updateStats() {
+      const summary = <%- summary %>;
+      document.getElementById('stat-intact').textContent = summary.partiesIntact || 0;
+      document.getElementById('stat-modified').textContent = summary.partiesModified || 0;
+      document.getElementById('stat-disbanded').textContent = summary.partiesDisbanded || 0;
+
+      const totalMembers = parties.reduce((sum, p) => sum + p.members.length, 0);
+      document.getElementById('stat-total').textContent = totalMembers;
+    }
+
+    // Format CP
+    function formatCP(cp) {
+      if (!cp) return '0';
+      if (cp >= 1000000) return `${(cp / 1000000).toFixed(1)}M`;
+      if (cp >= 1000) return `${(cp / 1000).toFixed(1)}K`;
+      return cp.toString();
+    }
+
+    // Preview DMs
+    async function previewDMs() {
+      if (parties.length === 0 || parties.every(p => p.members.length === 0)) {
+        alert('No party members to preview');
+        return;
+      }
+
+      // Find first party with members
+      const party = parties.find(p => p.members.length > 0);
+      if (!party) return;
+
+      const member = party.members[0];
+
+      try {
+        const response = await fetch(`/api/party-editor/${TOKEN}/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ member, party })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          document.getElementById('dm-preview-content').textContent = data.dmMessage;
+          document.getElementById('preview-modal').classList.add('active');
+        } else {
+          alert('Failed to preview DM: ' + data.error);
+        }
+      } catch (error) {
+        console.error('Preview error:', error);
+        alert('Failed to preview DM');
+      }
+    }
+
+    // Close modal
+    function closeModal() {
+      document.getElementById('preview-modal').classList.remove('active');
+    }
+
+    // Submit parties
+    async function submitParties() {
+      const totalMembers = parties.reduce((sum, p) => sum + p.members.length, 0);
+
+      if (totalMembers === 0) {
+        alert('No members in any parties. Please assign members before submitting.');
+        return;
+      }
+
+      const confirmed = confirm(
+        `Are you sure you want to send party assignments to ${totalMembers} member(s)?\n\n` +
+        `This will send DMs to all party members and cannot be undone.`
+      );
+
+      if (!confirmed) return;
+
+      document.getElementById('loading').classList.add('active');
+
+      try {
+        const response = await fetch(`/api/party-editor/${TOKEN}/submit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            processedParties: parties,
+            availableMembers 
+          })
+        });
+
+        const data = await response.json();
+
+        document.getElementById('loading').classList.remove('active');
+
+        if (response.ok) {
+          const { dmResults } = data;
+          const successCount = dmResults.successful.length;
+          const failCount = dmResults.failed.length;
+
+          let message = `✅ Party assignments sent!\n\n`;
+          message += `• Successfully sent: ${successCount} member(s)\n`;
+
+          if (failCount > 0) {
+            message += `• Failed: ${failCount} member(s)\n\n`;
+            message += `Failed members:\n`;
+            dmResults.failed.forEach(f => {
+              message += `• ${f.displayName}: ${f.error}\n`;
+            });
+          }
+
+          alert(message);
+
+          // Show success message and disable buttons
+          document.querySelector('.btn-primary').disabled = true;
+          document.querySelector('.btn-primary').textContent = '✅ DMs Sent!';
+        } else {
+          alert('Failed to submit parties: ' + data.error);
+        }
+      } catch (error) {
+        document.getElementById('loading').classList.remove('active');
+        console.error('Submit error:', error);
+        alert('Failed to submit parties. Please try again.');
+      }
+    }
+  </script>
+</body>
+</html>

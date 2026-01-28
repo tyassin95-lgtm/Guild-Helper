@@ -9,6 +9,7 @@ const { getRoleFromWeapons } = require('../../parties/roleDetection');
 
 /**
  * Handle "Form Event Parties" button click
+ * NOW USES WEB INTERFACE INSTEAD OF DISCORD EMBEDS
  */
 async function handleFormEventParties({ interaction, eventId, collections }) {
   const { pvpEvents, parties, partyPlayers, eventParties } = collections;
@@ -116,13 +117,6 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
       membersAvailable: availableMembers.length
     };
 
-    // Prepare event info
-    const eventInfo = {
-      eventType: event.eventType,
-      location: event.location,
-      eventTime: event.eventTime
-    };
-
     // Store the formation
     await eventParties.updateOne(
       { eventId: new ObjectId(eventId) },
@@ -144,13 +138,25 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
 
     console.log(`=== Formation Complete ===\n`);
 
-    // Create and send the review embed
-    const embed = createPartyFormationEmbed(processedParties, availableMembers, summary, eventInfo);
-    const buttons = createPartyFormationButtons(eventId);
+    // NEW: Generate web token and URL
+    const { webServer } = require('../../../web/server');
+    const token = webServer.generateToken(eventId, interaction.user.id);
 
+    // Use your actual domain in production, localhost for development
+    const webUrl = `http://localhost:${process.env.WEB_PORT || 3000}/party-editor/${token}`;
+
+    // Send ephemeral message with web link
     return interaction.editReply({
-      embeds: [embed],
-      components: [buttons]
+      content: `✅ **Event parties processed!**\n\n` +
+               `📊 **Summary:**\n` +
+               `• ${summary.partiesIntact} parties intact\n` +
+               `• ${summary.partiesModified} parties modified\n` +
+               `• ${summary.partiesDisbanded} parties disbanded\n` +
+               `• ${summary.membersAvailable} members available for placement\n` +
+               `• ${summary.totalAttending} total attending\n\n` +
+               `🌐 **[Open Party Editor](${webUrl})**\n\n` +
+               `⏰ Link expires in 1 hour\n` +
+               `ℹ️ Use the web interface to review, edit, and send party assignments`
     });
 
   } catch (error) {
@@ -288,7 +294,8 @@ function calculateComposition(members) {
 }
 
 /**
- * Handle party formation approval
+ * Handle party formation approval (LEGACY - kept for backwards compatibility)
+ * This is no longer used when web interface is enabled, but kept in case
  */
 async function handleApproveParties({ interaction, eventId, collections, client }) {
   const { eventParties, pvpEvents } = collections;

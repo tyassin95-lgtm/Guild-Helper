@@ -17,6 +17,9 @@ const { handleGearUpload } = require('./features/parties/handlers/gearUploadHand
 const { handleAutoModCheck } = require('./features/automod/handlers/messageHandler');
 const { handleTranslationReaction } = require('./features/automod/handlers/reactionHandler');
 
+// NEW: Import web server
+const { webServer } = require('./web/server');
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -40,21 +43,30 @@ const client = new Client({
     const collections = getCollections(db);
     await ensureIndexes(collections);
 
+    // NEW: Initialize web server
+    webServer.initialize(collections, client);
+
     client.once('clientReady', async () => {
       console.log(`Logged in as ${client.user.tag}!`);
       await registerSlashCommands(client);
       console.log('Slash commands registered.');
 
+      // Start broadcast stream server
       streamServer.start();
 
+      // Resume active item rolls and polls
       await resumeActiveItemRolls(client, collections);
       startItemRollAutoUpdate(client, collections);
 
       await resumeActivePolls(client, collections);
       startPollAutoUpdate(client, collections);
 
+      // Start auto-update tasks
       startCalendarAutoUpdate(client, collections);
       startRosterAutoUpdate(client, collections);
+
+      // NEW: Start web server
+      webServer.start();
     });
 
     client.on('interactionCreate', async (interaction) => {
@@ -105,17 +117,24 @@ const client = new Client({
       }
     });
 
+    // Graceful shutdown handlers
     process.on('SIGINT', async () => {
       console.log('\n🛑 Shutting down gracefully...');
 
+      // Stop auto-update tasks
       stopItemRollAutoUpdate();
       stopPollAutoUpdate();
       stopCalendarAutoUpdate();
       stopRosterAutoUpdate();
 
+      // Stop broadcast
       broadcastManager.stopAll();
       streamServer.stop();
 
+      // NEW: Stop web server
+      webServer.stop();
+
+      // Disconnect Discord client
       client.destroy();
 
       console.log('✅ Shutdown complete');
@@ -125,14 +144,20 @@ const client = new Client({
     process.on('SIGTERM', async () => {
       console.log('\n🛑 SIGTERM received, shutting down...');
 
+      // Stop auto-update tasks
       stopItemRollAutoUpdate();
       stopPollAutoUpdate();
       stopCalendarAutoUpdate();
       stopRosterAutoUpdate();
 
+      // Stop broadcast
       broadcastManager.stopAll();
       streamServer.stop();
 
+      // NEW: Stop web server
+      webServer.stop();
+
+      // Disconnect Discord client
       client.destroy();
 
       console.log('✅ Shutdown complete');
