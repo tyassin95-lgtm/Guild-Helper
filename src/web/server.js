@@ -436,7 +436,8 @@ class WebServer {
    */
   start() {
     this.server = this.app.listen(this.port, () => {
-      console.log(`🌐 Web server running on http://localhost:${this.port}`);
+      const baseUrl = process.env.WEB_BASE_URL || `http://localhost:${this.port}`;
+      console.log(`🌐 Web server running on ${baseUrl}`);
     });
   }
 
