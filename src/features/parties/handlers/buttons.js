@@ -1,40 +1,8 @@
-const { ActionRowBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionFlagsBits } = require('discord.js');
+const { ActionRowBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { WEAPONS } = require('../constants');
 
 async function handlePartyButtons({ interaction, collections }) {
-  const { partyPlayers, parties, dmContexts } = collections;
-
-  // Legacy web editor button - redirect to /viewparties
-  if (interaction.customId === 'party_web_editor' ||
-      interaction.customId === 'party_create' ||
-      interaction.customId === 'party_create_reserve' ||
-      interaction.customId === 'party_manage' ||
-      interaction.customId === 'party_delete') {
-
-    if (!interaction.guildId) {
-      return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
-    }
-
-    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
-    }
-
-    // Generate web token and redirect to web editor
-    const { webServer } = require('../../../web/server');
-    const token = webServer.generateStaticPartyToken(interaction.guildId, interaction.user.id);
-
-    const baseUrl = process.env.WEB_BASE_URL || 'http://34.170.220.22:3001';
-    const webUrl = `${baseUrl}/static-party-editor/${token}`;
-
-    return interaction.reply({
-      content: `⚔️ **Static Party Manager**\n\n` +
-               `Party management has moved to the web editor:\n\n` +
-               `**[Open Party Editor](${webUrl})**\n\n` +
-               `⏰ Link expires in 1 hour\n` +
-               `ℹ️ You can create, edit, delete parties and drag members between them`,
-      flags: [64]
-    });
-  }
+  const { dmContexts } = collections;
 
   // Set weapon 1
   if (interaction.customId === 'party_set_weapon1') {
