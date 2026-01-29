@@ -624,6 +624,7 @@ class WebServer {
 
   /**
    * Handle save static parties API request
+   * Supports creating, updating, and deleting parties
    */
   async handleSaveStaticParties(req, res) {
     try {
@@ -642,9 +643,31 @@ class WebServer {
       }
 
       console.log(`\n=== Saving Static Parties for Guild ${guildId} ===`);
-      console.log(`Total parties: ${parties.length}`);
+      console.log(`Total parties from client: ${parties.length}`);
 
-      // Update each party in the database
+      // Get current parties from database
+      const existingParties = await this.collections.parties.find({
+        guildId,
+        isReserve: { $ne: true }
+      }).toArray();
+
+      const existingPartyNumbers = new Set(existingParties.map(p => p.partyNumber));
+      const newPartyNumbers = new Set(parties.map(p => p.partyNumber));
+
+      // Find parties to delete (exist in DB but not in new data)
+      const partiesToDelete = [...existingPartyNumbers].filter(num => !newPartyNumbers.has(num));
+
+      // Delete removed parties
+      if (partiesToDelete.length > 0) {
+        await this.collections.parties.deleteMany({
+          guildId,
+          partyNumber: { $in: partiesToDelete },
+          isReserve: { $ne: true }
+        });
+        console.log(`  Deleted parties: ${partiesToDelete.join(', ')}`);
+      }
+
+      // Update or create each party
       for (const party of parties) {
         // Calculate composition
         const composition = { tank: 0, healer: 0, dps: 0 };
@@ -657,21 +680,39 @@ class WebServer {
         // Calculate total CP
         const totalCP = (party.members || []).reduce((sum, m) => sum + (m.cp || 0), 0);
 
-        await this.collections.parties.updateOne(
-          { guildId, partyNumber: party.partyNumber, isReserve: { $ne: true } },
-          {
-            $set: {
-              members: party.members || [],
-              roleComposition: composition,
-              totalCP,
-              lastModified: new Date(),
-              lastModifiedBy: userId
-            }
-          },
-          { upsert: false }
-        );
+        const isNew = party.isNew || !existingPartyNumbers.has(party.partyNumber);
 
-        console.log(`  Updated Party ${party.partyNumber}: ${(party.members || []).length} members`);
+        if (isNew) {
+          // Create new party
+          await this.collections.parties.insertOne({
+            guildId,
+            partyNumber: party.partyNumber,
+            members: party.members || [],
+            roleComposition: composition,
+            totalCP,
+            isReserve: false,
+            createdAt: new Date(),
+            createdBy: userId,
+            lastModified: new Date(),
+            lastModifiedBy: userId
+          });
+          console.log(`  Created Party ${party.partyNumber}: ${(party.members || []).length} members`);
+        } else {
+          // Update existing party
+          await this.collections.parties.updateOne(
+            { guildId, partyNumber: party.partyNumber, isReserve: { $ne: true } },
+            {
+              $set: {
+                members: party.members || [],
+                roleComposition: composition,
+                totalCP,
+                lastModified: new Date(),
+                lastModifiedBy: userId
+              }
+            }
+          );
+          console.log(`  Updated Party ${party.partyNumber}: ${(party.members || []).length} members`);
+        }
       }
 
       // Update reserve party if provided

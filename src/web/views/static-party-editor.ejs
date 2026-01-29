@@ -117,6 +117,17 @@
       transform: scale(1.02);
     }
 
+    .party-card.empty-slot {
+      border-style: dashed;
+      background: transparent;
+      opacity: 0.6;
+    }
+
+    .party-card.empty-slot:hover {
+      opacity: 1;
+      border-color: #667eea;
+    }
+
     .party-header {
       display: flex;
       justify-content: space-between;
@@ -137,6 +148,28 @@
       padding: 3px 8px;
       border-radius: 10px;
       font-weight: 500;
+    }
+
+    .disband-btn {
+      background: #fc8181;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      width: 20px;
+      height: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .disband-btn:hover {
+      background: #f56565;
+      transform: scale(1.1);
     }
 
     .status-full {
@@ -187,6 +220,11 @@
     .member-card.dragging {
       opacity: 0.5;
       cursor: grabbing;
+    }
+
+    .member-card.drag-over {
+      border-color: #48bb78;
+      background: #f0fff4;
     }
 
     .role-icon {
@@ -312,6 +350,24 @@
       box-shadow: 0 4px 8px rgba(72, 187, 120, 0.3);
     }
 
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #4a5568;
+    }
+
+    .btn-secondary:hover {
+      background: #cbd5e0;
+    }
+
+    .btn-danger {
+      background: #fc8181;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #f56565;
+    }
+
     .btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
@@ -397,6 +453,10 @@
       animation: slideIn 0.3s ease;
     }
 
+    .toast.error {
+      background: #fc8181;
+    }
+
     .toast.show {
       display: block;
     }
@@ -404,6 +464,37 @@
     @keyframes slideIn {
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
+    }
+
+    .create-party-card {
+      border: 2px dashed #cbd5e0;
+      border-radius: 8px;
+      padding: 20px 10px;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #a0aec0;
+      min-height: 120px;
+    }
+
+    .create-party-card:hover {
+      border-color: #667eea;
+      color: #667eea;
+      background: rgba(102, 126, 234, 0.05);
+    }
+
+    .create-party-card .icon {
+      font-size: 24px;
+    }
+
+    .create-party-card .text {
+      font-size: 12px;
+      font-weight: 500;
     }
 
     @media (max-width: 1600px) {
@@ -439,7 +530,7 @@
   <div class="container">
     <!-- Header -->
     <div class="header">
-      <h1>Static Party Editor</h1>
+      <h1>⚔️ Static Party Manager</h1>
       <div class="guild-info">
         <strong>Guild:</strong> <%= guildName %>
       </div>
@@ -508,7 +599,7 @@
         <div class="actions-section">
           <div class="section-title">Actions</div>
           <button class="btn btn-success" onclick="saveParties()" id="save-btn">
-            Save Parties
+            💾 Save Changes
           </button>
         </div>
       </div>
@@ -519,7 +610,7 @@
   <div class="loading" id="loading">
     <div class="loading-content">
       <div class="spinner"></div>
-      <div>Saving parties...</div>
+      <div id="loading-text">Saving parties...</div>
     </div>
   </div>
 
@@ -527,8 +618,11 @@
   <div class="toast" id="toast">Parties saved successfully!</div>
 
   <script>
-    // Global state
+    // Constants
+    const MAX_PARTIES = 12;
     const TOKEN = '<%= token %>';
+
+    // Global state
     let parties = [];
     let availableMembers = [];
     let reserveMembers = [];
@@ -536,6 +630,7 @@
     let draggedMember = null;
     let draggedSource = null; // 'party', 'available', or 'reserve'
     let draggedPartyIndex = null;
+    let draggedMemberIndex = null;
     let hasUnsavedChanges = false;
 
     // Initialize
@@ -582,10 +677,23 @@
       const grid = document.getElementById('parties-grid');
       grid.innerHTML = '';
 
+      // Render existing parties
       for (let i = 0; i < parties.length; i++) {
         const party = parties[i];
         const card = createPartyCard(party, i);
         grid.appendChild(card);
+      }
+
+      // Add "Create Party" card if under max
+      if (parties.length < MAX_PARTIES) {
+        const createCard = document.createElement('div');
+        createCard.className = 'create-party-card';
+        createCard.onclick = () => createParty();
+        createCard.innerHTML = `
+          <div class="icon">➕</div>
+          <div class="text">Create Party</div>
+        `;
+        grid.appendChild(createCard);
       }
 
       document.getElementById('party-count').textContent = parties.filter(p => (p.members || []).length > 0).length;
@@ -598,7 +706,7 @@
       div.dataset.partyIndex = partyIndex;
 
       // Add drag-over event listeners
-      div.addEventListener('dragover', handleDragOver);
+      div.addEventListener('dragover', (e) => handleDragOver(e, partyIndex));
       div.addEventListener('drop', (e) => handleDrop(e, partyIndex));
       div.addEventListener('dragleave', handleDragLeave);
 
@@ -613,13 +721,18 @@
         if (composition[m.role] !== undefined) composition[m.role]++;
       });
 
+      const disbandButton = `<button class="disband-btn" onclick="deleteParty(${partyIndex})" title="Delete party">✕</button>`;
+
       div.innerHTML = `
         <div class="party-header">
           <div class="party-title">Party ${party.partyNumber}</div>
-          <div class="party-status ${statusClass}">${statusText}</div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            ${disbandButton}
+            <div class="party-status ${statusClass}">${statusText}</div>
+          </div>
         </div>
         <div class="party-composition">
-          Tank ${composition.tank} | Healer ${composition.healer} | DPS ${composition.dps}
+          🛡️ ${composition.tank} • 💚 ${composition.healer} • ⚔️ ${composition.dps}
         </div>
         <div class="members-list" id="party-${partyIndex}-members">
           ${members.map((member, memberIndex) =>
@@ -634,9 +747,9 @@
 
     // Create member card HTML
     function createMemberCardHTML(member, source, partyIndex, memberIndex) {
-      const roleIcons = { tank: 'Tank', healer: 'Healer', dps: 'DPS' };
-      const roleIcon = roleIcons[member.role] || 'DPS';
-      const leaderBadge = member.isLeader ? ' [L]' : '';
+      const roleIcons = { tank: '🛡️', healer: '💚', dps: '⚔️' };
+      const roleIcon = roleIcons[member.role] || '❓';
+      const leaderBadge = member.isLeader ? ' 👑' : '';
 
       return `
         <div class="member-card"
@@ -644,9 +757,13 @@
              data-source="${source}"
              data-party-index="${partyIndex}"
              data-member-index="${memberIndex}"
+             data-user-id="${member.userId}"
              ondragstart="handleDragStart(event, '${source}', ${partyIndex}, ${memberIndex})"
-             ondragend="handleDragEnd(event)">
-          <div class="role-icon">${getRoleEmoji(member.role)}</div>
+             ondragend="handleDragEnd(event)"
+             ondragover="handleMemberDragOver(event)"
+             ondrop="handleMemberDrop(event, '${source}', ${partyIndex}, ${memberIndex})"
+             ondragleave="handleMemberDragLeave(event)">
+          <div class="role-icon">${roleIcon}</div>
           <div class="member-info">
             <div class="member-name">${member.displayName}${leaderBadge}</div>
             <div class="member-details">${member.weapon1 || '?'}/${member.weapon2 || '?'}</div>
@@ -659,9 +776,9 @@
     // Get role emoji
     function getRoleEmoji(role) {
       switch (role) {
-        case 'tank': return 'Tank';
-        case 'healer': return 'Heal';
-        default: return 'DPS';
+        case 'tank': return '🛡️';
+        case 'healer': return '💚';
+        default: return '⚔️';
       }
     }
 
@@ -681,6 +798,7 @@
                draggable="true"
                data-source="available"
                data-available-index="${index}"
+               data-user-id="${member.userId}"
                ondragstart="handleDragStart(event, 'available', null, ${index})"
                ondragend="handleDragEnd(event)">
             <div class="role-icon">${getRoleEmoji(member.role)}</div>
@@ -714,6 +832,7 @@
                draggable="true"
                data-source="reserve"
                data-reserve-index="${index}"
+               data-user-id="${member.userId}"
                ondragstart="handleDragStart(event, 'reserve', null, ${index})"
                ondragend="handleDragEnd(event)">
             <div class="role-icon">${getRoleEmoji(member.role)}</div>
@@ -734,13 +853,14 @@
       event.dataTransfer.effectAllowed = 'move';
       draggedSource = source;
       draggedPartyIndex = partyIndex;
+      draggedMemberIndex = memberIndex;
 
       if (source === 'party') {
-        draggedMember = parties[partyIndex].members[memberIndex];
+        draggedMember = { ...parties[partyIndex].members[memberIndex] };
       } else if (source === 'available') {
-        draggedMember = availableMembers[memberIndex];
+        draggedMember = { ...availableMembers[memberIndex] };
       } else if (source === 'reserve') {
-        draggedMember = reserveMembers[memberIndex];
+        draggedMember = { ...reserveMembers[memberIndex] };
       }
 
       event.target.classList.add('dragging');
@@ -748,34 +868,40 @@
 
     function handleDragEnd(event) {
       event.target.classList.remove('dragging');
+      document.querySelectorAll('.party-card').forEach(card => {
+        card.classList.remove('drag-over');
+      });
       document.querySelectorAll('.member-card').forEach(card => {
         card.classList.remove('drag-over');
       });
+      document.querySelectorAll('.drop-zone').forEach(zone => {
+        zone.classList.remove('drag-over');
+      });
     }
 
-    function handleDragOver(event) {
+    function handleDragOver(event, toPartyIndex) {
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
-      const card = event.currentTarget;
-      card.classList.add('drag-over');
+      event.currentTarget.classList.add('drag-over');
     }
 
     function handleDragLeave(event) {
-      const card = event.currentTarget;
-      card.classList.remove('drag-over');
+      event.currentTarget.classList.remove('drag-over');
     }
 
+    // Handle dropping on a party card (empty space or drop zone)
     function handleDrop(event, toPartyIndex) {
       event.preventDefault();
+      event.stopPropagation();
       event.currentTarget.classList.remove('drag-over');
 
       if (!draggedMember) return;
 
       const toParty = parties[toPartyIndex];
 
-      // Check if party is full
+      // Check if party is full (only if not swapping)
       if ((toParty.members || []).length >= 6) {
-        alert('Party is full (6/6 members)');
+        showToast('Party is full! Drag onto a member to swap.', true);
         resetDragState();
         return;
       }
@@ -792,23 +918,86 @@
       render();
     }
 
+    // Handle drag over a member card (for swapping)
+    function handleMemberDragOver(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'move';
+      event.currentTarget.classList.add('drag-over');
+    }
+
+    function handleMemberDragLeave(event) {
+      event.currentTarget.classList.remove('drag-over');
+    }
+
+    // Handle dropping on a member card (swap)
+    function handleMemberDrop(event, targetSource, targetPartyIndex, targetMemberIndex) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.classList.remove('drag-over');
+
+      if (!draggedMember) return;
+
+      // Don't swap with self
+      if (draggedSource === targetSource &&
+          draggedPartyIndex === targetPartyIndex &&
+          draggedMemberIndex === targetMemberIndex) {
+        resetDragState();
+        return;
+      }
+
+      // Get target member
+      let targetMember;
+      if (targetSource === 'party') {
+        targetMember = { ...parties[targetPartyIndex].members[targetMemberIndex] };
+      } else if (targetSource === 'available') {
+        targetMember = { ...availableMembers[targetMemberIndex] };
+      } else if (targetSource === 'reserve') {
+        targetMember = { ...reserveMembers[targetMemberIndex] };
+      }
+
+      // Remove dragged member from source
+      removeFromSource();
+
+      // Remove target member from its location
+      if (targetSource === 'party') {
+        parties[targetPartyIndex].members.splice(targetMemberIndex, 1);
+      } else if (targetSource === 'available') {
+        availableMembers.splice(targetMemberIndex, 1);
+      } else if (targetSource === 'reserve') {
+        reserveMembers.splice(targetMemberIndex, 1);
+      }
+
+      // Add dragged member to target location
+      if (targetSource === 'party') {
+        parties[targetPartyIndex].members.splice(targetMemberIndex, 0, { ...draggedMember });
+      } else if (targetSource === 'available') {
+        availableMembers.splice(targetMemberIndex, 0, { ...draggedMember });
+      } else if (targetSource === 'reserve') {
+        reserveMembers.splice(targetMemberIndex, 0, { ...draggedMember });
+      }
+
+      // Add target member to dragged source location
+      if (draggedSource === 'party') {
+        parties[draggedPartyIndex].members.splice(draggedMemberIndex, 0, targetMember);
+      } else if (draggedSource === 'available') {
+        availableMembers.splice(draggedMemberIndex, 0, targetMember);
+      } else if (draggedSource === 'reserve') {
+        reserveMembers.splice(draggedMemberIndex, 0, targetMember);
+      }
+
+      hasUnsavedChanges = true;
+      resetDragState();
+      render();
+    }
+
     function removeFromSource() {
       if (draggedSource === 'party') {
-        const fromParty = parties[draggedPartyIndex];
-        const memberIndex = fromParty.members.findIndex(m => m.userId === draggedMember.userId);
-        if (memberIndex !== -1) {
-          fromParty.members.splice(memberIndex, 1);
-        }
+        parties[draggedPartyIndex].members.splice(draggedMemberIndex, 1);
       } else if (draggedSource === 'available') {
-        const index = availableMembers.findIndex(m => m.userId === draggedMember.userId);
-        if (index !== -1) {
-          availableMembers.splice(index, 1);
-        }
+        availableMembers.splice(draggedMemberIndex, 1);
       } else if (draggedSource === 'reserve') {
-        const index = reserveMembers.findIndex(m => m.userId === draggedMember.userId);
-        if (index !== -1) {
-          reserveMembers.splice(index, 1);
-        }
+        reserveMembers.splice(draggedMemberIndex, 1);
       }
     }
 
@@ -816,9 +1005,10 @@
       draggedMember = null;
       draggedSource = null;
       draggedPartyIndex = null;
+      draggedMemberIndex = null;
     }
 
-    // Handle dragging over sidebar to remove from party
+    // Handle dragging over sidebar to move to available
     function handleSidebarDragOver(event) {
       if (draggedSource === 'party') {
         event.preventDefault();
@@ -881,12 +1071,64 @@
       render();
     }
 
+    // Create a new party
+    function createParty() {
+      if (parties.length >= MAX_PARTIES) {
+        showToast('Maximum of 12 parties allowed', true);
+        return;
+      }
+
+      // Find next available party number
+      const usedNumbers = new Set(parties.map(p => p.partyNumber));
+      let nextNumber = 1;
+      while (usedNumbers.has(nextNumber)) {
+        nextNumber++;
+      }
+
+      parties.push({
+        partyNumber: nextNumber,
+        members: [],
+        isNew: true
+      });
+
+      // Sort by party number
+      parties.sort((a, b) => a.partyNumber - b.partyNumber);
+
+      hasUnsavedChanges = true;
+      render();
+      showToast('Party created! Don\'t forget to save.');
+    }
+
+    // Delete a party
+    function deleteParty(partyIndex) {
+      const party = parties[partyIndex];
+      const memberCount = (party.members || []).length;
+
+      const message = memberCount > 0
+        ? `Delete Party ${party.partyNumber}? Its ${memberCount} member(s) will be moved to Available.`
+        : `Delete Party ${party.partyNumber}?`;
+
+      if (!confirm(message)) return;
+
+      // Move members to available
+      if (party.members && party.members.length > 0) {
+        availableMembers.push(...party.members);
+      }
+
+      // Remove party
+      parties.splice(partyIndex, 1);
+
+      hasUnsavedChanges = true;
+      render();
+      showToast('Party deleted! Don\'t forget to save.');
+    }
+
     // Update statistics
     function updateStats() {
       const totalMembers = parties.reduce((sum, p) => sum + ((p.members || []).length), 0);
       const partiesWithMembers = parties.filter(p => (p.members || []).length > 0).length;
 
-      document.getElementById('stat-parties').textContent = partiesWithMembers;
+      document.getElementById('stat-parties').textContent = parties.length;
       document.getElementById('stat-total').textContent = totalMembers;
       document.getElementById('stat-available').textContent = availableMembers.length;
     }
@@ -900,16 +1142,17 @@
     }
 
     // Show toast notification
-    function showToast(message) {
+    function showToast(message, isError = false) {
       const toast = document.getElementById('toast');
       toast.textContent = message;
-      toast.classList.add('show');
+      toast.className = 'toast show' + (isError ? ' error' : '');
       setTimeout(() => toast.classList.remove('show'), 3000);
     }
 
     // Save parties
     async function saveParties() {
       document.getElementById('loading').classList.add('active');
+      document.getElementById('loading-text').textContent = 'Saving parties...';
 
       try {
         const response = await fetch(`/api/static-party-editor/${TOKEN}/save`, {
@@ -918,7 +1161,8 @@
           body: JSON.stringify({
             parties: parties.map(p => ({
               partyNumber: p.partyNumber,
-              members: p.members || []
+              members: p.members || [],
+              isNew: p.isNew || false
             })),
             reserveMembers: hasReserve ? reserveMembers : undefined
           })
@@ -930,14 +1174,16 @@
 
         if (response.ok) {
           hasUnsavedChanges = false;
+          // Remove isNew flag from parties
+          parties.forEach(p => delete p.isNew);
           showToast('Parties saved successfully!');
         } else {
-          alert('Failed to save parties: ' + data.error);
+          showToast('Failed to save parties: ' + data.error, true);
         }
       } catch (error) {
         document.getElementById('loading').classList.remove('active');
         console.error('Save error:', error);
-        alert('Failed to save parties. Please try again.');
+        showToast('Failed to save parties. Please try again.', true);
       }
     }
   </script>
