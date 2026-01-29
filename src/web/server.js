@@ -10,6 +10,7 @@ class WebServer {
     this.app = express();
     this.port = process.env.WEB_PORT || 3001; // Changed to 3001 to avoid conflict with StreamServer (port 3000)
     this.activeTokens = new Map(); // In-memory token storage
+    this.staticPartyTokens = new Map(); // Tokens for static party editor
     this.collections = null;
     this.client = null;
     this.server = null;
@@ -80,6 +81,45 @@ class WebServer {
   }
 
   /**
+   * Generate a secure token for static party editor access
+   */
+  generateStaticPartyToken(guildId, userId, expiresIn = 3600000) { // 1 hour default
+    const token = crypto.randomBytes(32).toString('hex');
+
+    this.staticPartyTokens.set(token, {
+      guildId,
+      userId,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + expiresIn
+    });
+
+    // Auto-cleanup expired token
+    setTimeout(() => {
+      this.staticPartyTokens.delete(token);
+    }, expiresIn);
+
+    return token;
+  }
+
+  /**
+   * Validate static party token and return associated data
+   */
+  validateStaticPartyToken(token) {
+    const tokenData = this.staticPartyTokens.get(token);
+
+    if (!tokenData) {
+      return { valid: false, error: 'Token not found' };
+    }
+
+    if (tokenData.expiresAt < Date.now()) {
+      this.staticPartyTokens.delete(token);
+      return { valid: false, error: 'Token expired' };
+    }
+
+    return { valid: true, data: tokenData };
+  }
+
+  /**
    * Register all routes
    */
   registerRoutes() {
@@ -106,6 +146,21 @@ class WebServer {
     // API: Preview DM for a member
     this.app.post('/api/party-editor/:token/preview', async (req, res) => {
       await this.handlePreviewDM(req, res);
+    });
+
+    // Static Party Editor routes
+    this.app.get('/static-party-editor/:token', async (req, res) => {
+      await this.handleStaticPartyEditorPage(req, res);
+    });
+
+    // API: Get static party data
+    this.app.get('/api/static-party-editor/:token/data', async (req, res) => {
+      await this.handleGetStaticPartyData(req, res);
+    });
+
+    // API: Save static party changes
+    this.app.post('/api/static-party-editor/:token/save', async (req, res) => {
+      await this.handleSaveStaticParties(req, res);
     });
 
     // 404 handler
@@ -324,13 +379,13 @@ class WebServer {
   }
 
   /**
-   * Create DM message for party member
+   * Create DM message for party member - compact and stylish
    */
   createPartyAssignmentDM(member, party, eventInfo) {
     const eventTypeNames = {
       siege: 'Siege',
-      riftstone: 'Riftstone Fight',
-      boonstone: 'Boonstone Fight',
+      riftstone: 'Riftstone',
+      boonstone: 'Boonstone',
       wargames: 'Wargames',
       warboss: 'War Boss',
       guildevent: 'Guild Event'
@@ -346,27 +401,28 @@ class WebServer {
     };
 
     const eventName = eventTypeNames[eventInfo.eventType] || eventInfo.eventType;
-    const location = eventInfo.location ? ` - ${eventInfo.location}` : '';
+    const location = eventInfo.location ? ` @ ${eventInfo.location}` : '';
     const timestamp = Math.floor(eventInfo.eventTime.getTime() / 1000);
 
+    // Create compact party member list
     const partyList = party.members.map(m => {
       const roleIcon = getRoleEmoji(m.role);
-      const leaderCrown = m.isLeader ? '👑 ' : '';
-      const isYou = m.userId === member.userId ? ' **(You)**' : '';
-      return `${roleIcon} ${leaderCrown}${m.displayName}${isYou}`;
+      const leaderMark = m.isLeader ? ' **[L]**' : '';
+      const isYou = m.userId === member.userId ? ' *(you)*' : '';
+      return `${roleIcon} ${m.displayName}${leaderMark}${isYou}`;
     }).join('\n');
 
-    const message = 
-      `🎯 **Your Event Party Assignment**\n\n` +
-      `**Event:** ${eventName}${location}\n` +
-      `**Time:** <t:${timestamp}:F> (<t:${timestamp}:R>)\n\n` +
-      `You've been assigned to **Party ${party.partyNumber}**:\n\n` +
-      `${partyList}\n\n` +
-      `📋 **Role Composition:**\n` +
-      `• 🛡️ Tanks: ${party.composition.tank}\n` +
-      `• 💚 Healers: ${party.composition.healer}\n` +
-      `• ⚔️ DPS: ${party.composition.dps}\n\n` +
-      `Good luck! 🎯`;
+    // Compact role composition
+    const comp = party.composition;
+    const roleComp = `🛡️${comp.tank} 💚${comp.healer} ⚔️${comp.dps}`;
+
+    const message =
+      `**Party ${party.partyNumber}** | ${eventName}${location}\n` +
+      `<t:${timestamp}:F> (<t:${timestamp}:R>)\n` +
+      `\`\`\`\n` +
+      `${partyList}\n` +
+      `\`\`\`\n` +
+      `${roleComp}`;
 
     return message;
   }
@@ -429,6 +485,234 @@ class WebServer {
     console.log(`\n=== DM Summary: ${results.successful.length} successful, ${results.failed.length} failed ===\n`);
 
     return results;
+  }
+
+  /**
+   * Handle static party editor page request
+   */
+  async handleStaticPartyEditorPage(req, res) {
+    try {
+      const validation = this.validateStaticPartyToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).render('error', {
+          message: validation.error === 'Token expired'
+            ? 'This link has expired (links are valid for 1 hour)'
+            : 'Invalid or expired link'
+        });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Fetch all parties for this guild
+      const allParties = await this.collections.parties.find({
+        guildId,
+        isReserve: { $ne: true }
+      }).sort({ partyNumber: 1 }).toArray();
+
+      // Fetch reserve party
+      const reserveParty = await this.collections.parties.findOne({
+        guildId,
+        isReserve: true
+      });
+
+      // Fetch all party players for this guild (available members pool)
+      const allPlayers = await this.collections.partyPlayers.find({ guildId }).toArray();
+
+      // Find players not in any party
+      const assignedUserIds = new Set();
+      for (const party of allParties) {
+        for (const member of (party.members || [])) {
+          assignedUserIds.add(member.userId);
+        }
+      }
+      if (reserveParty) {
+        for (const member of (reserveParty.members || [])) {
+          assignedUserIds.add(member.userId);
+        }
+      }
+
+      const availablePlayers = allPlayers.filter(p => !assignedUserIds.has(p.userId));
+
+      // Fetch guild
+      const guild = await this.client.guilds.fetch(guildId);
+
+      // Enrich party members and available players with display names
+      const enrichedParties = await Promise.all(allParties.map(async (party) => {
+        const enrichedMembers = await Promise.all((party.members || []).map(async (member) => {
+          const discordMember = await guild.members.fetch(member.userId).catch(() => null);
+          return {
+            ...member,
+            displayName: discordMember?.displayName || member.displayName || 'Unknown'
+          };
+        }));
+        return {
+          ...party,
+          members: enrichedMembers
+        };
+      }));
+
+      const enrichedAvailable = await Promise.all(availablePlayers.map(async (player) => {
+        const discordMember = await guild.members.fetch(player.userId).catch(() => null);
+        return {
+          userId: player.userId,
+          displayName: discordMember?.displayName || 'Unknown',
+          weapon1: player.weapon1,
+          weapon2: player.weapon2,
+          role: player.role || 'dps',
+          cp: player.cp || 0
+        };
+      }));
+
+      // Render the static party editor page
+      res.render('static-party-editor', {
+        token: req.params.token,
+        guildId,
+        guildName: guild.name,
+        parties: JSON.stringify(enrichedParties),
+        availableMembers: JSON.stringify(enrichedAvailable),
+        reserveParty: JSON.stringify(reserveParty ? {
+          ...reserveParty,
+          members: await Promise.all((reserveParty.members || []).map(async (member) => {
+            const discordMember = await guild.members.fetch(member.userId).catch(() => null);
+            return {
+              ...member,
+              displayName: discordMember?.displayName || member.displayName || 'Unknown'
+            };
+          }))
+        } : null)
+      });
+
+    } catch (error) {
+      console.error('Error loading static party editor page:', error);
+      res.status(500).render('error', {
+        message: 'Failed to load party editor. Please try again.'
+      });
+    }
+  }
+
+  /**
+   * Handle get static party data API request
+   */
+  async handleGetStaticPartyData(req, res) {
+    try {
+      const validation = this.validateStaticPartyToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+
+      const parties = await this.collections.parties.find({
+        guildId,
+        isReserve: { $ne: true }
+      }).sort({ partyNumber: 1 }).toArray();
+
+      const reserveParty = await this.collections.parties.findOne({
+        guildId,
+        isReserve: true
+      });
+
+      res.json({ parties, reserveParty });
+
+    } catch (error) {
+      console.error('Error getting static party data:', error);
+      res.status(500).json({ error: 'Failed to get party data' });
+    }
+  }
+
+  /**
+   * Handle save static parties API request
+   */
+  async handleSaveStaticParties(req, res) {
+    try {
+      const validation = this.validateStaticPartyToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+      const { parties, reserveMembers } = req.body;
+
+      // Validate data
+      if (!parties || !Array.isArray(parties)) {
+        return res.status(400).json({ error: 'Invalid party data' });
+      }
+
+      console.log(`\n=== Saving Static Parties for Guild ${guildId} ===`);
+      console.log(`Total parties: ${parties.length}`);
+
+      // Update each party in the database
+      for (const party of parties) {
+        // Calculate composition
+        const composition = { tank: 0, healer: 0, dps: 0 };
+        for (const member of (party.members || [])) {
+          if (composition[member.role] !== undefined) {
+            composition[member.role]++;
+          }
+        }
+
+        // Calculate total CP
+        const totalCP = (party.members || []).reduce((sum, m) => sum + (m.cp || 0), 0);
+
+        await this.collections.parties.updateOne(
+          { guildId, partyNumber: party.partyNumber, isReserve: { $ne: true } },
+          {
+            $set: {
+              members: party.members || [],
+              roleComposition: composition,
+              totalCP,
+              lastModified: new Date(),
+              lastModifiedBy: userId
+            }
+          },
+          { upsert: false }
+        );
+
+        console.log(`  Updated Party ${party.partyNumber}: ${(party.members || []).length} members`);
+      }
+
+      // Update reserve party if provided
+      if (reserveMembers !== undefined) {
+        const reserveComposition = { tank: 0, healer: 0, dps: 0 };
+        for (const member of (reserveMembers || [])) {
+          if (reserveComposition[member.role] !== undefined) {
+            reserveComposition[member.role]++;
+          }
+        }
+
+        const reserveTotalCP = (reserveMembers || []).reduce((sum, m) => sum + (m.cp || 0), 0);
+
+        await this.collections.parties.updateOne(
+          { guildId, isReserve: true },
+          {
+            $set: {
+              members: reserveMembers || [],
+              roleComposition: reserveComposition,
+              totalCP: reserveTotalCP,
+              lastModified: new Date(),
+              lastModifiedBy: userId
+            }
+          },
+          { upsert: false }
+        );
+
+        console.log(`  Updated Reserve: ${(reserveMembers || []).length} members`);
+      }
+
+      console.log(`=== Save Complete ===\n`);
+
+      res.json({
+        success: true,
+        message: 'Parties saved successfully!'
+      });
+
+    } catch (error) {
+      console.error('Error saving static parties:', error);
+      res.status(500).json({ error: 'Failed to save parties' });
+    }
   }
 
   /**

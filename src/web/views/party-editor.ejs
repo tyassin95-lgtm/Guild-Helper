@@ -577,6 +577,12 @@
                         <div class="modal-content">
                           <div class="modal-header">Preview DM Message</div>
                           <div class="modal-body">
+                            <div style="margin-bottom: 15px;">
+                              <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #4a5568;">Preview for member:</label>
+                              <select id="preview-member-select" onchange="updatePreview()" style="width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
+                                <!-- Options populated dynamically -->
+                              </select>
+                            </div>
                             <div class="dm-preview" id="dm-preview-content"></div>
                           </div>
                           <div class="modal-footer">
@@ -1036,37 +1042,66 @@
                           return cp.toString();
                         }
 
-                        // Preview DMs
+                        // Preview DMs - show modal with member selector
                         async function previewDMs() {
-                          if (parties.length === 0 || parties.every(p => p.members.length === 0)) {
+                          // Collect all members from all parties
+                          const allMembers = [];
+                          for (const party of parties) {
+                            for (const member of party.members) {
+                              allMembers.push({
+                                member,
+                                party,
+                                label: `Party ${party.partyNumber}: ${member.displayName}`
+                              });
+                            }
+                          }
+
+                          if (allMembers.length === 0) {
                             alert('No party members to preview');
                             return;
                           }
 
-                          // Find first party with members
-                          const party = parties.find(p => p.members.length > 0);
-                          if (!party) return;
+                          // Populate the select dropdown
+                          const select = document.getElementById('preview-member-select');
+                          select.innerHTML = allMembers.map((item, index) =>
+                            `<option value="${index}">${item.label}</option>`
+                          ).join('');
 
-                          const member = party.members[0];
+                          // Store members data for use in updatePreview
+                          window.previewMembersData = allMembers;
+
+                          // Show modal and load first preview
+                          document.getElementById('preview-modal').classList.add('active');
+                          await updatePreview();
+                        }
+
+                        // Update preview when member selection changes
+                        async function updatePreview() {
+                          const select = document.getElementById('preview-member-select');
+                          const index = parseInt(select.value);
+                          const data = window.previewMembersData[index];
+
+                          if (!data) return;
+
+                          document.getElementById('dm-preview-content').textContent = 'Loading preview...';
 
                           try {
                             const response = await fetch(`/api/party-editor/${TOKEN}/preview`, {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ member, party })
+                              body: JSON.stringify({ member: data.member, party: data.party })
                             });
 
-                            const data = await response.json();
+                            const result = await response.json();
 
                             if (response.ok) {
-                              document.getElementById('dm-preview-content').textContent = data.dmMessage;
-                              document.getElementById('preview-modal').classList.add('active');
+                              document.getElementById('dm-preview-content').textContent = result.dmMessage;
                             } else {
-                              alert('Failed to preview DM: ' + data.error);
+                              document.getElementById('dm-preview-content').textContent = 'Failed to load preview: ' + result.error;
                             }
                           } catch (error) {
                             console.error('Preview error:', error);
-                            alert('Failed to preview DM');
+                            document.getElementById('dm-preview-content').textContent = 'Failed to load preview';
                           }
                         }
 
