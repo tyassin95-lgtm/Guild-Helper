@@ -15,8 +15,9 @@ async function handleViewParties({ interaction, collections }) {
   // Admin controls
   if (interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     const hasReserve = allParties.some(p => p.isReserve);
+    const hasParties = allParties.some(p => !p.isReserve);
 
-    const row = new ActionRowBuilder().addComponents(
+    const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('party_create')
         .setLabel('Create Party')
@@ -27,7 +28,7 @@ async function handleViewParties({ interaction, collections }) {
         .setLabel('Create Reserve')
         .setStyle(ButtonStyle.Success)
         .setEmoji('📦')
-        .setDisabled(hasReserve), // Disable if reserve already exists
+        .setDisabled(hasReserve),
       new ButtonBuilder()
         .setCustomId('party_manage')
         .setLabel('Manage Parties')
@@ -40,7 +41,19 @@ async function handleViewParties({ interaction, collections }) {
         .setEmoji('🗑️')
     );
 
-    components.push(row);
+    components.push(row1);
+
+    // Add web editor button if parties exist
+    if (hasParties) {
+      const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('party_web_editor')
+          .setLabel('Edit on Web')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('🌐')
+      );
+      components.push(row2);
+    }
   }
 
   return interaction.reply({ embeds: [embed], components, flags: [64] });

@@ -5,6 +5,33 @@ const { createPlayerInfoEmbed, createPartiesOverviewEmbed } = require('../embed'
 async function handlePartyButtons({ interaction, collections }) {
   const { partyPlayers, parties, dmContexts } = collections;
 
+  // Web Editor button (admin only)
+  if (interaction.customId === 'party_web_editor') {
+    if (!interaction.guildId) {
+      return interaction.reply({ content: '❌ This action must be performed in the server.', flags: [64] });
+    }
+
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
+    }
+
+    // Generate web token
+    const { webServer } = require('../../../web/server');
+    const token = webServer.generateStaticPartyToken(interaction.guildId, interaction.user.id);
+
+    const baseUrl = process.env.WEB_BASE_URL || 'http://34.170.220.22:3001';
+    const webUrl = `${baseUrl}/static-party-editor/${token}`;
+
+    return interaction.reply({
+      content: `🌐 **Static Party Editor**\n\n` +
+               `Click the link below to edit parties in your browser:\n\n` +
+               `**[Open Party Editor](${webUrl})**\n\n` +
+               `⏰ Link expires in 1 hour\n` +
+               `ℹ️ Changes are saved directly to the database`,
+      flags: [64]
+    });
+  }
+
   // Set weapon 1
   if (interaction.customId === 'party_set_weapon1') {
     const row = new ActionRowBuilder().addComponents(

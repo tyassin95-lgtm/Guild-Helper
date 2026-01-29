@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Party Editor - <%= guildName %></title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 15px;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      padding: 15px 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin-bottom: 15px;
+    }
+
+    .header h1 {
+      color: #2d3748;
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .guild-info {
+      color: #718096;
+      font-size: 13px;
+    }
+
+    .main-content {
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 15px;
+    }
+
+    .parties-section {
+      background: white;
+      padding: 18px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      transition: all 0.2s;
+    }
+
+    .sidebar.drag-remove-target {
+      background: rgba(252, 129, 129, 0.1);
+      border: 2px dashed #fc8181;
+      border-radius: 12px;
+    }
+
+    .available-section,
+    .reserve-section,
+    .actions-section {
+      background: white;
+      padding: 18px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .count-badge {
+      background: #667eea;
+      color: white;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .parties-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 12px;
+    }
+
+    .party-card {
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px;
+      background: #f7fafc;
+      transition: all 0.2s;
+      font-size: 12px;
+    }
+
+    .party-card.drag-over {
+      border-color: #667eea;
+      background: #edf2f7;
+      transform: scale(1.02);
+    }
+
+    .party-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    .party-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .party-status {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+
+    .status-full {
+      background: #48bb78;
+      color: white;
+    }
+
+    .status-partial {
+      background: #ed8936;
+      color: white;
+    }
+
+    .status-empty {
+      background: #cbd5e0;
+      color: #4a5568;
+    }
+
+    .party-composition {
+      font-size: 10px;
+      color: #718096;
+      margin-bottom: 8px;
+    }
+
+    .members-list {
+      min-height: 50px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .member-card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 6px 8px;
+      cursor: move;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .member-card:hover {
+      border-color: #667eea;
+      box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+    }
+
+    .member-card.dragging {
+      opacity: 0.5;
+      cursor: grabbing;
+    }
+
+    .role-icon {
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .member-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .member-name {
+      font-size: 11px;
+      font-weight: 500;
+      color: #2d3748;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .member-details {
+      font-size: 9px;
+      color: #718096;
+    }
+
+    .member-cp {
+      font-size: 10px;
+      color: #4a5568;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .available-list,
+    .reserve-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .available-list::-webkit-scrollbar,
+    .reserve-list::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .available-list::-webkit-scrollbar-track,
+    .reserve-list::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+
+    .available-list::-webkit-scrollbar-thumb,
+    .reserve-list::-webkit-scrollbar-thumb {
+      background: #cbd5e0;
+      border-radius: 4px;
+    }
+
+    .available-list::-webkit-scrollbar-thumb:hover,
+    .reserve-list::-webkit-scrollbar-thumb:hover {
+      background: #a0aec0;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 20px;
+      color: #a0aec0;
+      font-size: 13px;
+    }
+
+    .drop-zone {
+      border: 2px dashed #cbd5e0;
+      border-radius: 6px;
+      padding: 8px;
+      text-align: center;
+      color: #a0aec0;
+      font-size: 10px;
+      margin-top: 6px;
+      transition: all 0.2s;
+    }
+
+    .drop-zone.drag-over {
+      border-color: #667eea;
+      background: #edf2f7;
+      color: #667eea;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5a67d8;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-success {
+      background: #48bb78;
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #38a169;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(72, 187, 120, 0.3);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .actions-section .btn + .btn {
+      margin-top: 10px;
+    }
+
+    .summary-stats {
+      background: #edf2f7;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+
+    .summary-stats .stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 12px;
+    }
+
+    .stat-label {
+      color: #718096;
+    }
+
+    .stat-value {
+      font-weight: 600;
+      color: #2d3748;
+    }
+
+    .loading {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .loading.active {
+      display: flex;
+    }
+
+    .loading-content {
+      background: white;
+      padding: 30px 50px;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #48bb78;
+      color: white;
+      padding: 15px 25px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: none;
+      z-index: 3000;
+      animation: slideIn 0.3s ease;
+    }
+
+    .toast.show {
+      display: block;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    @media (max-width: 1600px) {
+      .parties-grid {
+        grid-template-columns: repeat(5, 1fr);
+      }
+    }
+
+    @media (max-width: 1400px) {
+      .parties-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    @media (max-width: 1200px) {
+      .main-content {
+        grid-template-columns: 1fr;
+      }
+
+      .parties-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .parties-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>Static Party Editor</h1>
+      <div class="guild-info">
+        <strong>Guild:</strong> <%= guildName %>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Parties Section -->
+      <div class="parties-section">
+        <div class="section-title">
+          <span>Parties</span>
+          <span class="count-badge" id="party-count">0</span>
+        </div>
+
+        <div class="summary-stats">
+          <div class="stat">
+            <span class="stat-label">Total Parties</span>
+            <span class="stat-value" id="stat-parties">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Total Members in Parties</span>
+            <span class="stat-value" id="stat-total">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Available Members</span>
+            <span class="stat-value" id="stat-available">0</span>
+          </div>
+        </div>
+
+        <div class="parties-grid" id="parties-grid">
+          <!-- Parties will be rendered here -->
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="sidebar"
+           ondragover="handleSidebarDragOver(event)"
+           ondragleave="handleSidebarDragLeave(event)"
+           ondrop="handleSidebarDrop(event)">
+        <!-- Reserve Section -->
+        <div class="reserve-section" id="reserve-section" style="display: none;">
+          <div class="section-title">
+            <span>Reserve</span>
+            <span class="count-badge" id="reserve-count">0</span>
+          </div>
+          <div class="reserve-list" id="reserve-list"
+               ondragover="handleReserveDragOver(event)"
+               ondrop="handleReserveDrop(event)"
+               ondragleave="handleReserveDragLeave(event)">
+            <!-- Reserve members will be rendered here -->
+          </div>
+        </div>
+
+        <!-- Available Members -->
+        <div class="available-section">
+          <div class="section-title">
+            <span>Available Members</span>
+            <span class="count-badge" id="available-count">0</span>
+          </div>
+          <div class="available-list" id="available-list">
+            <!-- Available members will be rendered here -->
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions-section">
+          <div class="section-title">Actions</div>
+          <button class="btn btn-success" onclick="saveParties()" id="save-btn">
+            Save Parties
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading" id="loading">
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <div>Saving parties...</div>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast">Parties saved successfully!</div>
+
+  <script>
+    // Global state
+    const TOKEN = '<%= token %>';
+    let parties = [];
+    let availableMembers = [];
+    let reserveMembers = [];
+    let hasReserve = false;
+    let draggedMember = null;
+    let draggedSource = null; // 'party', 'available', or 'reserve'
+    let draggedPartyIndex = null;
+    let hasUnsavedChanges = false;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadData();
+    });
+
+    // Warn before leaving with unsaved changes
+    window.addEventListener('beforeunload', (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+
+    // Load initial data
+    function loadData() {
+      const partiesData = <%- parties %>;
+      const availableData = <%- availableMembers %>;
+      const reserveData = <%- reserveParty %>;
+
+      parties = partiesData || [];
+      availableMembers = availableData || [];
+
+      if (reserveData) {
+        hasReserve = true;
+        reserveMembers = reserveData.members || [];
+        document.getElementById('reserve-section').style.display = 'block';
+      }
+
+      render();
+    }
+
+    // Render everything
+    function render() {
+      renderParties();
+      renderAvailable();
+      renderReserve();
+      updateStats();
+    }
+
+    // Render parties
+    function renderParties() {
+      const grid = document.getElementById('parties-grid');
+      grid.innerHTML = '';
+
+      for (let i = 0; i < parties.length; i++) {
+        const party = parties[i];
+        const card = createPartyCard(party, i);
+        grid.appendChild(card);
+      }
+
+      document.getElementById('party-count').textContent = parties.filter(p => (p.members || []).length > 0).length;
+    }
+
+    // Create party card
+    function createPartyCard(party, partyIndex) {
+      const div = document.createElement('div');
+      div.className = 'party-card';
+      div.dataset.partyIndex = partyIndex;
+
+      // Add drag-over event listeners
+      div.addEventListener('dragover', handleDragOver);
+      div.addEventListener('drop', (e) => handleDrop(e, partyIndex));
+      div.addEventListener('dragleave', handleDragLeave);
+
+      const members = party.members || [];
+      const memberCount = members.length;
+      const statusClass = memberCount === 6 ? 'status-full' : memberCount > 0 ? 'status-partial' : 'status-empty';
+      const statusText = `${memberCount}/6`;
+
+      // Calculate composition
+      const composition = { tank: 0, healer: 0, dps: 0 };
+      members.forEach(m => {
+        if (composition[m.role] !== undefined) composition[m.role]++;
+      });
+
+      div.innerHTML = `
+        <div class="party-header">
+          <div class="party-title">Party ${party.partyNumber}</div>
+          <div class="party-status ${statusClass}">${statusText}</div>
+        </div>
+        <div class="party-composition">
+          Tank ${composition.tank} | Healer ${composition.healer} | DPS ${composition.dps}
+        </div>
+        <div class="members-list" id="party-${partyIndex}-members">
+          ${members.map((member, memberIndex) =>
+            createMemberCardHTML(member, 'party', partyIndex, memberIndex)
+          ).join('')}
+          ${memberCount < 6 ? '<div class="drop-zone">Drop members here</div>' : ''}
+        </div>
+      `;
+
+      return div;
+    }
+
+    // Create member card HTML
+    function createMemberCardHTML(member, source, partyIndex, memberIndex) {
+      const roleIcons = { tank: 'Tank', healer: 'Healer', dps: 'DPS' };
+      const roleIcon = roleIcons[member.role] || 'DPS';
+      const leaderBadge = member.isLeader ? ' [L]' : '';
+
+      return `
+        <div class="member-card"
+             draggable="true"
+             data-source="${source}"
+             data-party-index="${partyIndex}"
+             data-member-index="${memberIndex}"
+             ondragstart="handleDragStart(event, '${source}', ${partyIndex}, ${memberIndex})"
+             ondragend="handleDragEnd(event)">
+          <div class="role-icon">${getRoleEmoji(member.role)}</div>
+          <div class="member-info">
+            <div class="member-name">${member.displayName}${leaderBadge}</div>
+            <div class="member-details">${member.weapon1 || '?'}/${member.weapon2 || '?'}</div>
+          </div>
+          <div class="member-cp">${formatCP(member.cp)}</div>
+        </div>
+      `;
+    }
+
+    // Get role emoji
+    function getRoleEmoji(role) {
+      switch (role) {
+        case 'tank': return 'Tank';
+        case 'healer': return 'Heal';
+        default: return 'DPS';
+      }
+    }
+
+    // Render available members
+    function renderAvailable() {
+      const list = document.getElementById('available-list');
+
+      if (availableMembers.length === 0) {
+        list.innerHTML = '<div class="empty-state">No available members</div>';
+        document.getElementById('available-count').textContent = '0';
+        return;
+      }
+
+      list.innerHTML = availableMembers.map((member, index) => {
+        return `
+          <div class="member-card"
+               draggable="true"
+               data-source="available"
+               data-available-index="${index}"
+               ondragstart="handleDragStart(event, 'available', null, ${index})"
+               ondragend="handleDragEnd(event)">
+            <div class="role-icon">${getRoleEmoji(member.role)}</div>
+            <div class="member-info">
+              <div class="member-name">${member.displayName}</div>
+              <div class="member-details">${member.weapon1 || '?'}/${member.weapon2 || '?'}</div>
+            </div>
+            <div class="member-cp">${formatCP(member.cp)}</div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('available-count').textContent = availableMembers.length;
+    }
+
+    // Render reserve members
+    function renderReserve() {
+      if (!hasReserve) return;
+
+      const list = document.getElementById('reserve-list');
+
+      if (reserveMembers.length === 0) {
+        list.innerHTML = '<div class="empty-state">Drop members here for reserve</div>';
+        document.getElementById('reserve-count').textContent = '0';
+        return;
+      }
+
+      list.innerHTML = reserveMembers.map((member, index) => {
+        return `
+          <div class="member-card"
+               draggable="true"
+               data-source="reserve"
+               data-reserve-index="${index}"
+               ondragstart="handleDragStart(event, 'reserve', null, ${index})"
+               ondragend="handleDragEnd(event)">
+            <div class="role-icon">${getRoleEmoji(member.role)}</div>
+            <div class="member-info">
+              <div class="member-name">${member.displayName}</div>
+              <div class="member-details">${member.weapon1 || '?'}/${member.weapon2 || '?'}</div>
+            </div>
+            <div class="member-cp">${formatCP(member.cp)}</div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('reserve-count').textContent = reserveMembers.length;
+    }
+
+    // Drag handlers
+    function handleDragStart(event, source, partyIndex, memberIndex) {
+      event.dataTransfer.effectAllowed = 'move';
+      draggedSource = source;
+      draggedPartyIndex = partyIndex;
+
+      if (source === 'party') {
+        draggedMember = parties[partyIndex].members[memberIndex];
+      } else if (source === 'available') {
+        draggedMember = availableMembers[memberIndex];
+      } else if (source === 'reserve') {
+        draggedMember = reserveMembers[memberIndex];
+      }
+
+      event.target.classList.add('dragging');
+    }
+
+    function handleDragEnd(event) {
+      event.target.classList.remove('dragging');
+      document.querySelectorAll('.member-card').forEach(card => {
+        card.classList.remove('drag-over');
+      });
+    }
+
+    function handleDragOver(event) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      const card = event.currentTarget;
+      card.classList.add('drag-over');
+    }
+
+    function handleDragLeave(event) {
+      const card = event.currentTarget;
+      card.classList.remove('drag-over');
+    }
+
+    function handleDrop(event, toPartyIndex) {
+      event.preventDefault();
+      event.currentTarget.classList.remove('drag-over');
+
+      if (!draggedMember) return;
+
+      const toParty = parties[toPartyIndex];
+
+      // Check if party is full
+      if ((toParty.members || []).length >= 6) {
+        alert('Party is full (6/6 members)');
+        resetDragState();
+        return;
+      }
+
+      // Remove from source
+      removeFromSource();
+
+      // Add to target party
+      if (!toParty.members) toParty.members = [];
+      toParty.members.push({ ...draggedMember });
+
+      hasUnsavedChanges = true;
+      resetDragState();
+      render();
+    }
+
+    function removeFromSource() {
+      if (draggedSource === 'party') {
+        const fromParty = parties[draggedPartyIndex];
+        const memberIndex = fromParty.members.findIndex(m => m.userId === draggedMember.userId);
+        if (memberIndex !== -1) {
+          fromParty.members.splice(memberIndex, 1);
+        }
+      } else if (draggedSource === 'available') {
+        const index = availableMembers.findIndex(m => m.userId === draggedMember.userId);
+        if (index !== -1) {
+          availableMembers.splice(index, 1);
+        }
+      } else if (draggedSource === 'reserve') {
+        const index = reserveMembers.findIndex(m => m.userId === draggedMember.userId);
+        if (index !== -1) {
+          reserveMembers.splice(index, 1);
+        }
+      }
+    }
+
+    function resetDragState() {
+      draggedMember = null;
+      draggedSource = null;
+      draggedPartyIndex = null;
+    }
+
+    // Handle dragging over sidebar to remove from party
+    function handleSidebarDragOver(event) {
+      if (draggedSource === 'party') {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        document.querySelector('.sidebar').classList.add('drag-remove-target');
+      }
+    }
+
+    function handleSidebarDragLeave(event) {
+      if (event.target.classList.contains('sidebar')) {
+        document.querySelector('.sidebar').classList.remove('drag-remove-target');
+      }
+    }
+
+    function handleSidebarDrop(event) {
+      event.preventDefault();
+      document.querySelector('.sidebar').classList.remove('drag-remove-target');
+
+      if (!draggedMember || draggedSource !== 'party') return;
+
+      // Remove from party
+      removeFromSource();
+
+      // Add to available
+      availableMembers.push({ ...draggedMember });
+
+      hasUnsavedChanges = true;
+      resetDragState();
+      render();
+    }
+
+    // Reserve drag handlers
+    function handleReserveDragOver(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'move';
+      event.currentTarget.classList.add('drag-over');
+    }
+
+    function handleReserveDragLeave(event) {
+      event.currentTarget.classList.remove('drag-over');
+    }
+
+    function handleReserveDrop(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.currentTarget.classList.remove('drag-over');
+      document.querySelector('.sidebar').classList.remove('drag-remove-target');
+
+      if (!draggedMember) return;
+
+      // Remove from source
+      removeFromSource();
+
+      // Add to reserve
+      reserveMembers.push({ ...draggedMember });
+
+      hasUnsavedChanges = true;
+      resetDragState();
+      render();
+    }
+
+    // Update statistics
+    function updateStats() {
+      const totalMembers = parties.reduce((sum, p) => sum + ((p.members || []).length), 0);
+      const partiesWithMembers = parties.filter(p => (p.members || []).length > 0).length;
+
+      document.getElementById('stat-parties').textContent = partiesWithMembers;
+      document.getElementById('stat-total').textContent = totalMembers;
+      document.getElementById('stat-available').textContent = availableMembers.length;
+    }
+
+    // Format CP
+    function formatCP(cp) {
+      if (!cp) return '0';
+      if (cp >= 1000000) return `${(cp / 1000000).toFixed(1)}M`;
+      if (cp >= 1000) return `${(cp / 1000).toFixed(1)}K`;
+      return cp.toString();
+    }
+
+    // Show toast notification
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Save parties
+    async function saveParties() {
+      document.getElementById('loading').classList.add('active');
+
+      try {
+        const response = await fetch(`/api/static-party-editor/${TOKEN}/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            parties: parties.map(p => ({
+              partyNumber: p.partyNumber,
+              members: p.members || []
+            })),
+            reserveMembers: hasReserve ? reserveMembers : undefined
+          })
+        });
+
+        const data = await response.json();
+
+        document.getElementById('loading').classList.remove('active');
+
+        if (response.ok) {
+          hasUnsavedChanges = false;
+          showToast('Parties saved successfully!');
+        } else {
+          alert('Failed to save parties: ' + data.error);
+        }
+      } catch (error) {
+        document.getElementById('loading').classList.remove('active');
+        console.error('Save error:', error);
+        alert('Failed to save parties. Please try again.');
+      }
+    }
+  </script>
+</body>
+</html>

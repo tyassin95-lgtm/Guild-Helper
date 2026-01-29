@@ -25,19 +25,8 @@ const { handlePvPModals } = require('../../features/pvp/handlers/modals');
 
 // Event Party imports
 const {
-  handleApproveParties,
   handleCancelParties
 } = require('../../features/pvp/eventParties/partyManager');
-
-const {
-  handleEditParties,
-  handleBackToReview,
-  handleBackToEdit,
-  handleAddMemberToParty,
-  handleRemoveMemberFromParty,
-  handleBackToParty,
-  handleSwapMembers
-} = require('../../features/pvp/eventParties/partyEditor');
 
 // Item Roll system imports
 const { handleItemRoll } = require('../../features/itemroll/commands/itemroll');
@@ -217,58 +206,10 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         return handleResetBonusesConfirmation({ interaction, collections });
       }
 
-      // Event party buttons
-      if (interaction.customId.startsWith('event_party_approve:')) {
-        const eventId = interaction.customId.split(':')[1];
-        return handleApproveParties({ interaction, eventId, collections, client });
-      }
-
+      // Event party cancel button (only cancel is needed, other actions use web interface)
       if (interaction.customId.startsWith('event_party_cancel:')) {
         const eventId = interaction.customId.split(':')[1];
         return handleCancelParties({ interaction, eventId, collections });
-      }
-
-      if (interaction.customId.startsWith('event_party_edit:')) {
-        const eventId = interaction.customId.split(':')[1];
-        return handleEditParties({ interaction, eventId, collections });
-      }
-
-      if (interaction.customId.startsWith('event_party_back_to_review:')) {
-        const eventId = interaction.customId.split(':')[1];
-        return handleBackToReview({ interaction, eventId, collections });
-      }
-
-      if (interaction.customId.startsWith('event_party_back_to_edit:')) {
-        const eventId = interaction.customId.split(':')[1];
-        return handleBackToEdit({ interaction, eventId, collections });
-      }
-
-      if (interaction.customId.startsWith('event_party_add_member:')) {
-        const parts = interaction.customId.split(':');
-        const eventId = parts[1];
-        const partyNumber = parts[2];
-        return handleAddMemberToParty({ interaction, eventId, partyNumber: parseInt(partyNumber), collections });
-      }
-
-      if (interaction.customId.startsWith('event_party_remove_member:')) {
-        const parts = interaction.customId.split(':');
-        const eventId = parts[1];
-        const partyNumber = parts[2];
-        return handleRemoveMemberFromParty({ interaction, eventId, partyNumber: parseInt(partyNumber), collections });
-      }
-
-      if (interaction.customId.startsWith('event_party_swap_members:')) {
-        const parts = interaction.customId.split(':');
-        const eventId = parts[1];
-        const partyNumber = parts[2];
-        return handleSwapMembers({ interaction, eventId, partyNumber: parseInt(partyNumber), collections });
-      }
-
-      if (interaction.customId.startsWith('event_party_back_to_party:')) {
-        const parts = interaction.customId.split(':');
-        const eventId = parts[1];
-        const partyNumber = parts[2];
-        return handleBackToParty({ interaction, eventId, partyNumber: parseInt(partyNumber), collections });
       }
 
       // Gambling blackjack buttons
