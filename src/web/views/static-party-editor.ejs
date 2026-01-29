@@ -660,7 +660,8 @@
         reserveMembers = reserveData.members || [];
         document.getElementById('reserve-section').style.display = 'block';
       }
-
+        
+      dedupeAll();
       render();
     }
 
@@ -906,16 +907,14 @@
         return;
       }
 
-      // Remove from source
-      removeFromSource();
+      removeMemberByUserId(draggedMember.userId);
 
-      // Add to target party
       if (!toParty.members) toParty.members = [];
       toParty.members.push({ ...draggedMember });
 
       hasUnsavedChanges = true;
       resetDragState();
-      render();
+      setTimeout(render, 0);
     }
 
     // Handle drag over a member card (for swapping)
@@ -930,7 +929,6 @@
       event.currentTarget.classList.remove('drag-over');
     }
 
-    // Handle dropping on a member card (swap)
     function handleMemberDrop(event, targetSource, targetPartyIndex, targetMemberIndex) {
       event.preventDefault();
       event.stopPropagation();
@@ -938,46 +936,37 @@
 
       if (!draggedMember) return;
 
-      // Don't swap with self
-      if (draggedSource === targetSource &&
-          draggedPartyIndex === targetPartyIndex &&
-          draggedMemberIndex === targetMemberIndex) {
-        resetDragState();
-        return;
-      }
+      const draggedUserId = draggedMember.userId;
 
       // Get target member
       let targetMember;
       if (targetSource === 'party') {
-        targetMember = { ...parties[targetPartyIndex].members[targetMemberIndex] };
+        targetMember = parties[targetPartyIndex].members[targetMemberIndex];
       } else if (targetSource === 'available') {
-        targetMember = { ...availableMembers[targetMemberIndex] };
+        targetMember = availableMembers[targetMemberIndex];
       } else if (targetSource === 'reserve') {
-        targetMember = { ...reserveMembers[targetMemberIndex] };
+        targetMember = reserveMembers[targetMemberIndex];
       }
 
-      // Remove dragged member from source
-      removeFromSource();
+      if (!targetMember || draggedUserId === targetMember.userId) {
+        resetDragState();
+        return;
+      }
 
-      // Remove target member from its location
+      // Remove both globally to avoid duplicates
+      removeMemberByUserId(draggedUserId);
+      removeMemberByUserId(targetMember.userId);
+
+      // Insert dragged member into target location
       if (targetSource === 'party') {
-        parties[targetPartyIndex].members.splice(targetMemberIndex, 1);
+        parties[targetPartyIndex].members.splice(targetMemberIndex, 0, draggedMember);
       } else if (targetSource === 'available') {
-        availableMembers.splice(targetMemberIndex, 1);
+        availableMembers.splice(targetMemberIndex, 0, draggedMember);
       } else if (targetSource === 'reserve') {
-        reserveMembers.splice(targetMemberIndex, 1);
+        reserveMembers.splice(targetMemberIndex, 0, draggedMember);
       }
 
-      // Add dragged member to target location
-      if (targetSource === 'party') {
-        parties[targetPartyIndex].members.splice(targetMemberIndex, 0, { ...draggedMember });
-      } else if (targetSource === 'available') {
-        availableMembers.splice(targetMemberIndex, 0, { ...draggedMember });
-      } else if (targetSource === 'reserve') {
-        reserveMembers.splice(targetMemberIndex, 0, { ...draggedMember });
-      }
-
-      // Add target member to dragged source location
+      // Insert target member into original dragged location
       if (draggedSource === 'party') {
         parties[draggedPartyIndex].members.splice(draggedMemberIndex, 0, targetMember);
       } else if (draggedSource === 'available') {
@@ -988,17 +977,12 @@
 
       hasUnsavedChanges = true;
       resetDragState();
-      render();
+      setTimeout(render, 0);
     }
 
     function removeFromSource() {
-      if (draggedSource === 'party') {
-        parties[draggedPartyIndex].members.splice(draggedMemberIndex, 1);
-      } else if (draggedSource === 'available') {
-        availableMembers.splice(draggedMemberIndex, 1);
-      } else if (draggedSource === 'reserve') {
-        reserveMembers.splice(draggedMemberIndex, 1);
-      }
+      if (!draggedMember) return;
+      removeMemberByUserId(draggedMember.userId);
     }
 
     function resetDragState() {
@@ -1030,14 +1014,14 @@
       if (!draggedMember || draggedSource !== 'party') return;
 
       // Remove from party
-      removeFromSource();
+      removeMemberByUserId(draggedMember.userId);
 
       // Add to available
       availableMembers.push({ ...draggedMember });
 
       hasUnsavedChanges = true;
       resetDragState();
-      render();
+      setTimeout(render, 0);
     }
 
     // Reserve drag handlers
@@ -1061,14 +1045,14 @@
       if (!draggedMember) return;
 
       // Remove from source
-      removeFromSource();
+      removeMemberByUserId(draggedMember.userId);
 
       // Add to reserve
       reserveMembers.push({ ...draggedMember });
 
       hasUnsavedChanges = true;
       resetDragState();
-      render();
+      setTimeout(render, 0);
     }
 
     // Create a new party
@@ -1095,7 +1079,7 @@
       parties.sort((a, b) => a.partyNumber - b.partyNumber);
 
       hasUnsavedChanges = true;
-      render();
+      setTimeout(render, 0);
       showToast('Party created! Don\'t forget to save.');
     }
 
@@ -1119,7 +1103,7 @@
       parties.splice(partyIndex, 1);
 
       hasUnsavedChanges = true;
-      render();
+      setTimeout(render, 0);
       showToast('Party deleted! Don\'t forget to save.');
     }
 
@@ -1133,6 +1117,30 @@
       document.getElementById('stat-available').textContent = availableMembers.length;
     }
 
+    function dedupeAll() {
+      const seen = new Set();
+
+      const dedupeList = (arr) => {
+        return arr.filter(m => {
+          if (!m || !m.userId) return false;
+          if (seen.has(m.userId)) return false;
+          seen.add(m.userId);
+          return true;
+        });
+      };
+
+      // Dedupe party members
+      parties.forEach(p => {
+        p.members = dedupeList(p.members || []);
+      });
+
+      // Dedupe available
+      availableMembers = dedupeList(availableMembers);
+
+      // Dedupe reserve
+      reserveMembers = dedupeList(reserveMembers);
+    }
+
     // Format CP
     function formatCP(cp) {
       if (!cp) return '0';
@@ -1140,6 +1148,21 @@
       if (cp >= 1000) return `${(cp / 1000).toFixed(1)}K`;
       return cp.toString();
     }
+    // Remove member by userID
+    function removeMemberByUserId(userId) {
+      // Remove from parties
+      parties.forEach(p => {
+        if (!p.members) return;
+        p.members = p.members.filter(m => m.userId !== userId);
+      });
+
+      // Remove from available
+      availableMembers = availableMembers.filter(m => m.userId !== userId);
+
+      // Remove from reserve
+      reserveMembers = reserveMembers.filter(m => m.userId !== userId);
+    }
+
 
     // Show toast notification
     function showToast(message, isError = false) {
