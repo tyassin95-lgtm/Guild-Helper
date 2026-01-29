@@ -11,8 +11,6 @@ const { resumeActivePolls } = require('./features/polls/utils/pollResume');
 const { startPollAutoUpdate, stopPollAutoUpdate } = require('./features/polls/utils/pollAutoUpdate');
 const { startCalendarAutoUpdate, stopCalendarAutoUpdate } = require('./features/pvp/calendar/calendarAutoUpdate');
 const { startRosterAutoUpdate, stopRosterAutoUpdate } = require('./features/parties/rosterAutoUpdate');
-const { streamServer } = require('./features/broadcast/server/streamServer');
-const { broadcastManager } = require('./features/broadcast/utils/broadcastManager');
 const { handleGearUpload } = require('./features/parties/handlers/gearUploadHandler');
 const { handleAutoModCheck } = require('./features/automod/handlers/messageHandler');
 const { handleTranslationReaction } = require('./features/automod/handlers/reactionHandler');
@@ -50,9 +48,6 @@ const client = new Client({
       console.log(`Logged in as ${client.user.tag}!`);
       await registerSlashCommands(client);
       console.log('Slash commands registered.');
-
-      // Start broadcast stream server
-      streamServer.start();
 
       // Resume active item rolls and polls
       await resumeActiveItemRolls(client, collections);
@@ -127,10 +122,6 @@ const client = new Client({
       stopCalendarAutoUpdate();
       stopRosterAutoUpdate();
 
-      // Stop broadcast
-      broadcastManager.stopAll();
-      streamServer.stop();
-
       // NEW: Stop web server
       webServer.stop();
 
@@ -149,10 +140,6 @@ const client = new Client({
       stopPollAutoUpdate();
       stopCalendarAutoUpdate();
       stopRosterAutoUpdate();
-
-      // Stop broadcast
-      broadcastManager.stopAll();
-      streamServer.stop();
 
       // NEW: Stop web server
       webServer.stop();

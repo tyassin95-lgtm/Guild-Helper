@@ -97,14 +97,6 @@ const { handleTriviaButtons } = require('../../features/gambling/handlers/trivia
 const { handleStartGamblingRaid } = require('../../features/gambling/commands/startgamblingraid');
 const { handleRaidButtons: handleGamblingRaidButtons } = require('../../features/gambling/handlers/raidButtons');
 
-// Broadcast system imports
-const { handleStartBroadcast } = require('../../features/broadcast/commands/startbroadcast');
-const { handleStopBroadcast } = require('../../features/broadcast/commands/stopbroadcast');
-const { handleAddBroadcaster } = require('../../features/broadcast/commands/addbroadcaster');
-const { handleRemoveBroadcaster } = require('../../features/broadcast/commands/removebroadcaster');
-const { handleListBroadcasters } = require('../../features/broadcast/commands/listbroadcasters');
-const { handleBroadcastStatus } = require('../../features/broadcast/commands/broadcaststatus');
-
 // Wishlist system imports
 const { handleMyWishlist } = require('../../features/wishlist/commands/mywishlist');
 const { handleWishlists } = require('../../features/wishlist/commands/wishlists');
@@ -195,14 +187,6 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'leaderboard')         return handleLeaderboard({ interaction, collections });
       if (name === 'killbias')            return handleKillBias({ interaction, collections });
       if (name === 'startgamblingraid')   return handleStartGamblingRaid({ interaction, collections });
-
-      // Broadcast commands
-      if (name === 'startbroadcast')      return handleStartBroadcast({ interaction, collections, client });
-      if (name === 'stopbroadcast')       return handleStopBroadcast({ interaction, collections, client });
-      if (name === 'addbroadcaster')      return handleAddBroadcaster({ interaction, collections });
-      if (name === 'removebroadcaster')   return handleRemoveBroadcaster({ interaction, collections });
-      if (name === 'listbroadcasters')    return handleListBroadcasters({ interaction, collections });
-      if (name === 'broadcaststatus')     return handleBroadcastStatus({ interaction, collections, client });
 
       // Wishlist commands
       if (name === 'mywishlist')          return handleMyWishlist({ interaction, collections });

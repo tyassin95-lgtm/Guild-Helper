@@ -55,8 +55,6 @@ function getCollections(db = _db) {
     killStats: db.collection('killStats'),
     killBiases: db.collection('killBiases'),
     transferHistory: db.collection('transferHistory'),
-    broadcastSessions: db.collection('broadcastSessions'),
-    broadcastUsers: db.collection('broadcastUsers'),
     wishlistSubmissions: db.collection('wishlistSubmissions'),
     wishlistPanels: db.collection('wishlistPanels'),
     wishlistSettings: db.collection('wishlistSettings'),

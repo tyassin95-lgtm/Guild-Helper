@@ -30,8 +30,6 @@ async function ensureIndexes({
   killStats,
   killBiases,
   transferHistory,
-  broadcastSessions,
-  broadcastUsers,
   wishlistSubmissions,
   wishlistPanels,
   wishlistSettings,
@@ -181,14 +179,6 @@ async function ensureIndexes({
   await transferHistory.createIndex({ guildId: 1, timestamp: -1 });
   await transferHistory.createIndex({ fromUserId: 1, guildId: 1 });
   await transferHistory.createIndex({ toUserId: 1, guildId: 1 });
-
-  await broadcastSessions.createIndex({ guildId: 1 }, { unique: true });
-  await broadcastSessions.createIndex({ active: 1 });
-  await broadcastSessions.createIndex({ sourceChannelId: 1 });
-
-  await broadcastUsers.createIndex({ guildId: 1, userId: 1 }, { unique: true });
-  await broadcastUsers.createIndex({ guildId: 1 });
-  await broadcastUsers.createIndex({ guildId: 1, enabled: 1 });
 
   await wishlistSubmissions.createIndex({ userId: 1, guildId: 1 }, { unique: true });
   await wishlistSubmissions.createIndex({ guildId: 1 });
