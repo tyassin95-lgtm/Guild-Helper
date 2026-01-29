@@ -361,67 +361,6 @@ async function registerSlashCommands(client) {
       ]
     },
     {
-      name: 'startbroadcast',
-      description: 'Admins: Start broadcasting selected users as an audio stream.',
-      default_member_permissions: ADMIN,
-      dm_permission: false,
-      options: [
-        {
-          type: 7,
-          name: 'source_channel',
-          description: 'Voice channel to monitor (leadership channel)',
-          required: true,
-          channel_types: [2]
-        }
-      ]
-    },
-    {
-      name: 'stopbroadcast',
-      description: 'Admins: Stop active broadcast stream.',
-      default_member_permissions: ADMIN,
-      dm_permission: false
-    },
-    {
-      name: 'addbroadcaster',
-      description: 'Admins: Add user to broadcast list (their voice will be streamed).',
-      default_member_permissions: ADMIN,
-      dm_permission: false,
-      options: [
-        {
-          type: 6,
-          name: 'user',
-          description: 'User whose voice should be broadcast',
-          required: true
-        }
-      ]
-    },
-    {
-      name: 'removebroadcaster',
-      description: 'Admins: Remove user from broadcast list.',
-      default_member_permissions: ADMIN,
-      dm_permission: false,
-      options: [
-        {
-          type: 6,
-          name: 'user',
-          description: 'User to remove from broadcast',
-          required: true
-        }
-      ]
-    },
-    {
-      name: 'listbroadcasters',
-      description: 'Admins: View all users being broadcast.',
-      default_member_permissions: ADMIN,
-      dm_permission: false
-    },
-    {
-      name: 'broadcaststatus',
-      description: 'Admins: View current broadcast status and stream URL.',
-      default_member_permissions: ADMIN,
-      dm_permission: false
-    },
-    {
       name: 'wishlists',
       description: 'Admins: Create an auto-updating wishlist panel in this channel.',
       default_member_permissions: ADMIN,
