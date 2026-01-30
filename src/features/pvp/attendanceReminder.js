@@ -82,9 +82,10 @@ async function checkAndSendReminders(client, collections) {
 
 /**
  * Send DM reminders to users who haven't marked attendance for an event
+ * Only reminds users who have submitted their party info
  */
 async function sendRemindersForEvent(client, event, collections) {
-  const { pvpEvents } = collections;
+  const { pvpEvents, partyPlayers } = collections;
 
   try {
     const guild = await client.guilds.fetch(event.guildId);
@@ -93,8 +94,24 @@ async function sendRemindersForEvent(client, event, collections) {
       return;
     }
 
-    // Fetch all guild members
-    await guild.members.fetch();
+    // Get users who have complete party info (weapon1, weapon2, cp)
+    const playersWithInfo = await partyPlayers.find({
+      guildId: event.guildId,
+      weapon1: { $exists: true },
+      weapon2: { $exists: true },
+      cp: { $exists: true }
+    }).toArray();
+
+    const usersWithPartyInfo = new Set(playersWithInfo.map(p => p.userId));
+
+    if (usersWithPartyInfo.size === 0) {
+      console.log(`⚠️ No users with party info for guild ${event.guildId} - skipping reminders`);
+      await pvpEvents.updateOne(
+        { _id: event._id },
+        { $set: { remindersSent: true } }
+      );
+      return;
+    }
 
     // Get users who have already marked attendance (any status)
     const rsvpAttending = event.rsvpAttending || [];
@@ -107,15 +124,11 @@ async function sendRemindersForEvent(client, event, collections) {
       ...rsvpNotAttending
     ]);
 
-    // Find human members who haven't responded
-    const needsReminder = guild.members.cache.filter(member => {
-      if (member.user.bot) return false;
-      return !respondedUsers.has(member.id);
-    });
+    // Find users with party info who haven't responded
+    const needsReminderIds = [...usersWithPartyInfo].filter(userId => !respondedUsers.has(userId));
 
-    if (needsReminder.size === 0) {
-      console.log(`✅ All members have responded to event ${event._id}`);
-      // Mark reminders as sent even if no one needed reminding
+    if (needsReminderIds.length === 0) {
+      console.log(`✅ All users with party info have responded to event ${event._id}`);
       await pvpEvents.updateOne(
         { _id: event._id },
         { $set: { remindersSent: true } }
@@ -123,7 +136,22 @@ async function sendRemindersForEvent(client, event, collections) {
       return;
     }
 
-    console.log(`📨 Sending reminders to ${needsReminder.size} member(s) for event ${event._id}`);
+    // Fetch the members who need reminders
+    await guild.members.fetch();
+    const needsReminder = needsReminderIds
+      .map(userId => guild.members.cache.get(userId))
+      .filter(member => member && !member.user.bot);
+
+    if (needsReminder.length === 0) {
+      console.log(`✅ All users with party info have responded to event ${event._id}`);
+      await pvpEvents.updateOne(
+        { _id: event._id },
+        { $set: { remindersSent: true } }
+      );
+      return;
+    }
+
+    console.log(`📨 Sending reminders to ${needsReminder.length} member(s) with party info for event ${event._id}`);
 
     // Create the reminder embed
     const reminderEmbed = createReminderEmbed(event, guild);
@@ -131,7 +159,7 @@ async function sendRemindersForEvent(client, event, collections) {
     let successCount = 0;
     let failCount = 0;
 
-    for (const member of needsReminder.values()) {
+    for (const member of needsReminder) {
       try {
         await member.send({ embeds: [reminderEmbed] });
         successCount++;
