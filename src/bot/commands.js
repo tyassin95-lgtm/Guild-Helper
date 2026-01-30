@@ -78,8 +78,8 @@ async function registerSlashCommands(client) {
       dm_permission: false
     },
     {
-      name: 'screenshot',
-      description: 'Admins: Manage gear screenshot storage system.',
+      name: 'gearcheck',
+      description: 'Admins: Manage gear check system and posting channel.',
       default_member_permissions: ADMIN,
       dm_permission: false,
       options: [
@@ -89,6 +89,7 @@ async function registerSlashCommands(client) {
           description: 'Action to perform',
           required: true,
           choices: [
+            { name: 'Set Post Channel', value: 'set_post_channel' },
             { name: 'Set Storage Channel', value: 'set_channel' },
             { name: 'Clean Old Storage', value: 'clean_storage' },
             { name: 'Storage Info', value: 'info' }
@@ -97,7 +98,7 @@ async function registerSlashCommands(client) {
         {
           type: 7,
           name: 'channel',
-          description: 'Channel to use for storage (for set_channel)',
+          description: 'Channel to use (for set_post_channel or set_channel)',
           required: false
         },
         {
