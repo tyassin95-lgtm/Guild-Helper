@@ -10,6 +10,7 @@ const { startItemRollAutoUpdate, stopItemRollAutoUpdate } = require('./features/
 const { resumeActivePolls } = require('./features/polls/utils/pollResume');
 const { startPollAutoUpdate, stopPollAutoUpdate } = require('./features/polls/utils/pollAutoUpdate');
 const { startCalendarAutoUpdate, stopCalendarAutoUpdate } = require('./features/pvp/calendar/calendarAutoUpdate');
+const { startAttendanceReminder, stopAttendanceReminder } = require('./features/pvp/attendanceReminder');
 const { startRosterAutoUpdate, stopRosterAutoUpdate } = require('./features/parties/rosterAutoUpdate');
 const { handleGearUpload } = require('./features/parties/handlers/gearUploadHandler');
 const { handleAutoModCheck } = require('./features/automod/handlers/messageHandler');
@@ -58,6 +59,7 @@ const client = new Client({
 
       // Start auto-update tasks
       startCalendarAutoUpdate(client, collections);
+      startAttendanceReminder(client, collections);
       startRosterAutoUpdate(client, collections);
 
       // NEW: Start web server
@@ -120,6 +122,7 @@ const client = new Client({
       stopItemRollAutoUpdate();
       stopPollAutoUpdate();
       stopCalendarAutoUpdate();
+      stopAttendanceReminder();
       stopRosterAutoUpdate();
 
       // NEW: Stop web server
@@ -139,6 +142,7 @@ const client = new Client({
       stopItemRollAutoUpdate();
       stopPollAutoUpdate();
       stopCalendarAutoUpdate();
+      stopAttendanceReminder();
       stopRosterAutoUpdate();
 
       // NEW: Stop web server
