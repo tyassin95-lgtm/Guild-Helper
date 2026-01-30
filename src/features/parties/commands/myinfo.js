@@ -31,9 +31,9 @@ async function handleMyInfo({ interaction, collections }) {
 
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('party_upload_gear')
-      .setLabel('Upload Gear Screenshot')
-      .setStyle(ButtonStyle.Secondary)
+      .setCustomId('party_gear_check')
+      .setLabel('Gear Check (mandatory)')
+      .setStyle(ButtonStyle.Danger)
       .setEmoji('📸')
   );
 

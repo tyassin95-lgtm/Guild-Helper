@@ -4,7 +4,57 @@ const { updatePlayerRole } = require('../roleDetection');
 const { updateGuildRoster } = require('../commands/guildroster');
 
 async function handlePartyModals({ interaction, collections }) {
-  const { partyPlayers, parties } = collections;
+  const { partyPlayers, parties, dmContexts } = collections;
+
+  // Build link modal submission
+  if (interaction.customId === 'party_build_link_modal') {
+    const buildLink = interaction.fields.getTextInputValue('build_link');
+
+    // Get guild context - for DM support
+    let guildId = interaction.guildId;
+    let guild = interaction.guild;
+
+    if (!guildId) {
+      const context = await dmContexts.findOne({
+        userId: interaction.user.id,
+        expiresAt: { $gt: new Date() }
+      });
+
+      if (!context) {
+        return interaction.reply({
+          content: '❌ **This DM link has expired (24 hours)**\n\nPlease return to the server and use `/myinfo` to complete your gear check.',
+          flags: [64]
+        });
+      }
+
+      guildId = context.guildId;
+      guild = await interaction.client.guilds.fetch(guildId).catch(() => null);
+    }
+
+    // Save build link to database
+    await partyPlayers.updateOne(
+      { userId: interaction.user.id, guildId: guildId },
+      { $set: { buildLink, buildLinkUpdatedAt: new Date() } },
+      { upsert: true }
+    );
+
+    // Show proceed button for screenshot upload
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('party_proceed_gear_upload')
+        .setLabel('Upload Gear Screenshot')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('📸')
+    );
+
+    return interaction.reply({
+      content: `✅ **Build link saved!**\n\n🔗 ${buildLink}\n\nNow click the button below to upload your gear screenshot.`,
+      components: [row],
+      flags: [64]
+    });
+  }
 
   // CP modal submission
   if (interaction.customId === 'party_cp_modal') {

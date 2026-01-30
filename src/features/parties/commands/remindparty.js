@@ -1,8 +1,7 @@
-const { PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { createPlayerInfoEmbed } = require('../embed');
+const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 async function handleRemindParty({ interaction, collections }) {
-  const { partyPlayers, guildSettings, dmContexts } = collections;
+  const { partyPlayers, guildSettings } = collections;
 
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
@@ -31,7 +30,7 @@ async function handleRemindParty({ interaction, collections }) {
   });
 
   // Get all players who have complete party info
-  const playersWithInfo = await partyPlayers.find({ 
+  const playersWithInfo = await partyPlayers.find({
     guildId: interaction.guildId,
     weapon1: { $exists: true },
     weapon2: { $exists: true },
@@ -61,40 +60,22 @@ async function handleRemindParty({ interaction, collections }) {
     return interaction.editReply({ content: message });
   }
 
-  // Prepare reminder embed and buttons
+  // Prepare simple reminder embed
   const reminderEmbed = new EmbedBuilder()
     .setColor('#5865F2')
-    .setTitle('⚔️ Party Info Setup Required')
+    .setTitle('⚔️ Party Info Setup Reminder')
     .setDescription(
       `Hello! This is a reminder from **${interaction.guild.name}**.\n\n` +
       `You haven't set up your party information yet! This information is needed for party assignments.\n\n` +
-      `**What you need to provide:**\n` +
+      `**Please use the \`/myinfo\` command in the server to set up your info:**\n\n` +
       `• ⚔️ Primary Weapon\n` +
       `• 🗡️ Secondary Weapon\n` +
-      `• 💪 Combat Power (CP)\n\n` +
-      `**Please use the buttons below to set up your info now!**\n\n` +
+      `• 💪 Combat Power (CP)\n` +
+      `• 📸 Gear Check (mandatory)\n\n` +
       `This will only take a moment and helps us organize our parties better. Thank you! 🎯`
     )
     .setFooter({ text: `Message sent by ${interaction.user.tag}` })
     .setTimestamp();
-
-  const buttonRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('party_set_weapon1')
-      .setLabel('Set Primary Weapon')
-      .setStyle(ButtonStyle.Primary)
-      .setEmoji('⚔️'),
-    new ButtonBuilder()
-      .setCustomId('party_set_weapon2')
-      .setLabel('Set Secondary Weapon')
-      .setStyle(ButtonStyle.Primary)
-      .setEmoji('🗡️'),
-    new ButtonBuilder()
-      .setCustomId('party_set_cp')
-      .setLabel('Set Combat Power')
-      .setStyle(ButtonStyle.Success)
-      .setEmoji('💪')
-  );
 
   // Send DMs with delay
   let successCount = 0;
@@ -103,33 +84,7 @@ async function handleRemindParty({ interaction, collections }) {
 
   for (const member of needsSetup.values()) {
     try {
-      // Get their current info (if any)
-      const playerInfo = await partyPlayers.findOne({
-        userId: member.id,
-        guildId: interaction.guildId
-      });
-
-      const infoEmbed = await createPlayerInfoEmbed(playerInfo, member, collections);
-
-      await member.send({ 
-        embeds: [reminderEmbed, infoEmbed], 
-        components: [buttonRow] 
-      });
-
-      // NEW: Store DM context mapping so we know which guild this DM is for
-      await dmContexts.updateOne(
-        { userId: member.id },
-        { 
-          $set: { 
-            guildId: interaction.guildId,
-            guildName: interaction.guild.name,
-            sentAt: new Date(),
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-          } 
-        },
-        { upsert: true }
-      );
-
+      await member.send({ embeds: [reminderEmbed] });
       successCount++;
 
       // Delay between DMs (1 second) to avoid rate limiting

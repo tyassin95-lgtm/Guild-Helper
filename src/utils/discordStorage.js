@@ -57,7 +57,7 @@ async function getOrCreateStorageChannel(guild, channelId = null) {
         content: '🔒 **Gear Screenshots Storage**\n\n' +
                  'This channel stores gear screenshots for the party system.\n' +
                  '⚠️ **DO NOT DELETE THIS CHANNEL** - It will break all gear links!\n\n' +
-                 'Admins can manage this channel with `/screenshot storage`'
+                 'Admins can manage this channel with `/gearcheck`'
       });
 
       console.log(`✅ Created storage channel: ${storageChannel.id}`);

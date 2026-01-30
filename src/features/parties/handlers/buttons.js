@@ -1,4 +1,4 @@
-const { ActionRowBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { ActionRowBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { WEAPONS } = require('../constants');
 
 async function handlePartyButtons({ interaction, collections }) {
@@ -57,16 +57,37 @@ async function handlePartyButtons({ interaction, collections }) {
     return interaction.showModal(modal);
   }
 
-  // Upload gear screenshot
-  if (interaction.customId === 'party_upload_gear') {
+  // Gear check - show build link modal
+  if (interaction.customId === 'party_gear_check') {
+    const modal = new ModalBuilder()
+      .setCustomId('party_build_link_modal')
+      .setTitle('Gear Check - Build Link');
+
+    const buildLinkInput = new TextInputBuilder()
+      .setCustomId('build_link')
+      .setLabel('Enter your build link')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('https://example.com/your-build')
+      .setRequired(true)
+      .setMinLength(5)
+      .setMaxLength(500);
+
+    const row = new ActionRowBuilder().addComponents(buildLinkInput);
+    modal.addComponents(row);
+
+    return interaction.showModal(modal);
+  }
+
+  // Proceed with gear screenshot upload after build link is set
+  if (interaction.customId === 'party_proceed_gear_upload') {
     await interaction.reply({
       content: '📸 **Upload your gear screenshot:**\n\n' +
                'Please send your gear screenshot as an image in your **next message**.\n\n' +
                '• Accepted formats: PNG, JPG, JPEG, WEBP\n' +
                '• Maximum size: 8MB\n' +
                '• This will be visible in the guild roster\n\n' +
-               '**Send the image now!** (You have 60 seconds)',
-      flags: [64] // Ephemeral flag (64 = MessageFlags.Ephemeral)
+               '**Send the image now!** (You have 2 minutes)',
+      flags: [64]
     });
 
     // Get guild context - for DM support
@@ -74,7 +95,7 @@ async function handlePartyButtons({ interaction, collections }) {
     let guild = interaction.guild;
 
     if (!guildId) {
-      const context = await dmContexts.findOne({ 
+      const context = await dmContexts.findOne({
         userId: interaction.user.id,
         expiresAt: { $gt: new Date() }
       });
@@ -92,15 +113,15 @@ async function handlePartyButtons({ interaction, collections }) {
     // Store upload context with expiration + the channel ID for cleanup
     await dmContexts.updateOne(
       { userId: interaction.user.id },
-      { 
-        $set: { 
+      {
+        $set: {
           type: 'gear_upload',
           guildId: guildId,
           guildName: guild?.name || 'Unknown',
-          channelId: interaction.channelId, // Store channel for cleanup
+          channelId: interaction.channelId,
           sentAt: new Date(),
-          expiresAt: new Date(Date.now() + 60 * 1000) // 60 seconds
-        } 
+          expiresAt: new Date(Date.now() + 2 * 60 * 1000) // 2 minutes
+        }
       },
       { upsert: true }
     );
