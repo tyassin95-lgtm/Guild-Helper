@@ -110,7 +110,7 @@ async function handlePartySelects({ interaction, collections }) {
 
       const embed = await createPlayerInfoEmbed(playerInfo, member, collections);
 
-      const row = new ActionRowBuilder().addComponents(
+      const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId('party_set_weapon1')
           .setLabel('Set Primary Weapon')
@@ -128,6 +128,14 @@ async function handlePartySelects({ interaction, collections }) {
           .setEmoji('💪')
       );
 
+      const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('party_gear_check')
+          .setLabel('Gear Check (mandatory)')
+          .setStyle(ButtonStyle.Danger)
+          .setEmoji('📸')
+      );
+
       // Update guild roster if it exists
       if (guild) {
         const { guildRosters } = collections;
@@ -142,7 +150,7 @@ async function handlePartySelects({ interaction, collections }) {
       return interaction.editReply({
         content: `✅ ${isWeapon1 ? 'Primary' : 'Secondary'} weapon set to **${weapon}**!`,
         embeds: [embed],
-        components: [row]
+        components: [row1, row2]
       });
     } catch (err) {
       console.error('Error in weapon select:', err);
