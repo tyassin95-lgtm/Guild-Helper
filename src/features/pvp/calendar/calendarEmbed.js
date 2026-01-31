@@ -5,7 +5,7 @@
  * Updates every 4 hours
  */
 async function createCalendarMessages(guildId, client, collections) {
-  const { pvpEvents } = collections;
+  const { pvpEvents, staticEvents } = collections;
 
   // Get UK timezone date for "today"
   const now = new Date();
@@ -48,8 +48,14 @@ async function createCalendarMessages(guildId, client, collections) {
     .sort({ eventTime: 1 }) // Sort by time ascending
     .toArray();
 
+  // Fetch static events for this guild
+  const allStaticEvents = await staticEvents.find({ guildId }).toArray();
+
   // Group events by day
   const eventsByDay = groupEventsByDay(events, startDate);
+
+  // Group static events by day of week
+  const staticEventsByDay = groupStaticEventsByDay(allStaticEvents, startDate);
 
   // Calculate date range for title
   const endDisplayDate = new Date(startDate);
@@ -71,17 +77,21 @@ async function createCalendarMessages(guildId, client, collections) {
   const messages = [];
 
   // Header message
-  const headerMessage = 
-    `# 🗓️ PvP Weekly Schedule\n` +
+  const staticCount = allStaticEvents.length;
+  const eventCountText = `**${events.length}** PvP event${events.length !== 1 ? 's' : ''}`;
+  const staticCountText = staticCount > 0 ? ` • **${staticCount}** recurring event${staticCount !== 1 ? 's' : ''}` : '';
+
+  const headerMessage =
+    `# 🗓️ Weekly Schedule\n` +
     `**${startDateStr} - ${endDateStr}**\n\n` +
-    `📊 **${events.length}** event${events.length !== 1 ? 's' : ''} scheduled • 🔄 Updates every 4 hours • Last updated <t:${timestamp}:R>\n` +
+    `📊 ${eventCountText}${staticCountText} • 🔄 Updates every 4 hours • Last updated <t:${timestamp}:R>\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
   messages.push(headerMessage);
 
   // Create one message per day
   for (let i = 0; i < 7; i++) {
-    const dayMessage = buildDayMessage(i, eventsByDay, startDate, guildId);
+    const dayMessage = buildDayMessage(i, eventsByDay, staticEventsByDay, startDate, guildId);
     messages.push(dayMessage);
   }
 
@@ -123,9 +133,40 @@ function groupEventsByDay(events, startDate) {
 }
 
 /**
+ * Group static events by day index based on their day of week
+ * Static events repeat weekly, so we match them to the appropriate day
+ */
+function groupStaticEventsByDay(staticEvents, startDate) {
+  const grouped = {
+    0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []
+  };
+
+  for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + dayIndex);
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 6 = Saturday
+
+    // Find static events that occur on this day of week
+    for (const event of staticEvents) {
+      if (event.dayOfWeek === dayOfWeek) {
+        grouped[dayIndex].push(event);
+      }
+    }
+
+    // Sort static events by time
+    grouped[dayIndex].sort((a, b) => {
+      if (a.hour !== b.hour) return a.hour - b.hour;
+      return a.minute - b.minute;
+    });
+  }
+
+  return grouped;
+}
+
+/**
  * Build a single day's message
  */
-function buildDayMessage(dayIndex, eventsByDay, startDate, guildId) {
+function buildDayMessage(dayIndex, eventsByDay, staticEventsByDay, startDate, guildId) {
   const eventTypeEmojis = {
     siege: '🏰',
     riftstone: '💎',
@@ -161,8 +202,10 @@ function buildDayMessage(dayIndex, eventsByDay, startDate, guildId) {
   let content = `**📅 ${dayName}, ${monthName} ${dayNum}${todayLabel}**\n`;
 
   const dayEvents = eventsByDay[dayIndex];
+  const dayStaticEvents = staticEventsByDay[dayIndex] || [];
+  const hasEvents = dayEvents.length > 0 || dayStaticEvents.length > 0;
 
-  if (dayEvents.length === 0) {
+  if (!hasEvents) {
     // No events for this day
     content += `*No events scheduled*`;
   } else {
@@ -223,6 +266,32 @@ function buildDayMessage(dayIndex, eventsByDay, startDate, guildId) {
       // Add spacing between events on same day
       if (eventIdx < dayEvents.length - 1) {
         content += `\n`;
+      }
+    }
+
+    // Add static events after PvP events
+    if (dayStaticEvents.length > 0) {
+      // Add spacing if there were PvP events
+      if (dayEvents.length > 0) {
+        content += `\n\n`;
+      }
+
+      for (let staticIdx = 0; staticIdx < dayStaticEvents.length; staticIdx++) {
+        const staticEvent = dayStaticEvents[staticIdx];
+
+        // Calculate the timestamp for this static event on this specific day
+        const eventDate = new Date(date);
+        eventDate.setHours(staticEvent.hour, staticEvent.minute, 0, 0);
+        const timestamp = Math.floor(eventDate.getTime() / 1000);
+        const timeDisplay = `<t:${timestamp}:t>`;
+
+        content += `📌 **${timeDisplay}** • ${staticEvent.title}\n`;
+        content += `  └─ *Recurring weekly event*\n`;
+
+        // Add spacing between static events
+        if (staticIdx < dayStaticEvents.length - 1) {
+          content += `\n`;
+        }
       }
     }
   }

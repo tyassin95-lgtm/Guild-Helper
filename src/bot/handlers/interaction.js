@@ -23,6 +23,11 @@ const { handlePvPButtons } = require('../../features/pvp/handlers/buttons');
 const { handlePvPSelects } = require('../../features/pvp/handlers/selects');
 const { handlePvPModals } = require('../../features/pvp/handlers/modals');
 
+// Static Event imports
+const { handleStaticEvent } = require('../../features/staticevents/commands/staticevent');
+const { handleStaticEventModals } = require('../../features/staticevents/handlers/modals');
+const { handleStaticEventSelects } = require('../../features/staticevents/handlers/selects');
+
 // Event Party imports
 const {
   handleCancelParties
@@ -147,6 +152,7 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'pvpcalendar') return handlePvPCalendar({ interaction, collections });
       if (name === 'resetbonuses') return handleResetBonuses({ interaction, collections });
       if (name === 'pvpcodemanagers') return handlePvPCodeManagers({ interaction, collections });
+      if (name === 'staticevent') return handleStaticEvent({ interaction, collections });
       if (name === 'itemroll')    return handleItemRoll({ interaction, collections });
 
       // Raid commands
@@ -387,6 +393,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
         }
         return handleApplicationSelects({ interaction, collections });
       }
+
+      // Static Event selects
+      if (interaction.customId.startsWith('static_event_')) {
+        return handleStaticEventSelects({ interaction, collections });
+      }
     }
 
     // User Select Menu Interactions
@@ -459,6 +470,11 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
           return handleAnswerSubmit({ interaction, collections });
         }
         return handleApplicationModals({ interaction, collections });
+      }
+
+      // Static Event modals
+      if (interaction.customId.startsWith('static_event_')) {
+        return handleStaticEventModals({ interaction, collections });
       }
     }
 

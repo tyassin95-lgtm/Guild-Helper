@@ -39,7 +39,8 @@ async function ensureIndexes({
   automodLogs,
   automodWarnings,
   messageTranslations,
-  eventParties
+  eventParties,
+  staticEvents
 }) {
   await guildSettings.createIndex({ guildId: 1 }, { unique: true });
 
@@ -226,6 +227,11 @@ async function ensureIndexes({
   await eventParties.createIndex({ status: 1 });
   await eventParties.createIndex({ approved: 1 });
   await eventParties.createIndex({ createdAt: -1 });
+
+  // Static Events indexes
+  await staticEvents.createIndex({ guildId: 1 });
+  await staticEvents.createIndex({ guildId: 1, dayOfWeek: 1 });
+  await staticEvents.createIndex({ createdAt: -1 });
 
   console.log('All indexes created successfully');
 }
