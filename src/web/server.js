@@ -211,6 +211,36 @@ class WebServer {
       // Fetch guild
       const guild = await this.client.guilds.fetch(event.guildId);
 
+      // Enrich formation data with avatars
+      const enrichedFormation = { ...formation };
+
+      if (enrichedFormation.processedParties) {
+        enrichedFormation.processedParties = await Promise.all(
+          enrichedFormation.processedParties.map(async (party) => ({
+            ...party,
+            members: await Promise.all((party.members || []).map(async (member) => {
+              const discordMember = await guild.members.fetch(member.userId).catch(() => null);
+              return {
+                ...member,
+                avatarUrl: discordMember?.user?.displayAvatarURL({ size: 64, format: 'png' }) || null
+              };
+            }))
+          }))
+        );
+      }
+
+      if (enrichedFormation.availableMembers) {
+        enrichedFormation.availableMembers = await Promise.all(
+          enrichedFormation.availableMembers.map(async (member) => {
+            const discordMember = await guild.members.fetch(member.userId).catch(() => null);
+            return {
+              ...member,
+              avatarUrl: discordMember?.user?.displayAvatarURL({ size: 64, format: 'png' }) || null
+            };
+          })
+        );
+      }
+
       // Render the party editor page
       res.render('party-editor', {
         token: req.params.token,
@@ -219,7 +249,7 @@ class WebServer {
         eventType: event.eventType,
         eventLocation: event.location,
         eventTime: event.eventTime,
-        formation: JSON.stringify(formation),
+        formation: JSON.stringify(enrichedFormation),
         summary: JSON.stringify(formation.summary)
       });
 
@@ -537,13 +567,14 @@ class WebServer {
       // Fetch guild
       const guild = await this.client.guilds.fetch(guildId);
 
-      // Enrich party members and available players with display names
+      // Enrich party members and available players with display names and avatars
       const enrichedParties = await Promise.all(allParties.map(async (party) => {
         const enrichedMembers = await Promise.all((party.members || []).map(async (member) => {
           const discordMember = await guild.members.fetch(member.userId).catch(() => null);
           return {
             ...member,
-            displayName: discordMember?.displayName || member.displayName || 'Unknown'
+            displayName: discordMember?.displayName || member.displayName || 'Unknown',
+            avatarUrl: discordMember?.user?.displayAvatarURL({ size: 64, format: 'png' }) || null
           };
         }));
         return {
@@ -557,6 +588,7 @@ class WebServer {
         return {
           userId: player.userId,
           displayName: discordMember?.displayName || 'Unknown',
+          avatarUrl: discordMember?.user?.displayAvatarURL({ size: 64, format: 'png' }) || null,
           weapon1: player.weapon1,
           weapon2: player.weapon2,
           role: player.role || 'dps',
@@ -577,7 +609,8 @@ class WebServer {
             const discordMember = await guild.members.fetch(member.userId).catch(() => null);
             return {
               ...member,
-              displayName: discordMember?.displayName || member.displayName || 'Unknown'
+              displayName: discordMember?.displayName || member.displayName || 'Unknown',
+              avatarUrl: discordMember?.user?.displayAvatarURL({ size: 64, format: 'png' }) || null
             };
           }))
         } : null)
