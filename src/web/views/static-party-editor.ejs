@@ -1111,6 +1111,23 @@
         return;
       }
 
+      // Special case: reordering within the same party
+      if (draggedSource === 'party' && targetSource === 'party' && 
+          draggedPartyIndex === targetPartyIndex) {
+        const party = parties[targetPartyIndex];
+        const [movedMember] = party.members.splice(draggedMemberIndex, 1);
+        // Adjust target index if we're moving down (since we removed an element before the target)
+        const adjustedTargetIndex = draggedMemberIndex < targetMemberIndex 
+          ? targetMemberIndex - 1 
+          : targetMemberIndex;
+        party.members.splice(adjustedTargetIndex, 0, movedMember);
+        
+        hasUnsavedChanges = true;
+        resetDragState();
+        setTimeout(render, 0);
+        return;
+      }
+
       // Remove both globally to avoid duplicates
       removeMemberByUserId(draggedUserId);
       removeMemberByUserId(targetMember.userId);
