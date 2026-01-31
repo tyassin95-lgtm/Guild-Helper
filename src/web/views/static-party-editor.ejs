@@ -931,7 +931,7 @@
              ondragover="handleMemberDragOver(event)"
              ondrop="handleMemberDrop(event, '${source}', ${partyIndex}, ${memberIndex})"
              ondragleave="handleMemberDragLeave(event)">
-          <img class="member-avatar" src="${avatarUrl}" crossorigin="anonymous" alt="" onerror="this.src='${DEFAULT_AVATAR}'">
+          <img class="member-avatar" src="${avatarUrl}" alt="" onerror="this.src='${DEFAULT_AVATAR}'">
           <div class="member-info">
             <div class="member-name">${leaderBadge}${member.displayName}</div>
             <div class="member-details">${member.weapon1 || '?'}/${member.weapon2 || '?'}</div>
@@ -963,7 +963,7 @@
                data-user-id="${member.userId}"
                ondragstart="handleDragStart(event, 'available', null, ${index})"
                ondragend="handleDragEnd(event)">
-            <img class="member-avatar" src="${avatarUrl}" crossorigin="anonymous" alt="" onerror="this.src='${DEFAULT_AVATAR}'">
+            <img class="member-avatar" src="${avatarUrl}" alt="" onerror="this.src='${DEFAULT_AVATAR}'">
             <div class="member-info">
               <div class="member-name">${member.displayName}</div>
               <div class="member-details">${member.weapon1 || '?'}/${member.weapon2 || '?'}</div>
@@ -1000,7 +1000,7 @@
                data-user-id="${member.userId}"
                ondragstart="handleDragStart(event, 'reserve', null, ${index})"
                ondragend="handleDragEnd(event)">
-            <img class="member-avatar" src="${avatarUrl}" crossorigin="anonymous" alt="" onerror="this.src='${DEFAULT_AVATAR}'">
+            <img class="member-avatar" src="${avatarUrl}" alt="" onerror="this.src='${DEFAULT_AVATAR}'">
             <div class="member-info">
               <div class="member-name">${member.displayName}</div>
               <div class="member-details">${member.weapon1 || '?'}/${member.weapon2 || '?'}</div>
@@ -1380,11 +1380,9 @@
     }
 
     async function savePartiesImage() {
-      const target = document.querySelector(".parties-section");
+      const target = document.querySelector(".parties-section"); // EXACT editor layout
 
       const canvas = await html2canvas(target, {
-        useCORS: true,
-        allowTaint: false,
         backgroundColor: "#0a0e17",
         scale: 2
       });
