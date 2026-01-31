@@ -1111,20 +1111,31 @@
         return;
       }
 
-      // Remove both globally to avoid duplicates
+      // Detect downward drag inside same party
+      let adjustedTargetIndex = targetMemberIndex;
+      if (
+        draggedSource === 'party' &&
+        targetSource === 'party' &&
+        draggedPartyIndex === targetPartyIndex &&
+        draggedMemberIndex < targetMemberIndex
+      ) {
+        adjustedTargetIndex = targetMemberIndex - 1;
+      }
+
+      // Remove both globally
       removeMemberByUserId(draggedUserId);
       removeMemberByUserId(targetMember.userId);
 
-      // Insert dragged member into target location
+      // Insert dragged member
       if (targetSource === 'party') {
-        parties[targetPartyIndex].members.splice(targetMemberIndex, 0, draggedMember);
+        parties[targetPartyIndex].members.splice(adjustedTargetIndex, 0, draggedMember);
       } else if (targetSource === 'available') {
         availableMembers.splice(targetMemberIndex, 0, draggedMember);
       } else if (targetSource === 'reserve') {
         reserveMembers.splice(targetMemberIndex, 0, draggedMember);
       }
 
-      // Insert target member into original dragged location
+      // Insert target member back into original slot
       if (draggedSource === 'party') {
         parties[draggedPartyIndex].members.splice(draggedMemberIndex, 0, targetMember);
       } else if (draggedSource === 'available') {
