@@ -72,7 +72,7 @@ async function handleStaticEventModals({ interaction, collections }) {
     const calendar = await pvpCalendars.findOne({ guildId: interaction.guildId });
     if (calendar) {
       try {
-        await updateCalendar(interaction.guildId, interaction.client, collections);
+        await updateCalendar(interaction.client, interaction.guildId, collections);
       } catch (error) {
         console.error('Failed to update calendar after static event creation:', error);
       }
