@@ -110,19 +110,15 @@ async function handlePvPModals({ interaction, collections }) {
     const isFirstAttendee = !event.attendees || event.attendees.length === 0;
 
     // Use atomic operation to add user to attendees (prevents race conditions)
+    // Note: We keep the user's RSVP status as a record (no $pull)
     const updateResult = await pvpEvents.updateOne(
-      { 
+      {
         _id: new ObjectId(eventId),
         attendees: { $ne: interaction.user.id },
         closed: false
       },
-      { 
-        $push: { attendees: interaction.user.id },
-        $pull: {
-          rsvpAttending: interaction.user.id,
-          rsvpNotAttending: interaction.user.id,
-          rsvpMaybe: interaction.user.id
-        }
+      {
+        $push: { attendees: interaction.user.id }
       }
     );
 
@@ -231,15 +227,11 @@ async function handlePvPModals({ interaction, collections }) {
       const isFirstAttendee = !event.attendees || event.attendees.length === 0;
 
       // Add attendance for the user
+      // Note: We keep the user's RSVP status as a record (no $pull)
       await pvpEvents.updateOne(
         { _id: new ObjectId(eventId) },
-        { 
-          $push: { attendees: userId },
-          $pull: {
-            rsvpAttending: userId,
-            rsvpNotAttending: userId,
-            rsvpMaybe: userId
-          }
+        {
+          $push: { attendees: userId }
         }
       );
 
