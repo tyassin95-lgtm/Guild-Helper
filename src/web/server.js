@@ -6,6 +6,11 @@ const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
 const { EmbedBuilder } = require('discord.js');
 
+// Import roster and embed update functions
+const { updateGuildRoster } = require('../features/parties/commands/guildroster');
+const { updateEventEmbed } = require('../features/pvp/embed');
+const { uploadToDiscordStorage } = require('../utils/discordStorage');
+
 class WebServer {
   constructor() {
     this.app = express();
@@ -242,6 +247,11 @@ class WebServer {
     // API: Update wishlist
     this.app.post('/api/profile/:token/update-wishlist', async (req, res) => {
       await this.handleUpdateProfileWishlist(req, res);
+    });
+
+    // API: Upload gear screenshot
+    this.app.post('/api/profile/:token/upload-gear', async (req, res) => {
+      await this.handleUploadGearScreenshot(req, res);
     });
 
     // 404 handler
@@ -1086,6 +1096,19 @@ class WebServer {
         );
       }
 
+      // Trigger roster update if roster exists for this guild
+      try {
+        const rosterRecord = await this.collections.guildRosters.findOne({ guildId });
+        if (rosterRecord && rosterRecord.channelId) {
+          const guild = await this.client.guilds.fetch(guildId);
+          await updateGuildRoster(guild, rosterRecord.channelId, this.collections);
+          console.log(`✅ Roster updated after profile change for user ${userId}`);
+        }
+      } catch (rosterErr) {
+        console.error('Failed to update roster after profile change:', rosterErr);
+        // Don't fail the request if roster update fails
+      }
+
       res.json({ success: true, message: 'Profile updated successfully' });
 
     } catch (error) {
@@ -1156,11 +1179,12 @@ class WebServer {
         events: enrichedEvents,
         staticEvents: staticEvents.map(se => ({
           _id: se._id.toString(),
-          eventType: se.eventType,
-          location: se.location,
+          title: se.title,
           dayOfWeek: se.dayOfWeek,
-          time: se.time,
-          timezone: se.timezone
+          dayName: se.dayName,
+          timeDisplay: se.timeDisplay,
+          hour: se.hour,
+          minute: se.minute
         }))
       });
 
@@ -1227,6 +1251,20 @@ class WebServer {
         { _id: new ObjectId(eventId) },
         { $addToSet: { [fieldMap[status]]: userId } }
       );
+
+      // Trigger embed update
+      try {
+        const updatedEvent = await this.collections.pvpEvents.findOne({ _id: new ObjectId(eventId) });
+        if (updatedEvent) {
+          // Create a mock interaction object with the client for embed update
+          const mockInteraction = { client: this.client };
+          await updateEventEmbed(mockInteraction, updatedEvent, this.collections);
+          console.log(`✅ PvP event embed updated after RSVP change for event ${eventId}`);
+        }
+      } catch (embedErr) {
+        console.error('Failed to update event embed after RSVP:', embedErr);
+        // Don't fail the request if embed update fails
+      }
 
       res.json({ success: true, message: 'RSVP updated successfully' });
 
@@ -1311,6 +1349,18 @@ class WebServer {
         },
         { upsert: true }
       );
+
+      // Trigger embed update
+      try {
+        const updatedEvent = await this.collections.pvpEvents.findOne({ _id: new ObjectId(eventId) });
+        if (updatedEvent) {
+          const mockInteraction = { client: this.client };
+          await updateEventEmbed(mockInteraction, updatedEvent, this.collections);
+          console.log(`✅ PvP event embed updated after attendance for event ${eventId}`);
+        }
+      } catch (embedErr) {
+        console.error('Failed to update event embed after attendance:', embedErr);
+      }
 
       res.json({ success: true, message: 'Attendance recorded successfully' });
 
@@ -1433,6 +1483,125 @@ class WebServer {
     } catch (error) {
       console.error('Error updating wishlist:', error);
       res.status(500).json({ error: 'Failed to update wishlist' });
+    }
+  }
+
+  /**
+   * Handle gear screenshot upload API request
+   */
+  async handleUploadGearScreenshot(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+      const { imageData } = req.body;
+
+      if (!imageData) {
+        return res.status(400).json({ error: 'No image data provided' });
+      }
+
+      // Validate base64 image data
+      const matches = imageData.match(/^data:image\/(png|jpg|jpeg|gif|webp);base64,(.+)$/);
+      if (!matches) {
+        return res.status(400).json({ error: 'Invalid image format. Please use PNG, JPG, JPEG, GIF, or WEBP.' });
+      }
+
+      const extension = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+      const base64Data = matches[2];
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      // Check file size (max 8MB)
+      if (buffer.length > 8 * 1024 * 1024) {
+        return res.status(400).json({ error: 'Image is too large. Maximum size is 8MB.' });
+      }
+
+      // Get guild and storage channel
+      const guild = await this.client.guilds.fetch(guildId);
+
+      // Get or create storage channel
+      const STORAGE_CHANNEL_NAME = 'gear-screenshots-storage';
+      let storageChannel = guild.channels.cache.find(
+        ch => ch.name === STORAGE_CHANNEL_NAME && ch.type === 0 // GuildText
+      );
+
+      if (!storageChannel) {
+        // Try to create storage channel
+        try {
+          storageChannel = await guild.channels.create({
+            name: STORAGE_CHANNEL_NAME,
+            type: 0, // GuildText
+            topic: 'Bot-only storage for gear screenshots. DO NOT DELETE THIS CHANNEL!',
+            permissionOverwrites: [
+              {
+                id: guild.id,
+                deny: ['ViewChannel']
+              },
+              {
+                id: this.client.user.id,
+                allow: ['ViewChannel', 'SendMessages', 'AttachFiles', 'EmbedLinks', 'ReadMessageHistory', 'ManageMessages']
+              }
+            ]
+          });
+        } catch (createErr) {
+          console.error('Failed to create storage channel:', createErr);
+          return res.status(500).json({ error: 'Could not create storage channel. Bot may be missing permissions.' });
+        }
+      }
+
+      // Upload to storage channel
+      const fileName = `gear_${userId}_${Date.now()}.${extension}`;
+      const storedMessage = await storageChannel.send({
+        content: `Gear for <@${userId}> | Uploaded: <t:${Math.floor(Date.now() / 1000)}:F>`,
+        files: [{
+          attachment: buffer,
+          name: fileName
+        }]
+      });
+
+      const attachment = storedMessage.attachments.first();
+      if (!attachment) {
+        return res.status(500).json({ error: 'Failed to upload screenshot' });
+      }
+
+      const screenshotUrl = attachment.url;
+
+      // Update player info with new screenshot
+      await this.collections.partyPlayers.updateOne(
+        { userId, guildId },
+        {
+          $set: {
+            gearScreenshotUrl: screenshotUrl,
+            gearScreenshotUpdatedAt: new Date(),
+            updatedAt: new Date()
+          }
+        },
+        { upsert: true }
+      );
+
+      // Trigger roster update
+      try {
+        const rosterRecord = await this.collections.guildRosters.findOne({ guildId });
+        if (rosterRecord && rosterRecord.channelId) {
+          await updateGuildRoster(guild, rosterRecord.channelId, this.collections);
+          console.log(`Roster updated after gear screenshot upload for user ${userId}`);
+        }
+      } catch (rosterErr) {
+        console.error('Failed to update roster after gear upload:', rosterErr);
+      }
+
+      res.json({
+        success: true,
+        message: 'Gear screenshot uploaded successfully',
+        screenshotUrl
+      });
+
+    } catch (error) {
+      console.error('Error uploading gear screenshot:', error);
+      res.status(500).json({ error: 'Failed to upload gear screenshot' });
     }
   }
 
