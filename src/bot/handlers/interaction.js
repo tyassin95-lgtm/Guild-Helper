@@ -91,6 +91,9 @@ const { handleTriviaButtons } = require('../../features/gambling/handlers/trivia
 const { handleStartGamblingRaid } = require('../../features/gambling/commands/startgamblingraid');
 const { handleRaidButtons: handleGamblingRaidButtons } = require('../../features/gambling/handlers/raidButtons');
 
+// Profile system imports
+const { handleProfile } = require('../../features/profile/commands/profile');
+
 // Wishlist system imports
 const { handleMyWishlist } = require('../../features/wishlist/commands/mywishlist');
 const { handleWishlists } = require('../../features/wishlist/commands/wishlists');
@@ -122,6 +125,9 @@ const { handleAutoMod } = require('../../features/automod/commands/automod');
 
 // Safe execution wrapper
 const { safeExecute } = require('../../utils/safeExecute');
+
+// Web server for profile tokens
+const { webServer } = require('../../web/server');
 
 async function onInteractionCreate({ client, interaction, db, collections }) {
   // Wrap everything in safeExecute for automatic error handling
@@ -182,6 +188,9 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
       if (name === 'leaderboard')         return handleLeaderboard({ interaction, collections });
       if (name === 'killbias')            return handleKillBias({ interaction, collections });
       if (name === 'startgamblingraid')   return handleStartGamblingRaid({ interaction, collections });
+
+      // Profile command
+      if (name === 'profile')             return handleProfile({ interaction, collections, webServer });
 
       // Wishlist commands
       if (name === 'mywishlist')          return handleMyWishlist({ interaction, collections });

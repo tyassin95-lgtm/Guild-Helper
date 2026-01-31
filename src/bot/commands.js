@@ -618,6 +618,11 @@ async function registerSlashCommands(client) {
       dm_permission: false
     },
     {
+      name: 'profile',
+      description: 'Open your personal profile dashboard to manage info, events, and wishlist.',
+      dm_permission: false
+    },
+    {
       name: 'gamblingbalance',
       description: 'Check your or another user\'s gambling balance.',
       dm_permission: false,

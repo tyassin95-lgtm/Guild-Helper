@@ -12,6 +12,7 @@ class WebServer {
     this.port = process.env.WEB_PORT || 3001; // Changed to 3001 to avoid conflict with StreamServer (port 3000)
     this.activeTokens = new Map(); // In-memory token storage
     this.staticPartyTokens = new Map(); // Tokens for static party editor
+    this.profileTokens = new Map(); // Tokens for profile dashboard
     this.collections = null;
     this.client = null;
     this.server = null;
@@ -121,6 +122,45 @@ class WebServer {
   }
 
   /**
+   * Generate a secure token for profile dashboard access
+   */
+  generateProfileToken(guildId, userId, expiresIn = 3600000) { // 1 hour default
+    const token = crypto.randomBytes(32).toString('hex');
+
+    this.profileTokens.set(token, {
+      guildId,
+      userId,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + expiresIn
+    });
+
+    // Auto-cleanup expired token
+    setTimeout(() => {
+      this.profileTokens.delete(token);
+    }, expiresIn);
+
+    return token;
+  }
+
+  /**
+   * Validate profile token and return associated data
+   */
+  validateProfileToken(token) {
+    const tokenData = this.profileTokens.get(token);
+
+    if (!tokenData) {
+      return { valid: false, error: 'Token not found' };
+    }
+
+    if (tokenData.expiresAt < Date.now()) {
+      this.profileTokens.delete(token);
+      return { valid: false, error: 'Token expired' };
+    }
+
+    return { valid: true, data: tokenData };
+  }
+
+  /**
    * Register all routes
    */
   registerRoutes() {
@@ -162,6 +202,46 @@ class WebServer {
     // API: Save static party changes
     this.app.post('/api/static-party-editor/:token/save', async (req, res) => {
       await this.handleSaveStaticParties(req, res);
+    });
+
+    // Profile dashboard page
+    this.app.get('/profile/:token', async (req, res) => {
+      await this.handleProfilePage(req, res);
+    });
+
+    // API: Get profile data
+    this.app.get('/api/profile/:token/data', async (req, res) => {
+      await this.handleGetProfileData(req, res);
+    });
+
+    // API: Update player info
+    this.app.post('/api/profile/:token/update-info', async (req, res) => {
+      await this.handleUpdatePlayerInfo(req, res);
+    });
+
+    // API: Get events data
+    this.app.get('/api/profile/:token/events', async (req, res) => {
+      await this.handleGetProfileEvents(req, res);
+    });
+
+    // API: Update event RSVP
+    this.app.post('/api/profile/:token/event-rsvp', async (req, res) => {
+      await this.handleProfileEventRsvp(req, res);
+    });
+
+    // API: Record event attendance
+    this.app.post('/api/profile/:token/event-attendance', async (req, res) => {
+      await this.handleProfileEventAttendance(req, res);
+    });
+
+    // API: Get wishlist data
+    this.app.get('/api/profile/:token/wishlist', async (req, res) => {
+      await this.handleGetProfileWishlist(req, res);
+    });
+
+    // API: Update wishlist
+    this.app.post('/api/profile/:token/update-wishlist', async (req, res) => {
+      await this.handleUpdateProfileWishlist(req, res);
     });
 
     // 404 handler
@@ -824,6 +904,535 @@ class WebServer {
     } catch (error) {
       console.error('Error saving static parties:', error);
       res.status(500).json({ error: 'Failed to save parties' });
+    }
+  }
+
+  /**
+   * Handle profile dashboard page request
+   */
+  async handleProfilePage(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).render('error', {
+          message: validation.error === 'Token expired'
+            ? 'This link has expired (links are valid for 1 hour)'
+            : 'Invalid or expired link'
+        });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Fetch guild
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId).catch(() => null);
+
+      // Render the profile page
+      res.render('profile-dashboard', {
+        token: req.params.token,
+        guildId,
+        userId,
+        guildName: guild.name,
+        userName: member?.displayName || 'Unknown User',
+        userAvatar: member?.user?.displayAvatarURL({ size: 128, format: 'png' }) || null
+      });
+
+    } catch (error) {
+      console.error('Error loading profile page:', error);
+      res.status(500).render('error', {
+        message: 'Failed to load profile dashboard. Please try again.'
+      });
+    }
+  }
+
+  /**
+   * Handle get profile data API request
+   */
+  async handleGetProfileData(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Get player info
+      const playerInfo = await this.collections.partyPlayers.findOne({
+        userId,
+        guildId
+      });
+
+      // Get party assignment
+      const party = await this.collections.parties.findOne({
+        guildId,
+        'members.userId': userId,
+        isReserve: { $ne: true }
+      });
+
+      // Get PvP bonuses
+      const bonuses = await this.collections.pvpBonuses.findOne({
+        userId,
+        guildId
+      });
+
+      // Get activity ranking
+      const activity = await this.collections.pvpActivityRanking.findOne({
+        userId,
+        guildId
+      });
+
+      // Get guild settings for weekly total
+      const guildSettings = await this.collections.guildSettings.findOne({
+        guildId
+      });
+
+      // Get user avatar
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId).catch(() => null);
+
+      res.json({
+        playerInfo: playerInfo || {},
+        partyNumber: party?.partyNumber || null,
+        bonuses: bonuses || { bonusCount: 0, eventsAttended: 0 },
+        totalEvents: activity?.totalEvents || 0,
+        weeklyTotalEvents: guildSettings?.weeklyTotalEvents || 0,
+        userName: member?.displayName || 'Unknown',
+        userAvatar: member?.user?.displayAvatarURL({ size: 128, format: 'png' }) || null
+      });
+
+    } catch (error) {
+      console.error('Error getting profile data:', error);
+      res.status(500).json({ error: 'Failed to get profile data' });
+    }
+  }
+
+  /**
+   * Handle update player info API request
+   */
+  async handleUpdatePlayerInfo(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+      const { weapon1, weapon2, cp, buildLink } = req.body;
+
+      // Validate CP
+      if (cp !== undefined && (isNaN(cp) || cp < 0 || cp > 10000000)) {
+        return res.status(400).json({ error: 'Invalid CP value (0-10,000,000)' });
+      }
+
+      // Validate build link
+      if (buildLink !== undefined && buildLink.length > 500) {
+        return res.status(400).json({ error: 'Build link too long (max 500 characters)' });
+      }
+
+      // Determine role based on weapons
+      const determineRole = (w1, w2) => {
+        const weapons = [w1, w2].filter(Boolean);
+        if (weapons.includes('SnS')) return 'tank';
+        if ((weapons.includes('Orb') && weapons.includes('Wand')) ||
+            (weapons.includes('Wand') && weapons.includes('Bow'))) {
+          return 'healer';
+        }
+        return 'dps';
+      };
+
+      const updateData = {
+        updatedAt: new Date()
+      };
+
+      if (weapon1 !== undefined) updateData.weapon1 = weapon1;
+      if (weapon2 !== undefined) updateData.weapon2 = weapon2;
+      if (cp !== undefined) updateData.cp = parseInt(cp, 10);
+      if (buildLink !== undefined) {
+        updateData.buildLink = buildLink;
+        updateData.buildLinkUpdatedAt = new Date();
+      }
+
+      // Calculate role if weapons changed
+      if (weapon1 !== undefined || weapon2 !== undefined) {
+        const currentPlayer = await this.collections.partyPlayers.findOne({ userId, guildId });
+        const newW1 = weapon1 !== undefined ? weapon1 : currentPlayer?.weapon1;
+        const newW2 = weapon2 !== undefined ? weapon2 : currentPlayer?.weapon2;
+        updateData.role = determineRole(newW1, newW2);
+      }
+
+      await this.collections.partyPlayers.updateOne(
+        { userId, guildId },
+        { $set: updateData },
+        { upsert: true }
+      );
+
+      // Update party member data if in a party
+      if (updateData.cp !== undefined || updateData.role !== undefined) {
+        await this.collections.parties.updateMany(
+          { guildId, 'members.userId': userId },
+          {
+            $set: {
+              'members.$[elem].cp': updateData.cp,
+              'members.$[elem].role': updateData.role,
+              'members.$[elem].weapon1': updateData.weapon1,
+              'members.$[elem].weapon2': updateData.weapon2
+            }
+          },
+          { arrayFilters: [{ 'elem.userId': userId }] }
+        );
+      }
+
+      res.json({ success: true, message: 'Profile updated successfully' });
+
+    } catch (error) {
+      console.error('Error updating player info:', error);
+      res.status(500).json({ error: 'Failed to update profile' });
+    }
+  }
+
+  /**
+   * Handle get profile events API request
+   */
+  async handleGetProfileEvents(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Get upcoming PvP events (not closed, event time in future or recent past)
+      const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+      const pvpEvents = await this.collections.pvpEvents.find({
+        guildId,
+        eventTime: { $gte: cutoffTime },
+        closed: { $ne: true }
+      }).sort({ eventTime: 1 }).toArray();
+
+      // Get static events
+      const staticEvents = await this.collections.staticEvents.find({
+        guildId,
+        cancelled: { $ne: true }
+      }).toArray();
+
+      // Enrich events with user's signup status
+      const enrichedEvents = pvpEvents.map(event => {
+        let signupStatus = 'none';
+        if (event.rsvpAttending?.includes(userId)) signupStatus = 'attending';
+        else if (event.rsvpNotAttending?.includes(userId)) signupStatus = 'not_attending';
+        else if (event.rsvpMaybe?.includes(userId)) signupStatus = 'maybe';
+
+        const hasRecordedAttendance = event.attendees?.includes(userId);
+
+        // Check if signup deadline passed (20 min before event)
+        const signupDeadline = new Date(event.eventTime.getTime() - 20 * 60 * 1000);
+        const signupsClosed = Date.now() > signupDeadline.getTime();
+
+        return {
+          _id: event._id.toString(),
+          eventType: event.eventType,
+          location: event.location,
+          eventTime: event.eventTime,
+          bonusPoints: event.bonusPoints,
+          message: event.message,
+          imageUrl: event.imageUrl,
+          signupStatus,
+          hasRecordedAttendance,
+          signupsClosed,
+          attendeesCount: event.attendees?.length || 0,
+          rsvpAttendingCount: event.rsvpAttending?.length || 0,
+          rsvpMaybeCount: event.rsvpMaybe?.length || 0,
+          rsvpNotAttendingCount: event.rsvpNotAttending?.length || 0
+        };
+      });
+
+      res.json({
+        events: enrichedEvents,
+        staticEvents: staticEvents.map(se => ({
+          _id: se._id.toString(),
+          eventType: se.eventType,
+          location: se.location,
+          dayOfWeek: se.dayOfWeek,
+          time: se.time,
+          timezone: se.timezone
+        }))
+      });
+
+    } catch (error) {
+      console.error('Error getting profile events:', error);
+      res.status(500).json({ error: 'Failed to get events' });
+    }
+  }
+
+  /**
+   * Handle profile event RSVP API request
+   */
+  async handleProfileEventRsvp(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+      const { eventId, status } = req.body;
+
+      if (!eventId || !['attending', 'not_attending', 'maybe'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid event ID or status' });
+      }
+
+      // Get the event
+      const event = await this.collections.pvpEvents.findOne({
+        _id: new ObjectId(eventId),
+        guildId
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Check if signups are closed
+      const signupDeadline = new Date(event.eventTime.getTime() - 20 * 60 * 1000);
+      if (Date.now() > signupDeadline.getTime()) {
+        return res.status(400).json({ error: 'Signups are closed for this event' });
+      }
+
+      // Remove from all lists first
+      await this.collections.pvpEvents.updateOne(
+        { _id: new ObjectId(eventId) },
+        {
+          $pull: {
+            rsvpAttending: userId,
+            rsvpNotAttending: userId,
+            rsvpMaybe: userId
+          }
+        }
+      );
+
+      // Add to appropriate list
+      const fieldMap = {
+        attending: 'rsvpAttending',
+        not_attending: 'rsvpNotAttending',
+        maybe: 'rsvpMaybe'
+      };
+
+      await this.collections.pvpEvents.updateOne(
+        { _id: new ObjectId(eventId) },
+        { $addToSet: { [fieldMap[status]]: userId } }
+      );
+
+      res.json({ success: true, message: 'RSVP updated successfully' });
+
+    } catch (error) {
+      console.error('Error updating event RSVP:', error);
+      res.status(500).json({ error: 'Failed to update RSVP' });
+    }
+  }
+
+  /**
+   * Handle profile event attendance API request
+   */
+  async handleProfileEventAttendance(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+      const { eventId, code } = req.body;
+
+      if (!eventId || !code) {
+        return res.status(400).json({ error: 'Event ID and code are required' });
+      }
+
+      // Get the event
+      const event = await this.collections.pvpEvents.findOne({
+        _id: new ObjectId(eventId),
+        guildId
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Check if user has signed up
+      const hasSignedUp = event.rsvpAttending?.includes(userId) ||
+                         event.rsvpMaybe?.includes(userId) ||
+                         event.rsvpNotAttending?.includes(userId);
+
+      if (!hasSignedUp) {
+        return res.status(400).json({ error: 'You must sign up for the event first' });
+      }
+
+      // Check if already recorded
+      if (event.attendees?.includes(userId)) {
+        return res.status(400).json({ error: 'You have already recorded attendance' });
+      }
+
+      // Verify code
+      if (event.password !== code) {
+        return res.status(400).json({ error: 'Incorrect attendance code' });
+      }
+
+      // Record attendance
+      await this.collections.pvpEvents.updateOne(
+        { _id: new ObjectId(eventId) },
+        { $push: { attendees: userId } }
+      );
+
+      // Award bonus points
+      await this.collections.pvpBonuses.updateOne(
+        { userId, guildId },
+        {
+          $inc: {
+            bonusCount: event.bonusPoints || 0,
+            eventsAttended: 1
+          },
+          $set: { lastUpdated: new Date() }
+        },
+        { upsert: true }
+      );
+
+      // Update activity ranking
+      await this.collections.pvpActivityRanking.updateOne(
+        { userId, guildId },
+        {
+          $inc: { totalEvents: 1 },
+          $set: { lastEventDate: new Date() }
+        },
+        { upsert: true }
+      );
+
+      res.json({ success: true, message: 'Attendance recorded successfully' });
+
+    } catch (error) {
+      console.error('Error recording attendance:', error);
+      res.status(500).json({ error: 'Failed to record attendance' });
+    }
+  }
+
+  /**
+   * Handle get profile wishlist API request
+   */
+  async handleGetProfileWishlist(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Get user's wishlist submission
+      const submission = await this.collections.wishlistSubmissions.findOne({
+        userId,
+        guildId
+      });
+
+      // Get given items
+      const givenItems = await this.collections.wishlistGivenItems.find({
+        userId,
+        guildId
+      }).toArray();
+
+      // Get wishlist settings (frozen status)
+      const settings = await this.collections.wishlistSettings.findOne({
+        guildId
+      });
+
+      res.json({
+        submission: submission || null,
+        givenItems: givenItems.map(item => ({
+          itemId: item.itemId,
+          givenAt: item.givenAt
+        })),
+        isFrozen: settings?.frozen || false,
+        hasSubmitted: !!submission?.submittedAt
+      });
+
+    } catch (error) {
+      console.error('Error getting wishlist:', error);
+      res.status(500).json({ error: 'Failed to get wishlist' });
+    }
+  }
+
+  /**
+   * Handle update profile wishlist API request
+   */
+  async handleUpdateProfileWishlist(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+      const { archbossWeapon, archbossArmor, t3Weapons, t3Armors, t3Accessories, submit } = req.body;
+
+      // Check if wishlists are frozen
+      const settings = await this.collections.wishlistSettings.findOne({ guildId });
+      if (settings?.frozen) {
+        return res.status(400).json({ error: 'Wishlists are currently frozen' });
+      }
+
+      // Check if already submitted
+      const existing = await this.collections.wishlistSubmissions.findOne({ userId, guildId });
+      if (existing?.submittedAt) {
+        return res.status(400).json({ error: 'Wishlist already submitted. Contact an admin to reset.' });
+      }
+
+      // Validate limits
+      const limits = {
+        archbossWeapon: 1,
+        archbossArmor: 1,
+        t3Weapons: 1,
+        t3Armors: 4,
+        t3Accessories: 2
+      };
+
+      if (archbossWeapon?.length > limits.archbossWeapon ||
+          archbossArmor?.length > limits.archbossArmor ||
+          t3Weapons?.length > limits.t3Weapons ||
+          t3Armors?.length > limits.t3Armors ||
+          t3Accessories?.length > limits.t3Accessories) {
+        return res.status(400).json({ error: 'Wishlist exceeds item limits' });
+      }
+
+      const updateData = {
+        archbossWeapon: archbossWeapon || [],
+        archbossArmor: archbossArmor || [],
+        t3Weapons: t3Weapons || [],
+        t3Armors: t3Armors || [],
+        t3Accessories: t3Accessories || [],
+        lastModified: new Date()
+      };
+
+      if (submit) {
+        updateData.submittedAt = new Date();
+      }
+
+      await this.collections.wishlistSubmissions.updateOne(
+        { userId, guildId },
+        { $set: updateData },
+        { upsert: true }
+      );
+
+      res.json({ success: true, message: submit ? 'Wishlist submitted successfully' : 'Wishlist saved' });
+
+    } catch (error) {
+      console.error('Error updating wishlist:', error);
+      res.status(500).json({ error: 'Failed to update wishlist' });
     }
   }
 
