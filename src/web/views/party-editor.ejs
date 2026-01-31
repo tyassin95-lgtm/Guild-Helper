@@ -570,14 +570,95 @@
 
     .dm-preview {
       background: var(--bg-card);
-      border: 1px solid var(--border-color);
       border-radius: 10px;
       padding: 16px;
-      white-space: pre-wrap;
       font-size: 14px;
-      line-height: 1.7;
+      line-height: 1.5;
       color: var(--text-primary);
-      font-family: 'Consolas', 'Monaco', monospace;
+    }
+
+    /* Discord-style embed preview */
+    .embed-preview {
+      display: flex;
+      max-width: 520px;
+    }
+
+    .embed-color-bar {
+      width: 4px;
+      border-radius: 4px 0 0 4px;
+      flex-shrink: 0;
+    }
+
+    .embed-content {
+      flex: 1;
+      background: #2f3136;
+      border-radius: 0 4px 4px 0;
+      padding: 12px 16px;
+    }
+
+    .embed-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .embed-description {
+      color: #dcddde;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    .embed-fields {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .embed-field {
+      flex: 0 0 100%;
+    }
+
+    .embed-field.inline {
+      flex: 0 0 calc(33.333% - 8px);
+      min-width: 120px;
+    }
+
+    .embed-field-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #b9bbbe;
+      margin-bottom: 2px;
+    }
+
+    .embed-field-value {
+      font-size: 14px;
+      color: #dcddde;
+      white-space: pre-wrap;
+    }
+
+    .embed-footer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .embed-footer-text {
+      font-size: 12px;
+      color: #72767d;
+    }
+
+    .embed-timestamp {
+      font-size: 12px;
+      color: #72767d;
+    }
+
+    .embed-timestamp::before {
+      content: "•";
+      margin: 0 6px;
     }
 
     .modal-footer {
@@ -1254,6 +1335,71 @@
       await updatePreview();
     }
 
+    // Render embed as HTML for preview
+    function renderEmbedPreview(embedData) {
+      const embed = embedData.embeds?.[0]?.data || embedData.embeds?.[0] || embedData;
+
+      // Convert color number to hex
+      const colorHex = embed.color ? '#' + embed.color.toString(16).padStart(6, '0') : '#5865F2';
+
+      // Parse Discord markdown (basic support)
+      const parseMarkdown = (text) => {
+        if (!text) return '';
+        return text
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.+?)\*/g, '<em>$1</em>')
+          .replace(/<t:(\d+):F>/g, (_, ts) => new Date(ts * 1000).toLocaleString())
+          .replace(/<t:(\d+):R>/g, (_, ts) => {
+            const diff = Math.floor((ts * 1000 - Date.now()) / 1000);
+            if (diff < 0) return 'now';
+            if (diff < 60) return 'in ' + diff + ' seconds';
+            if (diff < 3600) return 'in ' + Math.floor(diff / 60) + ' minutes';
+            if (diff < 86400) return 'in ' + Math.floor(diff / 3600) + ' hours';
+            return 'in ' + Math.floor(diff / 86400) + ' days';
+          })
+          .replace(/\n/g, '<br>');
+      };
+
+      // Build fields HTML
+      let fieldsHtml = '';
+      if (embed.fields && embed.fields.length > 0) {
+        fieldsHtml = '<div class="embed-fields">' + embed.fields.map(field => {
+          if (field.name === '\u200B' && field.value === '\u200B') return ''; // Skip spacer fields
+          return `
+            <div class="embed-field${field.inline ? ' inline' : ''}">
+              <div class="embed-field-name">${field.name}</div>
+              <div class="embed-field-value">${parseMarkdown(field.value)}</div>
+            </div>
+          `;
+        }).join('') + '</div>';
+      }
+
+      // Build footer HTML
+      let footerHtml = '';
+      if (embed.footer || embed.timestamp) {
+        footerHtml = '<div class="embed-footer">';
+        if (embed.footer?.text) {
+          footerHtml += `<span class="embed-footer-text">${embed.footer.text}</span>`;
+        }
+        if (embed.timestamp) {
+          footerHtml += `<span class="embed-timestamp">${new Date(embed.timestamp).toLocaleString()}</span>`;
+        }
+        footerHtml += '</div>';
+      }
+
+      return `
+        <div class="embed-preview">
+          <div class="embed-color-bar" style="background-color: ${colorHex}"></div>
+          <div class="embed-content">
+            ${embed.title ? `<div class="embed-title">${embed.title}</div>` : ''}
+            ${embed.description ? `<div class="embed-description">${parseMarkdown(embed.description)}</div>` : ''}
+            ${fieldsHtml}
+            ${footerHtml}
+          </div>
+        </div>
+      `;
+    }
+
     // Update preview when member selection changes
     async function updatePreview() {
       const select = document.getElementById('preview-member-select');
@@ -1262,7 +1408,7 @@
 
       if (!data) return;
 
-      document.getElementById('dm-preview-content').textContent = 'Loading preview...';
+      document.getElementById('dm-preview-content').innerHTML = '<div style="color: #72767d;">Loading preview...</div>';
 
       try {
         const response = await fetch(`/api/party-editor/${TOKEN}/preview`, {
@@ -1274,13 +1420,13 @@
         const result = await response.json();
 
         if (response.ok) {
-          document.getElementById('dm-preview-content').textContent = result.dmMessage;
+          document.getElementById('dm-preview-content').innerHTML = renderEmbedPreview(result.dmMessage);
         } else {
-          document.getElementById('dm-preview-content').textContent = 'Failed to load preview: ' + result.error;
+          document.getElementById('dm-preview-content').innerHTML = '<div style="color: #ed4245;">Failed to load preview: ' + result.error + '</div>';
         }
       } catch (error) {
         console.error('Preview error:', error);
-        document.getElementById('dm-preview-content').textContent = 'Failed to load preview';
+        document.getElementById('dm-preview-content').innerHTML = '<div style="color: #ed4245;">Failed to load preview</div>';
       }
     }
 

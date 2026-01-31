@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
+const { EmbedBuilder } = require('discord.js');
 
 class WebServer {
   constructor() {
@@ -409,7 +410,7 @@ class WebServer {
   }
 
   /**
-   * Create DM message for party member - compact and stylish
+   * Create DM message for party member - modern embed style
    */
   createPartyAssignmentDM(member, party, eventInfo) {
     const eventTypeNames = {
@@ -419,6 +420,15 @@ class WebServer {
       wargames: 'Wargames',
       warboss: 'War Boss',
       guildevent: 'Guild Event'
+    };
+
+    const eventTypeColors = {
+      siege: '#E74C3C',
+      riftstone: '#9B59B6',
+      boonstone: '#F1C40F',
+      wargames: '#E67E22',
+      warboss: '#C0392B',
+      guildevent: '#3498DB'
     };
 
     const getRoleEmoji = (role) => {
@@ -431,30 +441,58 @@ class WebServer {
     };
 
     const eventName = eventTypeNames[eventInfo.eventType] || eventInfo.eventType;
-    const location = eventInfo.location ? ` @ ${eventInfo.location}` : '';
+    const eventColor = eventTypeColors[eventInfo.eventType] || '#5865F2';
+    const location = eventInfo.location ? eventInfo.location : null;
     const timestamp = Math.floor(eventInfo.eventTime.getTime() / 1000);
 
-    // Create compact party member list
+    // Create party member list with better formatting
     const partyList = party.members.map(m => {
       const roleIcon = getRoleEmoji(m.role);
-      const leaderMark = m.isLeader ? ' **[L]**' : '';
-      const isYou = m.userId === member.userId ? ' *(you)*' : '';
+      const leaderMark = m.isLeader ? ' ⭐' : '';
+      const isYou = m.userId === member.userId ? ' **← you**' : '';
       return `${roleIcon} ${m.displayName}${leaderMark}${isYou}`;
     }).join('\n');
 
-    // Compact role composition
+    // Role composition
     const comp = party.composition;
-    const roleComp = `🛡️${comp.tank} 💚${comp.healer} ⚔️${comp.dps}`;
+    const roleComp = `🛡️ ${comp.tank}  ·  💚 ${comp.healer}  ·  ⚔️ ${comp.dps}`;
 
-    const message =
-      `**Party ${party.partyNumber}** | ${eventName}${location}\n` +
-      `<t:${timestamp}:F> (<t:${timestamp}:R>)\n` +
-      `\`\`\`\n` +
-      `${partyList}\n` +
-      `\`\`\`\n` +
-      `${roleComp}`;
+    // Build the embed
+    const embed = new EmbedBuilder()
+      .setColor(eventColor)
+      .setTitle(`🎮 Party ${party.partyNumber} Assignment`)
+      .setDescription(`You've been assigned to **Party ${party.partyNumber}** for the upcoming event.`)
+      .addFields(
+        {
+          name: '📅 Event',
+          value: `**${eventName}**${location ? `\n📍 ${location}` : ''}`,
+          inline: true
+        },
+        {
+          name: '⏰ Time',
+          value: `<t:${timestamp}:F>\n<t:${timestamp}:R>`,
+          inline: true
+        },
+        {
+          name: '\u200B',
+          value: '\u200B',
+          inline: true
+        },
+        {
+          name: '👥 Party Members',
+          value: partyList,
+          inline: false
+        },
+        {
+          name: '⚖️ Composition',
+          value: roleComp,
+          inline: false
+        }
+      )
+      .setFooter({ text: 'Good luck! See you at the event.' })
+      .setTimestamp();
 
-    return message;
+    return { embeds: [embed] };
   }
 
   /**
