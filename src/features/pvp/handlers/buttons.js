@@ -3,11 +3,12 @@ const { ObjectId } = require('mongodb');
 const { updateEventEmbed, cleanupOrphanedEvent } = require('../embed');
 const { updateCalendar } = require('../calendar/calendarUpdate');
 const { handleFormEventParties } = require('../eventParties/partyManager');
+const { getEmbedUpdateQueue } = require('../embedUpdateQueue');
 
 async function handlePvPButtons({ interaction, collections }) {
   const { pvpEvents, pvpBonuses, guildSettings } = collections;
 
-  // Form Event Parties button (NEW)
+  // Form Event Parties button
   if (interaction.customId.startsWith('pvp_form_parties:')) {
     const eventId = interaction.customId.split(':')[1];
     return handleFormEventParties({ interaction, eventId, collections });
@@ -19,19 +20,19 @@ async function handlePvPButtons({ interaction, collections }) {
     return handleViewCode(interaction, eventId, collections);
   }
 
-  // RSVP Attending button
+  // RSVP Attending button - OPTIMIZED
   if (interaction.customId.startsWith('pvp_rsvp_attending:')) {
     const eventId = interaction.customId.split(':')[1];
     return handleRSVP(interaction, eventId, 'attending', collections);
   }
 
-  // RSVP Not Attending button
+  // RSVP Not Attending button - OPTIMIZED
   if (interaction.customId.startsWith('pvp_rsvp_not_attending:')) {
     const eventId = interaction.customId.split(':')[1];
     return handleRSVP(interaction, eventId, 'not_attending', collections);
   }
 
-  // RSVP Maybe button
+  // RSVP Maybe button - OPTIMIZED
   if (interaction.customId.startsWith('pvp_rsvp_maybe:')) {
     const eventId = interaction.customId.split(':')[1];
     return handleRSVP(interaction, eventId, 'maybe', collections);
@@ -111,7 +112,7 @@ async function handlePvPButtons({ interaction, collections }) {
       return interaction.reply({ content: '❌ You\'ve already recorded attendance for this event.', flags: [64] });
     }
 
-    // NEW: Check if user signed up (attending, maybe, or not attending)
+    // Check if user signed up (attending, maybe, or not attending)
     const rsvpAttending = event.rsvpAttending || [];
     const rsvpMaybe = event.rsvpMaybe || [];
     const rsvpNotAttending = event.rsvpNotAttending || [];
@@ -149,7 +150,7 @@ async function handlePvPButtons({ interaction, collections }) {
     return interaction.showModal(modal);
   }
 
-  // Close Attendance button (admin only)
+  // Close Attendance button (admin only) - OPTIMIZED
   if (interaction.customId.startsWith('pvp_close_attendance:')) {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: '❌ You need administrator permissions.', flags: [64] });
@@ -174,15 +175,14 @@ async function handlePvPButtons({ interaction, collections }) {
       { $set: { closed: true } }
     );
 
-    const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
-
     // Update calendar asynchronously (don't block the response - auto-update will handle it)
     updateCalendar(interaction.client, interaction.guildId, collections).catch(err => 
       console.error('Failed to update calendar after closing event:', err)
     );
 
-    // Update the embed
-    await updateEventEmbed(interaction, updatedEvent, collections);
+    // OPTIMIZATION: Use queue for batched update with shorter delay for admin actions
+    const queue = getEmbedUpdateQueue(interaction.client, collections);
+    queue.scheduleUpdate(eventId, interaction, 500); // 500ms delay for admin actions
 
     return interaction.followUp({
       content: '✅ Event has been closed.',
@@ -298,7 +298,8 @@ async function handleViewCode(interaction, eventId, collections) {
 }
 
 /**
- * Handle RSVP button clicks with automatic cleanup and signup deadline enforcement
+ * Handle RSVP button clicks with optimized batched embed updates
+ * OPTIMIZED: Uses queue for batched updates instead of immediate updates
  */
 async function handleRSVP(interaction, eventId, rsvpType, collections) {
   const { pvpEvents } = collections;
@@ -321,7 +322,7 @@ async function handleRSVP(interaction, eventId, rsvpType, collections) {
     });
   }
 
-  // NEW: Check if signup deadline has passed (20 minutes before event)
+  // Check if signup deadline has passed (20 minutes before event)
   const signupDeadline = new Date(event.eventTime.getTime() - (20 * 60 * 1000));
   const isSignupClosed = new Date() >= signupDeadline;
 
@@ -362,9 +363,9 @@ async function handleRSVP(interaction, eventId, rsvpType, collections) {
     { $addToSet: { [field]: userId } }
   );
 
-  // Fetch updated event and update embed
-  const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
-  await updateEventEmbed(interaction, updatedEvent, collections);
+  // OPTIMIZATION: Schedule batched embed update instead of immediate update
+  const queue = getEmbedUpdateQueue(interaction.client, collections);
+  queue.scheduleUpdate(eventId, interaction, 1500); // 1.5 second debounce for RSVPs
 
   const responseMap = {
     'attending': '✅ You marked yourself as **Attending**!',

@@ -2,6 +2,7 @@ const { ObjectId } = require('mongodb');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { updateEventEmbed } = require('../embed');
 const { updateCalendar } = require('../calendar/calendarUpdate');
+const { getEmbedUpdateQueue } = require('../embedUpdateQueue');
 
 // Default event images
 const DEFAULT_EVENT_IMAGES = {
@@ -81,7 +82,7 @@ async function handlePvPModals({ interaction, collections }) {
     });
   }
 
-  // Password verification modal
+  // Password verification modal - OPTIMIZED VERSION
   if (interaction.customId.startsWith('pvp_password_modal:')) {
     const eventId = interaction.customId.split(':')[1];
     const enteredPassword = interaction.fields.getTextInputValue('password');
@@ -161,7 +162,7 @@ async function handlePvPModals({ interaction, collections }) {
       { 
         $inc: { 
           bonusCount: bonusPoints,
-          eventsAttended: 1  // NEW: Track number of events attended
+          eventsAttended: 1  // Track number of events attended
         },
         $set: { lastUpdated: new Date() }
       },
@@ -178,16 +179,18 @@ async function handlePvPModals({ interaction, collections }) {
       { upsert: true }
     );
 
-    // Update the event embed
-    const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
-    await updateEventEmbed(interaction, updatedEvent, collections);
+    // OPTIMIZATION: Schedule batched embed update instead of immediate update
+    // This prevents multiple simultaneous updates when many users submit at once
+    const queue = getEmbedUpdateQueue(interaction.client, collections);
+    queue.scheduleUpdate(eventId, interaction, 2000); // 2 second debounce
 
+    // Respond immediately without waiting for embed update
     return interaction.editReply({ 
       content: `✅ **Attendance recorded!**\n\nYou've earned **+${bonusPoints}** PvP bonus points for this event!` 
     });
   }
 
-  // Manual attendance modal (admin only)
+  // Manual attendance modal (admin only) - OPTIMIZED VERSION
   if (interaction.customId.startsWith('pvp_manual_attendance_modal:')) {
     const eventId = interaction.customId.split(':')[1];
     const userIdInput = interaction.fields.getTextInputValue('user_id');
@@ -255,7 +258,7 @@ async function handlePvPModals({ interaction, collections }) {
         { 
           $inc: { 
             bonusCount: bonusPoints,
-            eventsAttended: 1  // NEW: Track number of events attended
+            eventsAttended: 1  // Track number of events attended
           },
           $set: { lastUpdated: new Date() }
         },
@@ -272,10 +275,11 @@ async function handlePvPModals({ interaction, collections }) {
         { upsert: true }
       );
 
-      // Update the event embed
-      const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
-      await updateEventEmbed(interaction, updatedEvent, collections);
+      // OPTIMIZATION: Schedule batched embed update
+      const queue = getEmbedUpdateQueue(interaction.client, collections);
+      queue.scheduleUpdate(eventId, interaction, 2000);
 
+      // Respond immediately
       return interaction.editReply({ 
         content: `✅ **Attendance manually recorded for ${member.displayName}!**\n\nThey've been awarded **+${bonusPoints}** PvP bonus points.` 
       });

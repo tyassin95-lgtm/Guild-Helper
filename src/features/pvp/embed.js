@@ -1,6 +1,10 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { ObjectId } = require('mongodb');
 
+// Cache for guild members to avoid repeated API calls
+const memberCache = new Map(); // guildId -> Map(userId -> member)
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 async function createEventEmbed(event, client, collections) {
   const eventTypeEmojis = {
     siege: '🏰',
@@ -73,9 +77,12 @@ async function createEventEmbed(event, client, collections) {
   const rsvpNotAttending = event.rsvpNotAttending || [];
   const rsvpMaybe = event.rsvpMaybe || [];
 
-  const attendingNames = await fetchUserNames(client, event.guildId, rsvpAttending);
-  const notAttendingNames = await fetchUserNames(client, event.guildId, rsvpNotAttending);
-  const maybeNames = await fetchUserNames(client, event.guildId, rsvpMaybe);
+  // Fetch names in parallel for better performance
+  const [attendingNames, notAttendingNames, maybeNames] = await Promise.all([
+    fetchUserNamesOptimized(client, event.guildId, rsvpAttending),
+    fetchUserNamesOptimized(client, event.guildId, rsvpNotAttending),
+    fetchUserNamesOptimized(client, event.guildId, rsvpMaybe)
+  ]);
 
   const attendingText = attendingNames.length > 0 
     ? attendingNames.join(', ') 
@@ -100,7 +107,7 @@ async function createEventEmbed(event, client, collections) {
 
   if (attendeeCount > 0) {
     // Fetch attendee names
-    const attendeeNames = await fetchUserNames(client, event.guildId, event.attendees);
+    const attendeeNames = await fetchUserNamesOptimized(client, event.guildId, event.attendees);
     const attendeeList = attendeeNames.map(name => `• ${name}`).join('\n');
     const truncated = attendeeList.length > 1024 ? attendeeList.substring(0, 1021) + '...' : attendeeList;
 
@@ -221,30 +228,99 @@ async function createEventEmbed(event, client, collections) {
 }
 
 /**
- * Helper function to fetch user display names
+ * Optimized helper function to fetch user display names with caching and parallel fetching
+ * 
+ * @param {Client} client - Discord client
+ * @param {string} guildId - Guild ID
+ * @param {string[]} userIds - Array of user IDs
+ * @returns {Promise<string[]>} - Array of display names
  */
-async function fetchUserNames(client, guildId, userIds) {
-  const names = [];
+async function fetchUserNamesOptimized(client, guildId, userIds) {
+  if (!userIds || userIds.length === 0) {
+    return [];
+  }
 
   try {
     const guild = await client.guilds.fetch(guildId);
 
-    for (const userId of userIds) {
-      try {
-        const member = await guild.members.fetch(userId);
-        if (member) {
-          names.push(member.displayName);
-        }
-      } catch (err) {
-        // User might have left the server
-        names.push('Unknown User');
+    // Get or create cache for this guild
+    if (!memberCache.has(guildId)) {
+      memberCache.set(guildId, new Map());
+    }
+    const guildCache = memberCache.get(guildId);
+
+    // Clean expired cache entries (older than TTL)
+    const now = Date.now();
+    for (const [userId, data] of guildCache.entries()) {
+      if (now - data.timestamp > CACHE_TTL) {
+        guildCache.delete(userId);
       }
     }
+
+    // Separate cached and uncached users
+    const cachedNames = [];
+    const uncachedIds = [];
+
+    for (const userId of userIds) {
+      const cached = guildCache.get(userId);
+      if (cached) {
+        cachedNames.push({ userId, name: cached.name });
+      } else {
+        uncachedIds.push(userId);
+      }
+    }
+
+    // Fetch uncached members in parallel
+    if (uncachedIds.length > 0) {
+      const fetchPromises = uncachedIds.map(async (userId) => {
+        try {
+          const member = await guild.members.fetch(userId);
+          const name = member ? member.displayName : 'Unknown User';
+
+          // Cache the result
+          guildCache.set(userId, { name, timestamp: Date.now() });
+
+          return { userId, name };
+        } catch {
+          const name = 'Unknown User';
+          // Cache the failure too (to avoid repeated failed fetches)
+          guildCache.set(userId, { name, timestamp: Date.now() });
+          return { userId, name };
+        }
+      });
+
+      const fetchedMembers = await Promise.all(fetchPromises);
+      cachedNames.push(...fetchedMembers);
+    }
+
+    // Sort by original order
+    const nameMap = new Map(cachedNames.map(item => [item.userId, item.name]));
+    return userIds.map(userId => nameMap.get(userId) || 'Unknown User');
+
   } catch (err) {
     console.error('Failed to fetch guild for user names:', err);
+    return userIds.map(() => 'Unknown User');
   }
+}
 
-  return names;
+/**
+ * Clear member cache for a specific guild
+ * 
+ * @param {string} guildId - Guild ID
+ */
+function clearMemberCache(guildId) {
+  if (memberCache.has(guildId)) {
+    memberCache.delete(guildId);
+    console.log(`Cleared member cache for guild ${guildId}`);
+  }
+}
+
+/**
+ * Clear all member caches
+ */
+function clearAllMemberCaches() {
+  memberCache.clear();
+  console.log('Cleared all member caches');
 }
 
 /**
@@ -326,4 +402,10 @@ async function updateEventEmbed(interaction, event, collections) {
   }
 }
 
-module.exports = { createEventEmbed, updateEventEmbed, cleanupOrphanedEvent };
+module.exports = { 
+  createEventEmbed, 
+  updateEventEmbed, 
+  cleanupOrphanedEvent,
+  clearMemberCache,
+  clearAllMemberCaches
+};

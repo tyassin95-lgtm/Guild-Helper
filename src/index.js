@@ -15,8 +15,10 @@ const { startRosterAutoUpdate, stopRosterAutoUpdate } = require('./features/part
 const { handleGearUpload } = require('./features/parties/handlers/gearUploadHandler');
 const { handleAutoModCheck } = require('./features/automod/handlers/messageHandler');
 const { handleTranslationReaction } = require('./features/automod/handlers/reactionHandler');
+const { stopEmbedUpdateQueue } = require('./features/pvp/embedUpdateQueue');
+const { clearAllMemberCaches } = require('./features/pvp/embed');
 
-// NEW: Import web server
+// Import web server
 const { webServer } = require('./web/server');
 
 const client = new Client({
@@ -42,7 +44,7 @@ const client = new Client({
     const collections = getCollections(db);
     await ensureIndexes(collections);
 
-    // NEW: Initialize web server
+    // Initialize web server
     webServer.initialize(collections, client);
 
     client.once('clientReady', async () => {
@@ -62,8 +64,10 @@ const client = new Client({
       startAttendanceReminder(client, collections);
       startRosterAutoUpdate(client, collections);
 
-      // NEW: Start web server
+      // Start web server
       webServer.start();
+
+      console.log('✅ All systems initialized and running');
     });
 
     client.on('interactionCreate', async (interaction) => {
@@ -115,8 +119,8 @@ const client = new Client({
     });
 
     // Graceful shutdown handlers
-    process.on('SIGINT', async () => {
-      console.log('\n🛑 Shutting down gracefully...');
+    const shutdown = async (signal) => {
+      console.log(`\n🛑 ${signal} received, shutting down gracefully...`);
 
       // Stop auto-update tasks
       stopItemRollAutoUpdate();
@@ -125,7 +129,13 @@ const client = new Client({
       stopAttendanceReminder();
       stopRosterAutoUpdate();
 
-      // NEW: Stop web server
+      // Stop embed update queue (clears pending updates)
+      stopEmbedUpdateQueue();
+
+      // Clear member caches
+      clearAllMemberCaches();
+
+      // Stop web server
       webServer.stop();
 
       // Disconnect Discord client
@@ -133,27 +143,10 @@ const client = new Client({
 
       console.log('✅ Shutdown complete');
       process.exit(0);
-    });
+    };
 
-    process.on('SIGTERM', async () => {
-      console.log('\n🛑 SIGTERM received, shutting down...');
-
-      // Stop auto-update tasks
-      stopItemRollAutoUpdate();
-      stopPollAutoUpdate();
-      stopCalendarAutoUpdate();
-      stopAttendanceReminder();
-      stopRosterAutoUpdate();
-
-      // NEW: Stop web server
-      webServer.stop();
-
-      // Disconnect Discord client
-      client.destroy();
-
-      console.log('✅ Shutdown complete');
-      process.exit(0);
-    });
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
 
     console.log('Loaded token:', process.env.DISCORD_TOKEN ? '✅ Found' : '❌ Missing');
     await client.login(process.env.DISCORD_TOKEN);
