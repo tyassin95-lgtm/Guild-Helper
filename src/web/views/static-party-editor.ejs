@@ -683,6 +683,7 @@
       }
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -756,8 +757,13 @@
         <!-- Actions -->
         <div class="actions-section">
           <div class="section-title">Actions</div>
+
           <button class="btn btn-success" onclick="saveParties()" id="save-btn">
             Save Changes
+          </button>
+
+          <button class="btn btn-secondary" onclick="savePartiesImage()">
+            Save Parties Image
           </button>
         </div>
       </div>
@@ -1371,6 +1377,20 @@
         console.error('Save error:', error);
         showToast('Failed to save parties. Please try again.', true);
       }
+    }
+
+    async function savePartiesImage() {
+      const target = document.querySelector(".parties-section"); // EXACT editor layout
+
+      const canvas = await html2canvas(target, {
+        backgroundColor: "#0a0e17",
+        scale: 2
+      });
+
+      const link = document.createElement("a");
+      link.download = `parties_${Date.now()}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
     }
   </script>
 </body>
