@@ -9,7 +9,8 @@ const {
   ModalBuilder, 
   StringSelectMenuBuilder, 
   TextInputBuilder, 
-  TextInputStyle 
+  TextInputStyle,
+  PermissionFlagsBits
 } = require('discord.js');
 
 async function handleRaidButtons({ interaction, collections }) {
@@ -589,6 +590,14 @@ async function handleLeaveAllButton({ interaction, collections }) {
 async function handleCloseButton({ interaction, collections }) {
   const { raidEvents } = collections;
   const raidIdStr = interaction.customId.split(':')[1];
+
+  // Check if user has administrator permissions
+  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    return interaction.reply({
+      content: '❌ You need administrator permissions to close/reopen raid events.',
+      flags: [64]
+    });
+  }
 
   // Check if interaction is still valid
   if (interaction.replied || interaction.deferred) {
