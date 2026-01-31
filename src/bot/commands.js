@@ -130,6 +130,24 @@ async function registerSlashCommands(client) {
       dm_permission: false
     },
     {
+      name: 'staticevent',
+      description: 'Admins: Create or cancel recurring static events for the calendar.',
+      default_member_permissions: ADMIN,
+      dm_permission: false,
+      options: [
+        {
+          type: 3,
+          name: 'action',
+          description: 'What to do',
+          required: true,
+          choices: [
+            { name: 'Create Static Event', value: 'create' },
+            { name: 'Cancel Static Event', value: 'cancel' }
+          ]
+        }
+      ]
+    },
+    {
       name: 'resetbonuses',
       description: 'Admins: Reset all PvP bonuses (DANGEROUS!).',
       default_member_permissions: ADMIN,
