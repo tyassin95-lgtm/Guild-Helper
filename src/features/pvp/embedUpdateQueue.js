@@ -1,5 +1,5 @@
-const { ObjectId } = require('mongodb');
-const { updateEventEmbed } = require('./embed');
+const { ObjectId } = require("mongodb");
+const { updateEventEmbed } = require("./embed");
 
 /**
  * Manages batched embed updates to prevent rate limiting and improve performance
@@ -17,12 +17,12 @@ class EmbedUpdateQueue {
   /**
    * Schedule an embed update with debouncing
    * Multiple rapid calls for the same event will be batched together
-   * 
+   *
    * @param {string} eventId - Event ID to update
    * @param {Interaction} interaction - Discord interaction for context
-   * @param {number} delayMs - Debounce delay in milliseconds (default: 2000)
+   * @param {number} delayMs - Debounce delay in milliseconds (default: 15000)
    */
-  scheduleUpdate(eventId, interaction, delayMs = 2000) {
+  scheduleUpdate(eventId, interaction, delayMs = 15000) {
     // Clear any existing scheduled update for this event
     if (this.pendingUpdates.has(eventId)) {
       clearTimeout(this.pendingUpdates.get(eventId));
@@ -40,7 +40,7 @@ class EmbedUpdateQueue {
 
   /**
    * Process the actual embed update
-   * 
+   *
    * @param {string} eventId - Event ID to update
    * @param {Interaction} interaction - Discord interaction for context
    */
@@ -50,7 +50,9 @@ class EmbedUpdateQueue {
 
     // Check if we're already processing this event
     if (this.processing.has(eventId)) {
-      console.log(`Event ${eventId} is already being processed, skipping duplicate update`);
+      console.log(
+        `Event ${eventId} is already being processed, skipping duplicate update`,
+      );
       return;
     }
 
@@ -58,8 +60,8 @@ class EmbedUpdateQueue {
     this.processing.add(eventId);
 
     try {
-      const event = await this.collections.pvpEvents.findOne({ 
-        _id: new ObjectId(eventId) 
+      const event = await this.collections.pvpEvents.findOne({
+        _id: new ObjectId(eventId),
       });
 
       if (!event) {
@@ -68,7 +70,9 @@ class EmbedUpdateQueue {
       }
 
       // Perform the actual update
-      console.log(`Updating embed for event ${eventId} (${event.attendees?.length || 0} attendees)`);
+      console.log(
+        `Updating embed for event ${eventId} (${event.attendees?.length || 0} attendees)`,
+      );
       await updateEventEmbed(interaction, event, this.collections);
 
       // Record the update time
@@ -86,7 +90,7 @@ class EmbedUpdateQueue {
   /**
    * Force immediate update (bypasses debouncing)
    * Use for critical updates that can't wait
-   * 
+   *
    * @param {string} eventId - Event ID to update
    * @param {Interaction} interaction - Discord interaction for context
    */
@@ -110,7 +114,7 @@ class EmbedUpdateQueue {
     }
     this.pendingUpdates.clear();
     this.processing.clear();
-    console.log('Cleared all pending embed updates');
+    console.log("Cleared all pending embed updates");
   }
 }
 
@@ -119,7 +123,7 @@ let queueInstance = null;
 
 /**
  * Get or create the embed update queue singleton
- * 
+ *
  * @param {Client} client - Discord client
  * @param {Object} collections - MongoDB collections
  * @returns {EmbedUpdateQueue}
@@ -127,7 +131,7 @@ let queueInstance = null;
 function getEmbedUpdateQueue(client, collections) {
   if (!queueInstance) {
     queueInstance = new EmbedUpdateQueue(client, collections);
-    console.log('✅ Embed update queue initialized');
+    console.log("✅ Embed update queue initialized");
   }
   return queueInstance;
 }
@@ -139,12 +143,12 @@ function stopEmbedUpdateQueue() {
   if (queueInstance) {
     queueInstance.clearAll();
     queueInstance = null;
-    console.log('🛑 Embed update queue stopped');
+    console.log("🛑 Embed update queue stopped");
   }
 }
 
-module.exports = { 
-  getEmbedUpdateQueue, 
+module.exports = {
+  getEmbedUpdateQueue,
   stopEmbedUpdateQueue,
-  EmbedUpdateQueue 
+  EmbedUpdateQueue,
 };
