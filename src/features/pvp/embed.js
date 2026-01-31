@@ -1,7 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { ObjectId } = require('mongodb');
 
-async function createEventEmbed(event, client, collections, userId = null) {
+async function createEventEmbed(event, client, collections) {
   const eventTypeEmojis = {
     siege: '🏰',
     riftstone: '💎',
@@ -23,22 +23,6 @@ async function createEventEmbed(event, client, collections, userId = null) {
   const emoji = eventTypeEmojis[event.eventType] || '⚔️';
   const typeName = eventTypeNames[event.eventType] || event.eventType;
   const bonusPoints = event.bonusPoints || 10;
-
-  // Determine user's RSVP status if userId provided
-  let userRSVPStatus = null;
-  if (userId) {
-    const rsvpAttending = event.rsvpAttending || [];
-    const rsvpMaybe = event.rsvpMaybe || [];
-    const rsvpNotAttending = event.rsvpNotAttending || [];
-
-    if (rsvpAttending.includes(userId)) {
-      userRSVPStatus = 'attending';
-    } else if (rsvpMaybe.includes(userId)) {
-      userRSVPStatus = 'maybe';
-    } else if (rsvpNotAttending.includes(userId)) {
-      userRSVPStatus = 'not_attending';
-    }
-  }
 
   // Calculate signup deadline (20 minutes before event)
   const signupDeadline = new Date(event.eventTime.getTime() - (20 * 60 * 1000));
@@ -155,28 +139,28 @@ async function createEventEmbed(event, client, collections, userId = null) {
     inline: false
   });
 
-  // Create buttons with personalized labels based on user's RSVP status
+  // Create buttons with better organization
   const components = [];
 
   if (!event.closed) {
-    // Row 1: RSVP buttons with BIG VISIBLE indicators showing user's current status
+    // Row 1: RSVP buttons (disabled if signup deadline passed)
     const rsvpRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`pvp_rsvp_attending:${event._id}`)
-        .setLabel(userRSVPStatus === 'attending' ? '✅ ATTENDING (YOU!)' : 'Attending')
-        .setStyle(userRSVPStatus === 'attending' ? ButtonStyle.Success : ButtonStyle.Secondary)
+        .setLabel('Attending')
+        .setStyle(ButtonStyle.Success)
         .setEmoji('✅')
         .setDisabled(isSignupClosed),
       new ButtonBuilder()
         .setCustomId(`pvp_rsvp_not_attending:${event._id}`)
-        .setLabel(userRSVPStatus === 'not_attending' ? '❌ NOT ATTENDING (YOU!)' : 'Not Attending')
-        .setStyle(userRSVPStatus === 'not_attending' ? ButtonStyle.Danger : ButtonStyle.Secondary)
+        .setLabel('Not Attending')
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji('❌')
         .setDisabled(isSignupClosed),
       new ButtonBuilder()
         .setCustomId(`pvp_rsvp_maybe:${event._id}`)
-        .setLabel(userRSVPStatus === 'maybe' ? '❓ MAYBE (YOU!)' : 'Maybe')
-        .setStyle(userRSVPStatus === 'maybe' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+        .setLabel('Maybe')
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji('❓')
         .setDisabled(isSignupClosed)
     );
@@ -287,7 +271,6 @@ async function cleanupOrphanedEvent(eventId, collections) {
 
 /**
  * Update event embed with automatic cleanup if message is deleted
- * NOW SUPPORTS PERSONALIZED BUTTONS - pass interaction to get userId
  */
 async function updateEventEmbed(interaction, event, collections) {
   try {
@@ -309,9 +292,8 @@ async function updateEventEmbed(interaction, event, collections) {
       return;
     }
 
-    // Message exists, update it with personalized buttons for the user who triggered the update
-    const userId = interaction?.user?.id || null;
-    const { embed, components } = await createEventEmbed(event, interaction.client, collections, userId);
+    // Message exists, update it
+    const { embed, components } = await createEventEmbed(event, interaction.client, collections);
 
     await message.edit({
       embeds: [embed],

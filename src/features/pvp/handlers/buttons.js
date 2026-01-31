@@ -181,7 +181,7 @@ async function handlePvPButtons({ interaction, collections }) {
       console.error('Failed to update calendar after closing event:', err)
     );
 
-    // Update the embed with personalized buttons for this user
+    // Update the embed
     await updateEventEmbed(interaction, updatedEvent, collections);
 
     return interaction.followUp({
@@ -299,7 +299,6 @@ async function handleViewCode(interaction, eventId, collections) {
 
 /**
  * Handle RSVP button clicks with automatic cleanup and signup deadline enforcement
- * NOW UPDATES BUTTONS WITH PERSONALIZED LABELS!
  */
 async function handleRSVP(interaction, eventId, rsvpType, collections) {
   const { pvpEvents } = collections;
@@ -363,14 +362,14 @@ async function handleRSVP(interaction, eventId, rsvpType, collections) {
     { $addToSet: { [field]: userId } }
   );
 
-  // Fetch updated event and update embed WITH PERSONALIZED BUTTONS FOR THIS USER
+  // Fetch updated event and update embed
   const updatedEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
   await updateEventEmbed(interaction, updatedEvent, collections);
 
   const responseMap = {
-    'attending': '✅ You marked yourself as **Attending**! Your button now shows "ATTENDING (YOU!)" so you can easily see your signup status.',
-    'not_attending': '❌ You marked yourself as **Not Attending**. Your button now shows "NOT ATTENDING (YOU!)".',
-    'maybe': '❓ You marked yourself as **Maybe**. Your button now shows "MAYBE (YOU!)".'
+    'attending': '✅ You marked yourself as **Attending**!',
+    'not_attending': '❌ You marked yourself as **Not Attending**.',
+    'maybe': '❓ You marked yourself as **Maybe**.'
   };
 
   return interaction.followUp({
