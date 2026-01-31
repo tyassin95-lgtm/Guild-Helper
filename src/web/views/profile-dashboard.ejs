@@ -1015,15 +1015,27 @@
           </form>
         </div>
 
-        ${info.gearScreenshotUrl ? `
-          <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border-color);">
-            <h3 style="font-size: 16px; margin-bottom: 16px;">Gear Screenshot</h3>
-            <img src="${info.gearScreenshotUrl}" alt="Gear Screenshot" class="gear-screenshot">
+        <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border-color);">
+          <h3 style="font-size: 16px; margin-bottom: 16px;">Gear Screenshot</h3>
+          ${info.gearScreenshotUrl ? `
+            <img src="${info.gearScreenshotUrl}" alt="Gear Screenshot" class="gear-screenshot" style="margin-bottom: 16px;">
+          ` : `
+            <p style="color: var(--text-secondary); margin-bottom: 16px;">No gear screenshot uploaded yet.</p>
+          `}
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <input type="file" id="gear-file-input" accept="image/png,image/jpg,image/jpeg,image/webp,image/gif" style="display: none;">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('gear-file-input').click()">
+              ${info.gearScreenshotUrl ? 'Update Screenshot' : 'Upload Screenshot'}
+            </button>
+            <span id="gear-upload-status" style="color: var(--text-secondary); font-size: 13px;"></span>
           </div>
-        ` : ''}
+        </div>
       `;
 
       document.getElementById('info-content').innerHTML = html;
+
+      // Setup gear file input listener
+      document.getElementById('gear-file-input').addEventListener('change', handleGearFileSelect);
     }
 
     // Save profile info
@@ -1043,6 +1055,58 @@
         await loadProfileData();
       } catch (error) {
         showToast(error.message, 'error');
+      }
+    }
+
+    // Handle gear file selection and upload
+    async function handleGearFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Validate file type
+      const validTypes = ['image/png', 'image/jpg', 'image/jpeg', 'image/webp', 'image/gif'];
+      if (!validTypes.includes(file.type)) {
+        showToast('Please select a valid image file (PNG, JPG, WEBP, GIF)', 'error');
+        return;
+      }
+
+      // Validate file size (max 8MB)
+      if (file.size > 8 * 1024 * 1024) {
+        showToast('Image is too large. Maximum size is 8MB.', 'error');
+        return;
+      }
+
+      const statusEl = document.getElementById('gear-upload-status');
+      statusEl.textContent = 'Uploading...';
+      statusEl.style.color = 'var(--text-secondary)';
+
+      try {
+        // Convert to base64
+        const reader = new FileReader();
+        reader.onload = async function(event) {
+          const imageData = event.target.result;
+
+          try {
+            const result = await apiCall('upload-gear', 'POST', { imageData });
+            showToast('Gear screenshot uploaded successfully!', 'success');
+            statusEl.textContent = '';
+            await loadProfileData();
+          } catch (error) {
+            showToast(error.message, 'error');
+            statusEl.textContent = 'Upload failed';
+            statusEl.style.color = 'var(--danger-color)';
+          }
+        };
+        reader.onerror = function() {
+          showToast('Failed to read file', 'error');
+          statusEl.textContent = 'Upload failed';
+          statusEl.style.color = 'var(--danger-color)';
+        };
+        reader.readAsDataURL(file);
+      } catch (error) {
+        showToast('Failed to upload screenshot', 'error');
+        statusEl.textContent = 'Upload failed';
+        statusEl.style.color = 'var(--danger-color)';
       }
     }
 
@@ -1123,7 +1187,17 @@
         <div class="events-list">
           ${eventsData.events.map(event => {
             const eventDate = new Date(event.eventTime);
+            const now = Date.now();
+            const eventTime = eventDate.getTime();
             const isUpcoming = eventDate > new Date();
+
+            // Show attendance button from 30 min before event until 6 hours after
+            const thirtyMinsBefore = eventTime - (30 * 60 * 1000);
+            const sixHoursAfter = eventTime + (6 * 60 * 60 * 1000);
+            const canRecordAttendance = event.signupStatus !== 'none' &&
+                                        now >= thirtyMinsBefore &&
+                                        now <= sixHoursAfter &&
+                                        !event.hasRecordedAttendance;
 
             let statusClass = '';
             let statusText = '';
@@ -1167,7 +1241,7 @@
                       ` : `
                         <span style="color: var(--text-muted); font-size: 13px;">Signups closed</span>
                       `}
-                      ${event.signupStatus !== 'none' && !isUpcoming ? `
+                      ${canRecordAttendance ? `
                         <button class="btn btn-primary" onclick="openAttendanceModal('${event._id}')">Record Attendance</button>
                       ` : ''}
                     </div>
@@ -1189,24 +1263,16 @@
         return;
       }
 
-      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const eventTypeNames = {
-        siege: 'Siege',
-        riftstone: 'Riftstone',
-        boonstone: 'Boonstone',
-        wargames: 'Wargames',
-        warboss: 'War Boss',
-        guildevent: 'Guild Event'
-      };
+      // Sort by day of week
+      const sortedEvents = [...eventsData.staticEvents].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
 
-      const html = eventsData.staticEvents.map(event => `
+      const html = sortedEvents.map(event => `
         <div class="static-event-card">
-          <div class="static-event-day">${days[event.dayOfWeek]}</div>
+          <div class="static-event-day">${event.dayName || 'Unknown'}</div>
           <div>
-            <strong>${eventTypeNames[event.eventType] || event.eventType}</strong>
-            ${event.location ? ` - ${event.location}` : ''}
+            <strong>${event.title || 'Untitled Event'}</strong>
             <br>
-            <span style="color: var(--text-secondary); font-size: 13px;">${event.time}</span>
+            <span style="color: var(--text-secondary); font-size: 13px;">${event.timeDisplay || 'No time set'} (UK)</span>
           </div>
         </div>
       `).join('');
