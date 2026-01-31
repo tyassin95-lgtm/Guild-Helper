@@ -343,4 +343,5 @@ async function updateEventEmbed(interaction, event, collections) {
     }
   }
 }
-module.exports = { createEventEmbed, updateEventEmbed, cleanupOrphanedEvent };``````
+
+module.exports = { createEventEmbed, updateEventEmbed, cleanupOrphanedEvent };
