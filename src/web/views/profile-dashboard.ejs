@@ -1962,13 +1962,25 @@
 
     // Track RSVP/attendance processing to prevent spam
     const processingEvents = new Set();
+    const rsvpCooldowns = new Map(); // Track cooldown end times by eventId
     let isSubmittingAttendance = false;
 
     // Update RSVP
     async function updateRsvp(eventId, status, buttonEl) {
-      // Prevent spam
+      // Check cooldown
+      const cooldownEnd = rsvpCooldowns.get(eventId);
+      if (cooldownEnd && Date.now() < cooldownEnd) {
+        const remaining = Math.ceil((cooldownEnd - Date.now()) / 1000);
+        showToast(`Please wait ${remaining}s before changing RSVP`, 'error');
+        return;
+      }
+
+      // Prevent spam during processing
       if (processingEvents.has(eventId)) return;
       processingEvents.add(eventId);
+
+      // Start 15 second cooldown
+      rsvpCooldowns.set(eventId, Date.now() + 15000);
 
       // Disable all RSVP buttons for this event
       const eventCard = buttonEl?.closest('.event-card');
@@ -1983,8 +1995,13 @@
         await apiCall('event-rsvp', 'POST', { eventId, status });
         showToast('RSVP updated', 'success');
         await loadEventsData();
+
+        // After reload, re-apply cooldown styling to new buttons
+        setTimeout(() => applyRsvpCooldown(eventId), 100);
       } catch (error) {
         showToast(error.message, 'error');
+        // Clear cooldown on error
+        rsvpCooldowns.delete(eventId);
         // Re-enable buttons on error
         rsvpButtons?.forEach(btn => {
           btn.disabled = false;
@@ -1994,6 +2011,38 @@
       } finally {
         processingEvents.delete(eventId);
       }
+    }
+
+    // Apply cooldown styling to RSVP buttons after page reload
+    function applyRsvpCooldown(eventId) {
+      const cooldownEnd = rsvpCooldowns.get(eventId);
+      if (!cooldownEnd || Date.now() >= cooldownEnd) {
+        rsvpCooldowns.delete(eventId);
+        return;
+      }
+
+      const remaining = cooldownEnd - Date.now();
+
+      // Find the event card and disable buttons
+      const eventCards = document.querySelectorAll('.event-card');
+      eventCards.forEach(card => {
+        const rsvpButtons = card.querySelectorAll('.event-actions .btn');
+        rsvpButtons.forEach(btn => {
+          const onclick = btn.getAttribute('onclick');
+          if (onclick && onclick.includes(eventId)) {
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+            btn.style.cursor = 'not-allowed';
+          }
+        });
+      });
+
+      // Re-enable after cooldown expires
+      setTimeout(() => {
+        rsvpCooldowns.delete(eventId);
+        // Re-render events to restore button state
+        if (eventsData) renderEvents();
+      }, remaining);
     }
 
     // Attendance modal
