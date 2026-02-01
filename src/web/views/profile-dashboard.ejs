@@ -778,19 +778,60 @@
     .roster-attendance-medium { color: var(--warning-color); }
     .roster-attendance-low { color: var(--danger-color); }
 
-    .roster-sort-btn.active {
+    .roster-sort-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .roster-sort-label {
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    .roster-sort-select {
+      padding: 8px 12px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 14px;
+      cursor: pointer;
+      min-width: 150px;
+    }
+
+    .roster-sort-select:focus {
+      outline: none;
+      border-color: var(--accent-purple);
+    }
+
+    .roster-direction-btns {
+      display: flex;
+      gap: 4px;
+    }
+
+    .roster-direction-btn {
+      padding: 8px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .roster-direction-btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent-purple);
+    }
+
+    .roster-direction-btn.active {
       background: linear-gradient(135deg, var(--accent-purple), #6366f1);
       color: white;
       border-color: transparent;
-    }
-
-    .roster-sort-btn .sort-arrow {
-      margin-left: 4px;
-      font-size: 10px;
-    }
-
-    .roster-sort-btn:not(.active) .sort-arrow {
-      display: none;
     }
 
     .roster-summary {
@@ -912,13 +953,20 @@
     <div id="tab-roster" class="tab-content">
       <div class="card">
         <h2 class="card-title">Guild Roster</h2>
-        <div class="roster-controls" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;">
-          <button class="btn btn-secondary roster-sort-btn active" data-sort="name">Name<span class="sort-arrow">▲</span></button>
-          <button class="btn btn-secondary roster-sort-btn" data-sort="cp">CP<span class="sort-arrow">▼</span></button>
-          <button class="btn btn-secondary roster-sort-btn" data-sort="role">Role<span class="sort-arrow">▲</span></button>
-          <button class="btn btn-secondary roster-sort-btn" data-sort="classes">Classes<span class="sort-arrow">▲</span></button>
-          <button class="btn btn-secondary roster-sort-btn" data-sort="totalEvents">Total Events<span class="sort-arrow">▼</span></button>
-          <button class="btn btn-secondary roster-sort-btn" data-sort="attendance">Attendance<span class="sort-arrow">▼</span></button>
+        <div class="roster-sort-controls">
+          <span class="roster-sort-label">Sort by:</span>
+          <select id="roster-sort-field" class="roster-sort-select">
+            <option value="name">Name</option>
+            <option value="cp">Combat Power</option>
+            <option value="role">Role</option>
+            <option value="classes">Weapons</option>
+            <option value="totalEvents">Total Events</option>
+            <option value="attendance">Attendance %</option>
+          </select>
+          <div class="roster-direction-btns">
+            <button id="sort-asc-btn" class="roster-direction-btn active" data-direction="asc">▲ Ascending</button>
+            <button id="sort-desc-btn" class="roster-direction-btn" data-direction="desc">▼ Descending</button>
+          </div>
         </div>
         <div id="roster-content">
           <div class="loading">Loading...</div>
@@ -1754,34 +1802,39 @@
       }
     }
 
-    // Setup roster sort buttons
+    // Setup roster sort controls
     function setupRosterSortButtons() {
-      document.querySelectorAll('.roster-sort-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const sortField = btn.dataset.sort;
-
-          // Toggle ascending/descending if same field
-          if (rosterSortField === sortField) {
-            rosterSortAscending = !rosterSortAscending;
-          } else {
-            rosterSortField = sortField;
-            // Default sort direction based on field type
-            rosterSortAscending = sortField === 'name' || sortField === 'role' || sortField === 'classes';
-          }
-
-          // Update active button and arrow
-          document.querySelectorAll('.roster-sort-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-
-          // Update arrow direction
-          const arrow = btn.querySelector('.sort-arrow');
-          if (arrow) {
-            arrow.textContent = rosterSortAscending ? '▲' : '▼';
-          }
-
+      // Setup sort field dropdown
+      const sortSelect = document.getElementById('roster-sort-field');
+      if (sortSelect) {
+        sortSelect.value = rosterSortField;
+        sortSelect.addEventListener('change', () => {
+          rosterSortField = sortSelect.value;
           renderRoster();
         });
-      });
+      }
+
+      // Setup direction buttons
+      const ascBtn = document.getElementById('sort-asc-btn');
+      const descBtn = document.getElementById('sort-desc-btn');
+
+      if (ascBtn) {
+        ascBtn.addEventListener('click', () => {
+          rosterSortAscending = true;
+          ascBtn.classList.add('active');
+          descBtn.classList.remove('active');
+          renderRoster();
+        });
+      }
+
+      if (descBtn) {
+        descBtn.addEventListener('click', () => {
+          rosterSortAscending = false;
+          descBtn.classList.add('active');
+          ascBtn.classList.remove('active');
+          renderRoster();
+        });
+      }
     }
 
     // Sort roster players
@@ -1792,12 +1845,14 @@
       sorted.sort((a, b) => {
         let comparison = 0;
 
+        // All comparisons are ascending (a - b or a.localeCompare(b))
+        // The rosterSortAscending flag controls the final direction
         switch (rosterSortField) {
           case 'name':
             comparison = a.displayName.localeCompare(b.displayName);
             break;
           case 'cp':
-            comparison = b.cp - a.cp;
+            comparison = a.cp - b.cp;
             break;
           case 'role':
             comparison = roleOrder[a.role] - roleOrder[b.role];
@@ -1809,10 +1864,10 @@
             comparison = aWeapons.localeCompare(bWeapons);
             break;
           case 'totalEvents':
-            comparison = b.totalEvents - a.totalEvents;
+            comparison = a.totalEvents - b.totalEvents;
             break;
           case 'attendance':
-            comparison = b.attendancePercent - a.attendancePercent;
+            comparison = a.attendancePercent - b.attendancePercent;
             break;
           default:
             comparison = 0;
