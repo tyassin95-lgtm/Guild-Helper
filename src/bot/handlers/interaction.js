@@ -1,5 +1,9 @@
 const { handleExcludeRole } = require('./commands/excluderole');
 
+// Admin panel imports
+const { handleAdminRole } = require('../../features/admin/commands/adminrole');
+const { handleAdminPanel } = require('../../features/admin/commands/adminpanel');
+
 // Party system imports
 const { handleMyInfo } = require('../../features/parties/commands/myinfo');
 const { handleViewParties } = require('../../features/parties/commands/viewparties');
@@ -139,6 +143,8 @@ async function onInteractionCreate({ client, interaction, db, collections }) {
 
       // Admin commands
       if (name === 'excluderole') return handleExcludeRole({ interaction, collections });
+      if (name === 'adminrole') return handleAdminRole({ interaction, collections });
+      if (name === 'adminpanel') return handleAdminPanel({ interaction, collections, webServer });
 
       // AutoMod command
       if (name === 'automod') return handleAutoMod({ interaction, collections });
