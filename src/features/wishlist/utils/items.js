@@ -234,7 +234,7 @@ const WISHLIST_ITEMS = {
     {
       id: 'aelon_longbow',
       name: "Grand Aelon's Longbow of Blight",
-      icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Weapon/IT_P_Dagger_00035.webp',
+      icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Weapon/IT_P_Bow_00034A.webp',
       category: 'Bow'
     },
     {
