@@ -10,6 +10,8 @@ const { EmbedBuilder } = require('discord.js');
 const { updateGuildRoster } = require('../features/parties/commands/guildroster');
 const { updateEventEmbed } = require('../features/pvp/embed');
 const { uploadToDiscordStorage } = require('../utils/discordStorage');
+const { postGearCheckEmbed } = require('../features/parties/handlers/gearUploadHandler');
+const { updateWishlistPanels } = require('../features/wishlist/commands/wishlists');
 
 class WebServer {
   constructor() {
@@ -32,8 +34,17 @@ class WebServer {
 
     // Middleware
     this.app.use(cors());
-    this.app.use(bodyParser.json());
-    this.app.use(bodyParser.urlencoded({ extended: true }));
+    this.app.use(bodyParser.json({ limit: '10mb' }));
+    this.app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+
+    // Disable caching for API routes to ensure fresh data
+    this.app.use('/api', (req, res, next) => {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+      res.set('Surrogate-Control', 'no-store');
+      next();
+    });
 
     // Serve static files
     this.app.use('/static', express.static(path.join(__dirname, 'public')));
@@ -252,6 +263,11 @@ class WebServer {
     // API: Upload gear screenshot
     this.app.post('/api/profile/:token/upload-gear', async (req, res) => {
       await this.handleUploadGearScreenshot(req, res);
+    });
+
+    // API: Get roster data
+    this.app.get('/api/profile/:token/roster', async (req, res) => {
+      await this.handleGetRosterData(req, res);
     });
 
     // 404 handler
@@ -1109,6 +1125,21 @@ class WebServer {
         // Don't fail the request if roster update fails
       }
 
+      // Post gear check embed if build link was updated
+      if (buildLink !== undefined) {
+        try {
+          const guild = await this.client.guilds.fetch(guildId);
+          const member = await guild.members.fetch(userId).catch(() => null);
+          const playerInfo = await this.collections.partyPlayers.findOne({ userId, guildId });
+          if (member && playerInfo && playerInfo.gearScreenshotUrl) {
+            await postGearCheckEmbed(guild, member, playerInfo, this.collections);
+            console.log(`✅ Gear check embed posted after build link update for user ${userId}`);
+          }
+        } catch (embedErr) {
+          console.error('Failed to post gear check embed after build link update:', embedErr);
+        }
+      }
+
       res.json({ success: true, message: 'Profile updated successfully' });
 
     } catch (error) {
@@ -1157,6 +1188,17 @@ class WebServer {
         const signupDeadline = new Date(event.eventTime.getTime() - 20 * 60 * 1000);
         const signupsClosed = Date.now() > signupDeadline.getTime();
 
+        // Check if attendance can be recorded (30 min before to 6 hours after event)
+        const eventTime = event.eventTime.getTime();
+        const thirtyMinsBefore = eventTime - (30 * 60 * 1000);
+        const sixHoursAfter = eventTime + (6 * 60 * 60 * 1000);
+        const now = Date.now();
+        const canRecordAttendance = signupStatus !== 'none' &&
+                                    now >= thirtyMinsBefore &&
+                                    now <= sixHoursAfter &&
+                                    !hasRecordedAttendance &&
+                                    !event.closed;
+
         return {
           _id: event._id.toString(),
           eventType: event.eventType,
@@ -1171,7 +1213,11 @@ class WebServer {
           attendeesCount: event.attendees?.length || 0,
           rsvpAttendingCount: event.rsvpAttending?.length || 0,
           rsvpMaybeCount: event.rsvpMaybe?.length || 0,
-          rsvpNotAttendingCount: event.rsvpNotAttending?.length || 0
+          rsvpNotAttendingCount: event.rsvpNotAttending?.length || 0,
+          // Include attendance code when attendance can be recorded
+          attendanceCode: canRecordAttendance ? event.password : null,
+          canRecordAttendance,
+          isClosed: event.closed || false
         };
       });
 
@@ -1478,6 +1524,19 @@ class WebServer {
         { upsert: true }
       );
 
+      // Update wishlist panels in Discord
+      try {
+        await updateWishlistPanels({
+          client: this.client,
+          guildId,
+          collections: this.collections
+        });
+        console.log(`✅ Wishlist panels updated for guild ${guildId}`);
+      } catch (panelErr) {
+        console.error('Failed to update wishlist panels:', panelErr);
+        // Don't fail the request if panel update fails
+      }
+
       res.json({ success: true, message: submit ? 'Wishlist submitted successfully' : 'Wishlist saved' });
 
     } catch (error) {
@@ -1593,6 +1652,18 @@ class WebServer {
         console.error('Failed to update roster after gear upload:', rosterErr);
       }
 
+      // Post gear check embed to configured channel
+      try {
+        const member = await guild.members.fetch(userId).catch(() => null);
+        const playerInfo = await this.collections.partyPlayers.findOne({ userId, guildId });
+        if (member && playerInfo) {
+          await postGearCheckEmbed(guild, member, playerInfo, this.collections);
+          console.log(`Gear check embed posted for user ${userId}`);
+        }
+      } catch (embedErr) {
+        console.error('Failed to post gear check embed:', embedErr);
+      }
+
       res.json({
         success: true,
         message: 'Gear screenshot uploaded successfully',
@@ -1602,6 +1673,100 @@ class WebServer {
     } catch (error) {
       console.error('Error uploading gear screenshot:', error);
       res.status(500).json({ error: 'Failed to upload gear screenshot' });
+    }
+  }
+
+  /**
+   * Handle get roster data API request
+   */
+  async handleGetRosterData(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+
+      // Get all players with info submitted
+      const players = await this.collections.partyPlayers.find({
+        guildId,
+        weapon1: { $exists: true },
+        weapon2: { $exists: true }
+      }).toArray();
+
+      // Get guild settings for weekly total events
+      const guildSettings = await this.collections.guildSettings.findOne({ guildId });
+      const weeklyTotalEvents = guildSettings?.weeklyTotalEvents || 0;
+
+      // Fetch guild for member info
+      const guild = await this.client.guilds.fetch(guildId);
+
+      // Enrich player data with display names, avatars, PvP stats
+      const enrichedPlayers = await Promise.all(
+        players.map(async (player) => {
+          // Get member info
+          const member = await guild.members.fetch(player.userId).catch(() => null);
+          const displayName = member?.displayName || 'Unknown';
+          const avatarUrl = member?.user?.displayAvatarURL({ size: 64, format: 'png' }) || null;
+
+          // Get PvP activity ranking (total events)
+          const pvpActivity = await this.collections.pvpActivityRanking.findOne({
+            userId: player.userId,
+            guildId
+          });
+          const totalEvents = pvpActivity?.totalEvents || 0;
+
+          // Get PvP bonuses (weekly attendance)
+          const pvpBonus = await this.collections.pvpBonuses.findOne({
+            userId: player.userId,
+            guildId
+          });
+          const eventsAttended = pvpBonus?.eventsAttended || 0;
+          const bonusCount = pvpBonus?.bonusCount || 0;
+
+          // Calculate attendance percentage
+          const attendancePercent = weeklyTotalEvents > 0
+            ? Math.round((eventsAttended / weeklyTotalEvents) * 100)
+            : 0;
+
+          return {
+            userId: player.userId,
+            displayName,
+            avatarUrl,
+            weapon1: player.weapon1 || 'Unknown',
+            weapon2: player.weapon2 || 'Unknown',
+            cp: player.cp || 0,
+            role: player.role || 'dps',
+            totalEvents,
+            eventsAttended,
+            bonusCount,
+            attendancePercent,
+            buildLink: player.buildLink || null,
+            gearScreenshotUrl: player.gearScreenshotUrl || null
+          };
+        })
+      );
+
+      // Calculate summary stats
+      const summary = {
+        totalPlayers: enrichedPlayers.length,
+        totalCP: enrichedPlayers.reduce((sum, p) => sum + p.cp, 0),
+        tanks: enrichedPlayers.filter(p => p.role === 'tank').length,
+        healers: enrichedPlayers.filter(p => p.role === 'healer').length,
+        dps: enrichedPlayers.filter(p => p.role === 'dps').length,
+        weeklyTotalEvents
+      };
+
+      res.json({
+        players: enrichedPlayers,
+        summary
+      });
+
+    } catch (error) {
+      console.error('Error getting roster data:', error);
+      res.status(500).json({ error: 'Failed to get roster data' });
     }
   }
 

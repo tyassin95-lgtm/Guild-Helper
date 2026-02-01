@@ -690,6 +690,139 @@
       font-size: 48px;
       margin-bottom: 12px;
     }
+
+    /* Roster Table */
+    .roster-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .roster-table th {
+      text-align: left;
+      padding: 12px;
+      background: var(--bg-card);
+      border-bottom: 2px solid var(--border-color);
+      color: var(--text-secondary);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    .roster-table td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+
+    .roster-table tr:hover {
+      background: var(--bg-card);
+    }
+
+    .roster-player-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .roster-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 2px solid var(--border-color);
+    }
+
+    .roster-role-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .roster-role-tank {
+      background: var(--tank-bg);
+      color: var(--tank-color);
+      border: 1px solid var(--tank-color);
+    }
+
+    .roster-role-healer {
+      background: var(--healer-bg);
+      color: var(--healer-color);
+      border: 1px solid var(--healer-color);
+    }
+
+    .roster-role-dps {
+      background: var(--dps-bg);
+      color: var(--dps-color);
+      border: 1px solid var(--dps-color);
+    }
+
+    .roster-cp {
+      font-weight: 600;
+      color: var(--gold-color);
+    }
+
+    .roster-weapons {
+      color: var(--text-secondary);
+    }
+
+    .roster-stat {
+      text-align: center;
+    }
+
+    .roster-attendance-good { color: var(--success-color); }
+    .roster-attendance-medium { color: var(--warning-color); }
+    .roster-attendance-low { color: var(--danger-color); }
+
+    .roster-sort-btn.active {
+      background: linear-gradient(135deg, var(--accent-purple), #6366f1);
+      color: white;
+      border-color: transparent;
+    }
+
+    .roster-summary {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 20px;
+      padding: 16px;
+      background: var(--bg-card);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .roster-summary-item {
+      text-align: center;
+    }
+
+    .roster-summary-value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .roster-summary-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 768px) {
+      .roster-table {
+        font-size: 12px;
+      }
+
+      .roster-table th, .roster-table td {
+        padding: 8px;
+      }
+
+      .roster-avatar {
+        width: 24px;
+        height: 24px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -715,6 +848,9 @@
       </button>
       <button class="tab-btn" data-tab="wishlist">
         <span>Wishlist</span>
+      </button>
+      <button class="tab-btn" data-tab="roster">
+        <span>Roster</span>
       </button>
     </div>
 
@@ -758,6 +894,24 @@
         <h2 class="card-title">Your Wishlist</h2>
         <div id="wishlist-status"></div>
         <div id="wishlist-content">
+          <div class="loading">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Roster Tab -->
+    <div id="tab-roster" class="tab-content">
+      <div class="card">
+        <h2 class="card-title">Guild Roster</h2>
+        <div class="roster-controls" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;">
+          <button class="btn btn-secondary roster-sort-btn active" data-sort="name">Name</button>
+          <button class="btn btn-secondary roster-sort-btn" data-sort="cp">CP</button>
+          <button class="btn btn-secondary roster-sort-btn" data-sort="role">Role</button>
+          <button class="btn btn-secondary roster-sort-btn" data-sort="classes">Classes</button>
+          <button class="btn btn-secondary roster-sort-btn" data-sort="totalEvents">Total Events</button>
+          <button class="btn btn-secondary roster-sort-btn" data-sort="attendance">Attendance</button>
+        </div>
+        <div id="roster-content">
           <div class="loading">Loading...</div>
         </div>
       </div>
@@ -906,6 +1060,7 @@
       loadProfileData();
       loadEventsData();
       loadWishlistData();
+      loadRosterData();
     });
 
     // Tab switching
@@ -921,19 +1076,43 @@
           // Update content
           document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
           document.getElementById(`tab-${tab}`).classList.add('active');
+
+          // Refresh data when switching tabs to ensure fresh data
+          switch (tab) {
+            case 'info':
+              loadProfileData();
+              break;
+            case 'events':
+              loadEventsData();
+              break;
+            case 'wishlist':
+              loadWishlistData();
+              break;
+            case 'roster':
+              loadRosterData();
+              break;
+          }
         });
       });
     }
 
-    // API calls
+    // API calls with cache busting
     async function apiCall(endpoint, method = 'GET', data = null) {
       const options = {
         method,
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
+        cache: 'no-store'
       };
       if (data) options.body = JSON.stringify(data);
 
-      const response = await fetch(`/api/profile/${TOKEN}/${endpoint}`, options);
+      // Add timestamp to bust cache
+      const separator = endpoint.includes('?') ? '&' : '?';
+      const url = `/api/profile/${TOKEN}/${endpoint}${separator}_t=${Date.now()}`;
+
+      const response = await fetch(url, options);
       const result = await response.json();
 
       if (!response.ok) {
@@ -1187,22 +1366,14 @@
         <div class="events-list">
           ${eventsData.events.map(event => {
             const eventDate = new Date(event.eventTime);
-            const now = Date.now();
-            const eventTime = eventDate.getTime();
-            const isUpcoming = eventDate > new Date();
-
-            // Show attendance button from 30 min before event until 6 hours after
-            const thirtyMinsBefore = eventTime - (30 * 60 * 1000);
-            const sixHoursAfter = eventTime + (6 * 60 * 60 * 1000);
-            const canRecordAttendance = event.signupStatus !== 'none' &&
-                                        now >= thirtyMinsBefore &&
-                                        now <= sixHoursAfter &&
-                                        !event.hasRecordedAttendance;
 
             let statusClass = '';
             let statusText = '';
 
-            if (event.hasRecordedAttendance) {
+            if (event.isClosed) {
+              statusClass = 'not-attending';
+              statusText = 'Closed';
+            } else if (event.hasRecordedAttendance) {
               statusClass = 'recorded';
               statusText = 'Attended';
             } else if (event.signupStatus === 'attending') {
@@ -1232,7 +1403,7 @@
                     <span>${event.rsvpAttendingCount} attending</span>
                     <span>${event.attendeesCount} recorded</span>
                   </div>
-                  ${!event.hasRecordedAttendance ? `
+                  ${!event.isClosed && !event.hasRecordedAttendance ? `
                     <div class="event-actions">
                       ${!event.signupsClosed ? `
                         <button class="btn ${event.signupStatus === 'attending' ? 'btn-success' : 'btn-secondary'}" onclick="updateRsvp('${event._id}', 'attending')">Going</button>
@@ -1241,10 +1412,18 @@
                       ` : `
                         <span style="color: var(--text-muted); font-size: 13px;">Signups closed</span>
                       `}
-                      ${canRecordAttendance ? `
-                        <button class="btn btn-primary" onclick="openAttendanceModal('${event._id}')">Record Attendance</button>
-                      ` : ''}
                     </div>
+                    ${event.canRecordAttendance && event.attendanceCode ? `
+                      <div class="attendance-section" style="margin-top: 16px; padding: 16px; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--accent-purple);">
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                          <div style="flex: 1;">
+                            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">ATTENDANCE CODE</div>
+                            <div style="font-size: 24px; font-weight: 700; color: var(--accent-purple); letter-spacing: 4px;">${event.attendanceCode}</div>
+                          </div>
+                          <button class="btn btn-primary" onclick="recordAttendance('${event._id}', '${event.attendanceCode}')">Record Attendance</button>
+                        </div>
+                      </div>
+                    ` : ''}
                   ` : ''}
                 </div>
               </div>
@@ -1266,18 +1445,56 @@
       // Sort by day of week
       const sortedEvents = [...eventsData.staticEvents].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
 
-      const html = sortedEvents.map(event => `
-        <div class="static-event-card">
-          <div class="static-event-day">${event.dayName || 'Unknown'}</div>
-          <div>
-            <strong>${event.title || 'Untitled Event'}</strong>
-            <br>
-            <span style="color: var(--text-secondary); font-size: 13px;">${event.timeDisplay || 'No time set'} (UK)</span>
+      const html = sortedEvents.map(event => {
+        // Calculate next occurrence of this static event in user's local time
+        const now = new Date();
+        const nextEvent = getNextEventOccurrence(event.dayOfWeek, event.hour, event.minute);
+        const localTime = nextEvent.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const localDay = nextEvent.toLocaleDateString([], { weekday: 'long' });
+
+        return `
+          <div class="static-event-card">
+            <div class="static-event-day">${localDay}</div>
+            <div>
+              <strong>${event.title || 'Untitled Event'}</strong>
+              <br>
+              <span style="color: var(--text-secondary); font-size: 13px;">${localTime} (Your Time)</span>
+            </div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
 
       document.getElementById('static-events-content').innerHTML = html;
+    }
+
+    // Get next occurrence of a weekly event (converts from UK time)
+    function getNextEventOccurrence(dayOfWeek, hour, minute) {
+      // Create a date in UK timezone
+      const now = new Date();
+
+      // Get current day of week (0 = Sunday, 1 = Monday, etc.)
+      const currentDay = now.getDay();
+
+      // Calculate days until next occurrence
+      let daysUntil = dayOfWeek - currentDay;
+      if (daysUntil < 0) daysUntil += 7;
+
+      // Create the next event date in UTC (UK time without DST adjustment for simplicity)
+      // Note: UK is UTC+0 in winter, UTC+1 in summer (BST)
+      // We'll use a rough approximation - events are stored in UK time
+      const nextEvent = new Date(now);
+      nextEvent.setDate(now.getDate() + daysUntil);
+
+      // Set the time (assuming UK time is roughly UTC for now)
+      // This creates a date object that JavaScript will display in the user's local timezone
+      nextEvent.setUTCHours(hour, minute, 0, 0);
+
+      // If the event already passed this week, move to next week
+      if (daysUntil === 0 && nextEvent < now) {
+        nextEvent.setDate(nextEvent.getDate() + 7);
+      }
+
+      return nextEvent;
     }
 
     // Update RSVP
@@ -1317,6 +1534,18 @@
         });
         showToast('Attendance recorded!', 'success');
         closeAttendanceModal();
+        await loadEventsData();
+        await loadProfileData();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    // Record attendance directly with code
+    async function recordAttendance(eventId, code) {
+      try {
+        await apiCall('event-attendance', 'POST', { eventId, code });
+        showToast('Attendance recorded!', 'success');
         await loadEventsData();
         await loadProfileData();
       } catch (error) {
@@ -1497,6 +1726,189 @@
       } catch (error) {
         showToast(error.message, 'error');
       }
+    }
+
+    // Roster state
+    let rosterData = null;
+    let rosterSortField = 'name';
+    let rosterSortAscending = true;
+
+    // Load roster data
+    async function loadRosterData() {
+      try {
+        rosterData = await apiCall('roster');
+        renderRoster();
+        setupRosterSortButtons();
+      } catch (error) {
+        console.error('Error loading roster:', error);
+        document.getElementById('roster-content').innerHTML = '<p class="error">Failed to load roster</p>';
+      }
+    }
+
+    // Setup roster sort buttons
+    function setupRosterSortButtons() {
+      document.querySelectorAll('.roster-sort-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const sortField = btn.dataset.sort;
+
+          // Toggle ascending/descending if same field
+          if (rosterSortField === sortField) {
+            rosterSortAscending = !rosterSortAscending;
+          } else {
+            rosterSortField = sortField;
+            rosterSortAscending = sortField === 'name' || sortField === 'role' || sortField === 'classes';
+          }
+
+          // Update active button
+          document.querySelectorAll('.roster-sort-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+
+          renderRoster();
+        });
+      });
+    }
+
+    // Sort roster players
+    function sortRosterPlayers(players) {
+      const sorted = [...players];
+      const roleOrder = { tank: 0, healer: 1, dps: 2 };
+
+      sorted.sort((a, b) => {
+        let comparison = 0;
+
+        switch (rosterSortField) {
+          case 'name':
+            comparison = a.displayName.localeCompare(b.displayName);
+            break;
+          case 'cp':
+            comparison = b.cp - a.cp;
+            break;
+          case 'role':
+            comparison = roleOrder[a.role] - roleOrder[b.role];
+            if (comparison === 0) comparison = a.displayName.localeCompare(b.displayName);
+            break;
+          case 'classes':
+            const aWeapons = `${a.weapon1}/${a.weapon2}`;
+            const bWeapons = `${b.weapon1}/${b.weapon2}`;
+            comparison = aWeapons.localeCompare(bWeapons);
+            break;
+          case 'totalEvents':
+            comparison = b.totalEvents - a.totalEvents;
+            break;
+          case 'attendance':
+            comparison = b.attendancePercent - a.attendancePercent;
+            break;
+          default:
+            comparison = 0;
+        }
+
+        return rosterSortAscending ? comparison : -comparison;
+      });
+
+      return sorted;
+    }
+
+    // Format CP with K/M suffixes
+    function formatCP(cp) {
+      if (!cp || cp === 0) return '0';
+      if (cp >= 1000000) return `${(cp / 1000000).toFixed(1)}M`;
+      if (cp >= 1000) return `${(cp / 1000).toFixed(1)}K`;
+      return cp.toString();
+    }
+
+    // Get attendance class
+    function getAttendanceClass(percent) {
+      if (percent >= 70) return 'roster-attendance-good';
+      if (percent >= 40) return 'roster-attendance-medium';
+      return 'roster-attendance-low';
+    }
+
+    // Render roster
+    function renderRoster() {
+      if (!rosterData || !rosterData.players || rosterData.players.length === 0) {
+        document.getElementById('roster-content').innerHTML = `
+          <div class="no-events">
+            <div class="no-events-icon">👥</div>
+            <p>No players in the roster yet</p>
+          </div>
+        `;
+        return;
+      }
+
+      const summary = rosterData.summary;
+      const sortedPlayers = sortRosterPlayers(rosterData.players);
+
+      const summaryHtml = `
+        <div class="roster-summary">
+          <div class="roster-summary-item">
+            <div class="roster-summary-value">${summary.totalPlayers}</div>
+            <div class="roster-summary-label">Players</div>
+          </div>
+          <div class="roster-summary-item">
+            <div class="roster-summary-value">${formatCP(summary.totalCP)}</div>
+            <div class="roster-summary-label">Total CP</div>
+          </div>
+          <div class="roster-summary-item">
+            <div class="roster-summary-value" style="color: var(--tank-color);">${summary.tanks}</div>
+            <div class="roster-summary-label">Tanks</div>
+          </div>
+          <div class="roster-summary-item">
+            <div class="roster-summary-value" style="color: var(--healer-color);">${summary.healers}</div>
+            <div class="roster-summary-label">Healers</div>
+          </div>
+          <div class="roster-summary-item">
+            <div class="roster-summary-value" style="color: var(--dps-color);">${summary.dps}</div>
+            <div class="roster-summary-label">DPS</div>
+          </div>
+        </div>
+      `;
+
+      const tableHtml = `
+        <div style="overflow-x: auto;">
+          <table class="roster-table">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Role</th>
+                <th>Weapons</th>
+                <th>CP</th>
+                <th>Total Events</th>
+                <th>Attendance</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sortedPlayers.map(player => {
+                const roleClass = `roster-role-${player.role}`;
+                const roleEmoji = player.role === 'tank' ? '🛡️' : player.role === 'healer' ? '💚' : '⚔️';
+                const roleDisplay = player.role.charAt(0).toUpperCase() + player.role.slice(1);
+                const attendanceClass = getAttendanceClass(player.attendancePercent);
+
+                return `
+                  <tr>
+                    <td>
+                      <div class="roster-player-name">
+                        ${player.avatarUrl ? `<img src="${player.avatarUrl}" alt="" class="roster-avatar">` : ''}
+                        <span>${player.displayName}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="roster-role-badge ${roleClass}">
+                        ${roleEmoji} ${roleDisplay}
+                      </span>
+                    </td>
+                    <td class="roster-weapons">${player.weapon1} / ${player.weapon2}</td>
+                    <td class="roster-cp">${formatCP(player.cp)}</td>
+                    <td class="roster-stat">${player.totalEvents}</td>
+                    <td class="roster-stat ${attendanceClass}">${player.attendancePercent}%</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      document.getElementById('roster-content').innerHTML = summaryHtml + tableHtml;
     }
 
     // Toast notification
