@@ -1869,9 +1869,9 @@
                   ${!event.isClosed && !event.hasRecordedAttendance ? `
                     <div class="event-actions">
                       ${!event.signupsClosed ? `
-                        <button class="btn ${event.signupStatus === 'attending' ? 'btn-success' : 'btn-secondary'}" onclick="updateRsvp('${event._id}', 'attending')">Going</button>
-                        <button class="btn ${event.signupStatus === 'maybe' ? 'btn-warning' : 'btn-secondary'}" onclick="updateRsvp('${event._id}', 'maybe')">Maybe</button>
-                        <button class="btn ${event.signupStatus === 'not_attending' ? 'btn-danger' : 'btn-secondary'}" onclick="updateRsvp('${event._id}', 'not_attending')">Not Going</button>
+                        <button class="btn ${event.signupStatus === 'attending' ? 'btn-success' : 'btn-secondary'}" onclick="updateRsvp('${event._id}', 'attending', this)">Going</button>
+                        <button class="btn ${event.signupStatus === 'maybe' ? 'btn-warning' : 'btn-secondary'}" onclick="updateRsvp('${event._id}', 'maybe', this)">Maybe</button>
+                        <button class="btn ${event.signupStatus === 'not_attending' ? 'btn-danger' : 'btn-secondary'}" onclick="updateRsvp('${event._id}', 'not_attending', this)">Not Going</button>
                       ` : `
                         <span style="color: var(--text-muted); font-size: 13px;">Signups closed</span>
                       `}
@@ -1883,7 +1883,7 @@
                             <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">ATTENDANCE CODE</div>
                             <div style="font-size: 24px; font-weight: 700; color: var(--accent-purple); letter-spacing: 4px;">${event.attendanceCode}</div>
                           </div>
-                          <button class="btn btn-primary" onclick="recordAttendance('${event._id}', '${event.attendanceCode}')">Record Attendance</button>
+                          <button class="btn btn-primary" onclick="recordAttendance('${event._id}', '${event.attendanceCode}', this)">Record Attendance</button>
                         </div>
                       </div>
                     ` : ''}
@@ -1960,14 +1960,39 @@
       return nextEvent;
     }
 
+    // Track RSVP/attendance processing to prevent spam
+    const processingEvents = new Set();
+    let isSubmittingAttendance = false;
+
     // Update RSVP
-    async function updateRsvp(eventId, status) {
+    async function updateRsvp(eventId, status, buttonEl) {
+      // Prevent spam
+      if (processingEvents.has(eventId)) return;
+      processingEvents.add(eventId);
+
+      // Disable all RSVP buttons for this event
+      const eventCard = buttonEl?.closest('.event-card');
+      const rsvpButtons = eventCard?.querySelectorAll('.event-actions .btn');
+      rsvpButtons?.forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+      });
+
       try {
         await apiCall('event-rsvp', 'POST', { eventId, status });
         showToast('RSVP updated', 'success');
         await loadEventsData();
       } catch (error) {
         showToast(error.message, 'error');
+        // Re-enable buttons on error
+        rsvpButtons?.forEach(btn => {
+          btn.disabled = false;
+          btn.style.opacity = '';
+          btn.style.cursor = '';
+        });
+      } finally {
+        processingEvents.delete(eventId);
       }
     }
 
@@ -1984,10 +2009,21 @@
     }
 
     async function submitAttendance() {
+      // Prevent spam
+      if (isSubmittingAttendance) return;
+
       const code = document.getElementById('attendance-code').value;
       if (!code || code.length !== 4) {
         showToast('Please enter a 4-digit code', 'error');
         return;
+      }
+
+      isSubmittingAttendance = true;
+      const submitBtn = document.querySelector('#attendance-modal .btn-primary');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+        submitBtn.style.opacity = '0.6';
       }
 
       try {
@@ -2001,11 +2037,30 @@
         await loadProfileData();
       } catch (error) {
         showToast(error.message, 'error');
+      } finally {
+        isSubmittingAttendance = false;
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Submit';
+          submitBtn.style.opacity = '';
+        }
       }
     }
 
     // Record attendance directly with code
-    async function recordAttendance(eventId, code) {
+    async function recordAttendance(eventId, code, buttonEl) {
+      // Prevent spam
+      if (processingEvents.has('attend_' + eventId)) return;
+      processingEvents.add('attend_' + eventId);
+
+      // Disable the button
+      if (buttonEl) {
+        buttonEl.disabled = true;
+        buttonEl.textContent = 'Recording...';
+        buttonEl.style.opacity = '0.6';
+        buttonEl.style.cursor = 'not-allowed';
+      }
+
       try {
         await apiCall('event-attendance', 'POST', { eventId, code });
         showToast('Attendance recorded!', 'success');
@@ -2013,6 +2068,15 @@
         await loadProfileData();
       } catch (error) {
         showToast(error.message, 'error');
+        // Re-enable button on error
+        if (buttonEl) {
+          buttonEl.disabled = false;
+          buttonEl.textContent = 'Record Attendance';
+          buttonEl.style.opacity = '';
+          buttonEl.style.cursor = '';
+        }
+      } finally {
+        processingEvents.delete('attend_' + eventId);
       }
     }
 
