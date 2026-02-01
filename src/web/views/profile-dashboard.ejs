@@ -1869,11 +1869,23 @@
                   ${!event.isClosed && !event.hasRecordedAttendance ? `
                     <div class="event-actions">
                       ${!event.signupsClosed ? `
-                        <button class="btn ${event.signupStatus === 'attending' ? 'btn-success' : 'btn-secondary'}" onclick="updateRsvp('${event._id}', 'attending', this)">Going</button>
-                        <button class="btn ${event.signupStatus === 'maybe' ? 'btn-warning' : 'btn-secondary'}" onclick="updateRsvp('${event._id}', 'maybe', this)">Maybe</button>
-                        <button class="btn ${event.signupStatus === 'not_attending' ? 'btn-danger' : 'btn-secondary'}" onclick="updateRsvp('${event._id}', 'not_attending', this)">Not Going</button>
+                        <button class="btn ${event.signupStatus === 'attending' ? 'btn-success' : 'btn-secondary'}"
+                                onclick="updateRsvp('${event._id}', 'attending', this)"
+                                ${event.signupStatus === 'attending' ? 'disabled style="cursor: default; opacity: 1;"' : ''}>
+                          ${event.signupStatus === 'attending' ? '✓ ' : ''}Going
+                        </button>
+                        <button class="btn ${event.signupStatus === 'maybe' ? 'btn-warning' : 'btn-secondary'}"
+                                onclick="updateRsvp('${event._id}', 'maybe', this)"
+                                ${event.signupStatus === 'maybe' ? 'disabled style="cursor: default; opacity: 1;"' : ''}>
+                          ${event.signupStatus === 'maybe' ? '✓ ' : ''}Maybe
+                        </button>
+                        <button class="btn ${event.signupStatus === 'not_attending' ? 'btn-danger' : 'btn-secondary'}"
+                                onclick="updateRsvp('${event._id}', 'not_attending', this)"
+                                ${event.signupStatus === 'not_attending' ? 'disabled style="cursor: default; opacity: 1;"' : ''}>
+                          ${event.signupStatus === 'not_attending' ? '✓ ' : ''}Not Going
+                        </button>
                       ` : `
-                        <span style="color: var(--text-muted); font-size: 13px;">Signups closed</span>
+                        <span style="color: var(--text-muted); font-size: 13px;">Signups closed (20 min before event)</span>
                       `}
                     </div>
                     ${event.canRecordAttendance && event.attendanceCode ? `
@@ -1967,6 +1979,9 @@
 
     // Update RSVP
     async function updateRsvp(eventId, status, buttonEl) {
+      // Check if button is disabled (already selected status)
+      if (buttonEl?.disabled) return;
+
       // Check cooldown
       const cooldownEnd = rsvpCooldowns.get(eventId);
       if (cooldownEnd && Date.now() < cooldownEnd) {
