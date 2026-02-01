@@ -1,0 +1,1372 @@
+/**
+ * Profile Dashboard Styles
+ * Modular CSS for the guild profile dashboard
+ */
+
+/* ==========================================
+   Base Styles & CSS Variables
+   ========================================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-primary: #0a0e17;
+  --bg-secondary: #111827;
+  --bg-card: #1a1f2e;
+  --bg-card-hover: #232a3d;
+  --bg-input: #0d1117;
+  --border-color: #2d3748;
+  --border-glow: rgba(139, 92, 246, 0.3);
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --accent-purple: #8b5cf6;
+  --accent-purple-glow: rgba(139, 92, 246, 0.4);
+  --accent-blue: #3b82f6;
+  --tank-color: #3b82f6;
+  --tank-bg: rgba(59, 130, 246, 0.15);
+  --healer-color: #22c55e;
+  --healer-bg: rgba(34, 197, 94, 0.15);
+  --dps-color: #ef4444;
+  --dps-bg: rgba(239, 68, 68, 0.15);
+  --success-color: #22c55e;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  --gold-color: #fbbf24;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
+  background-image:
+    radial-gradient(ellipse at top, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(59, 130, 246, 0.08) 0%, transparent 50%);
+  min-height: 100vh;
+  color: var(--text-primary);
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* ==========================================
+   Header
+   ========================================== */
+.header {
+  background: var(--bg-secondary);
+  padding: 24px 30px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.user-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 3px solid var(--accent-purple);
+  box-shadow: 0 0 20px var(--accent-purple-glow);
+}
+
+.user-info h1 {
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.user-info .guild-name {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ==========================================
+   Tab Navigation
+   ========================================== */
+.tab-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  background: var(--bg-secondary);
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 14px 24px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.tab-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, var(--accent-purple), #6366f1);
+  color: white;
+  box-shadow: 0 4px 15px var(--accent-purple-glow);
+}
+
+/* ==========================================
+   Tab Content
+   ========================================== */
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* ==========================================
+   Cards
+   ========================================== */
+.card {
+  background: var(--bg-secondary);
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(180deg, var(--accent-purple), var(--accent-blue));
+  border-radius: 2px;
+}
+
+/* ==========================================
+   Info Grid
+   ========================================== */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.info-item {
+  background: var(--bg-card);
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.info-item label {
+  display: block;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.info-item .value {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.info-item .value.role-tank { color: var(--tank-color); }
+.info-item .value.role-healer { color: var(--healer-color); }
+.info-item .value.role-dps { color: var(--dps-color); }
+
+/* Clickable info item for party */
+.info-item.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.info-item.clickable:hover {
+  border-color: var(--accent-purple);
+  transform: translateY(-2px);
+}
+
+.info-item .click-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ==========================================
+   Stats Grid
+   ========================================== */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  text-align: center;
+}
+
+.stat-card .stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--accent-purple);
+  margin-bottom: 4px;
+}
+
+.stat-card .stat-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ==========================================
+   Form Elements
+   ========================================== */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.form-control {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--accent-purple);
+  box-shadow: 0 0 0 3px var(--accent-purple-glow);
+}
+
+select.form-control {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239ca3af' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+/* ==========================================
+   Buttons
+   ========================================== */
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-purple), #6366f1);
+  color: white;
+  box-shadow: 0 4px 15px var(--accent-purple-glow);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px var(--accent-purple-glow);
+}
+
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-purple);
+}
+
+.btn-success {
+  background: var(--success-color);
+  color: white;
+}
+
+.btn-warning {
+  background: var(--warning-color);
+  color: #1a1a1a;
+}
+
+.btn-danger {
+  background: var(--danger-color);
+  color: white;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* ==========================================
+   Events Calendar
+   ========================================== */
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.event-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.event-card:hover {
+  border-color: var(--accent-purple);
+  transform: translateY(-2px);
+}
+
+.event-card-header {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  gap: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.event-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  background: var(--bg-secondary);
+}
+
+.event-info {
+  flex: 1;
+}
+
+.event-info h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.event-info .event-time {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.event-status {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.event-status.attending { background: var(--healer-bg); color: var(--healer-color); }
+.event-status.not-attending { background: var(--dps-bg); color: var(--dps-color); }
+.event-status.maybe { background: rgba(251, 191, 36, 0.15); color: var(--warning-color); }
+.event-status.recorded { background: var(--accent-purple-glow); color: var(--accent-purple); }
+
+.event-card-body {
+  padding: 16px;
+}
+
+.event-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.event-actions .btn {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+/* ==========================================
+   Attendance Code Input Panel
+   ========================================== */
+.attendance-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--accent-purple);
+}
+
+.attendance-code-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.attendance-code-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.code-input-container {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.code-digit-input {
+  width: 50px;
+  height: 60px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  background: var(--bg-input);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--accent-purple);
+  transition: all 0.2s ease;
+}
+
+.code-digit-input:focus {
+  outline: none;
+  border-color: var(--accent-purple);
+  box-shadow: 0 0 0 3px var(--accent-purple-glow);
+}
+
+.code-digit-input::placeholder {
+  color: var(--text-muted);
+}
+
+.attendance-submit-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+/* ==========================================
+   Wishlist
+   ========================================== */
+.wishlist-section {
+  margin-bottom: 24px;
+}
+
+.wishlist-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wishlist-section-title .limit {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.wishlist-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.wishlist-item {
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.wishlist-item:hover {
+  border-color: var(--accent-purple);
+  transform: translateY(-2px);
+}
+
+.wishlist-item.selected {
+  border-color: var(--success-color);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.wishlist-item.received {
+  border-color: var(--gold-color);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.wishlist-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wishlist-item img {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--bg-secondary);
+}
+
+.wishlist-item .item-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.wishlist-item .item-category {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.wishlist-item .received-badge {
+  margin-top: 8px;
+  padding: 4px 8px;
+  background: var(--gold-color);
+  color: #1a1a1a;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.wishlist-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* ==========================================
+   Toast Notifications
+   ========================================== */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 16px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.toast.success { border-color: var(--success-color); }
+.toast.error { border-color: var(--danger-color); }
+
+/* ==========================================
+   Loading
+   ========================================== */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: var(--text-secondary);
+}
+
+.loading::after {
+  content: '';
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent-purple);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ==========================================
+   Gear Screenshot
+   ========================================== */
+.gear-screenshot {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  margin-top: 12px;
+}
+
+/* ==========================================
+   Modal
+   ========================================== */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay.show {
+  display: flex;
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-footer {
+  padding: 20px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* ==========================================
+   Static Events
+   ========================================== */
+.static-events {
+  margin-top: 24px;
+}
+
+.static-event-card {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.static-event-day {
+  background: var(--accent-purple);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  min-width: 80px;
+  text-align: center;
+}
+
+/* No events message */
+.no-events {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary);
+}
+
+.no-events-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+/* ==========================================
+   Roster Table
+   ========================================== */
+.roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.roster-table th {
+  text-align: left;
+  padding: 12px;
+  background: var(--bg-card);
+  border-bottom: 2px solid var(--border-color);
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.roster-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.roster-table tr:hover {
+  background: var(--bg-card);
+}
+
+.roster-player-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.roster-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+}
+
+.roster-role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.roster-role-tank {
+  background: var(--tank-bg);
+  color: var(--tank-color);
+  border: 1px solid var(--tank-color);
+}
+
+.roster-role-healer {
+  background: var(--healer-bg);
+  color: var(--healer-color);
+  border: 1px solid var(--healer-color);
+}
+
+.roster-role-dps {
+  background: var(--dps-bg);
+  color: var(--dps-color);
+  border: 1px solid var(--dps-color);
+}
+
+.roster-cp {
+  font-weight: 600;
+  color: var(--gold-color);
+}
+
+.roster-weapons {
+  color: var(--text-secondary);
+}
+
+.roster-stat {
+  text-align: center;
+}
+
+.roster-attendance-good { color: var(--success-color); }
+.roster-attendance-medium { color: var(--warning-color); }
+.roster-attendance-low { color: var(--danger-color); }
+
+.roster-sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.roster-sort-label {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.roster-sort-select {
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.roster-sort-select:focus {
+  outline: none;
+  border-color: var(--accent-purple);
+}
+
+.roster-direction-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.roster-direction-btn {
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.roster-direction-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-purple);
+}
+
+.roster-direction-btn.active {
+  background: linear-gradient(135deg, var(--accent-purple), #6366f1);
+  color: white;
+  border-color: transparent;
+}
+
+/* ==========================================
+   Stats Wishlist Items
+   ========================================== */
+.stats-wishlist-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.stats-wishlist-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stats-wishlist-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.stats-wishlist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.stats-wishlist-item:hover {
+  border-color: var(--accent-purple);
+  transform: translateY(-2px);
+}
+
+.stats-wishlist-item.received {
+  border-color: var(--gold-color);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.stats-wishlist-item img {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+}
+
+.stats-wishlist-item-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stats-wishlist-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats-wishlist-item-category {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.stats-wishlist-item-badge {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.stats-wishlist-item-badge.received {
+  background: var(--gold-color);
+  color: #1a1a1a;
+}
+
+.stats-wishlist-empty {
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 16px;
+  text-align: center;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px dashed var(--border-color);
+}
+
+/* ==========================================
+   Roster Summary
+   ========================================== */
+.roster-summary {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  flex-wrap: wrap;
+  justify-content: space-around;
+}
+
+.roster-summary-item {
+  text-align: center;
+  min-width: 60px;
+  flex: 1;
+}
+
+.roster-summary-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.roster-summary-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+/* ==========================================
+   Item Rolls
+   ========================================== */
+.item-roll-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  transition: all 0.2s ease;
+}
+
+.item-roll-card:hover {
+  border-color: var(--accent-purple);
+}
+
+.item-roll-card.closed {
+  opacity: 0.7;
+}
+
+.item-roll-card.won {
+  border-color: var(--gold-color);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.item-roll-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.item-roll-image {
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  object-fit: cover;
+}
+
+.item-roll-info {
+  flex: 1;
+}
+
+.item-roll-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.item-roll-trait {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.item-roll-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.item-roll-status.active {
+  background: var(--healer-bg);
+  color: var(--healer-color);
+}
+
+.item-roll-status.closed {
+  background: var(--bg-card-hover);
+  color: var(--text-muted);
+}
+
+.item-roll-status.won {
+  background: rgba(251, 191, 36, 0.2);
+  color: var(--gold-color);
+}
+
+.item-roll-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.item-roll-participants {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.item-roll-participants-title {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.item-roll-participant {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.item-roll-participant.winner {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid var(--gold-color);
+}
+
+.item-roll-participant.you {
+  border: 1px solid var(--accent-purple);
+}
+
+.item-roll-participant-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-roll-participant-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.item-roll-participant-score {
+  font-weight: 600;
+}
+
+.item-roll-participant-score.passed {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.item-roll-your-status {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--accent-purple);
+}
+
+.item-roll-your-status-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.item-roll-your-status-value {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.item-roll-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.item-roll-actions .btn {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.no-rolls {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary);
+}
+
+.no-rolls-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+/* ==========================================
+   Party Members Modal
+   ========================================== */
+.party-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.party-member-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.party-member-row.current-user {
+  border-color: var(--accent-purple);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.party-member-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+}
+
+.party-member-info {
+  flex: 1;
+}
+
+.party-member-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.party-member-weapons {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.party-member-cp {
+  font-weight: 600;
+  color: var(--gold-color);
+  font-size: 13px;
+}
+
+/* ==========================================
+   Responsive Styles
+   ========================================== */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .tab-nav {
+    flex-direction: column;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wishlist-items {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .roster-table {
+    font-size: 12px;
+  }
+
+  .roster-table th, .roster-table td {
+    padding: 8px;
+  }
+
+  .roster-avatar {
+    width: 24px;
+    height: 24px;
+  }
+
+  .roster-summary {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .roster-summary-item {
+    min-width: 50px;
+  }
+
+  .roster-summary-value {
+    font-size: 16px;
+  }
+
+  .roster-summary-label {
+    font-size: 9px;
+  }
+
+  .code-digit-input {
+    width: 45px;
+    height: 55px;
+    font-size: 20px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 12px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .roster-summary {
+    gap: 4px;
+    padding: 10px;
+  }
+
+  .roster-summary-item {
+    min-width: 40px;
+  }
+
+  .roster-summary-value {
+    font-size: 14px;
+  }
+
+  .roster-sort-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .code-digit-input {
+    width: 40px;
+    height: 50px;
+    font-size: 18px;
+  }
+}

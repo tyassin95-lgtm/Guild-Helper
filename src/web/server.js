@@ -270,6 +270,11 @@ class WebServer {
       await this.handleGetRosterData(req, res);
     });
 
+    // API: Get party members data
+    this.app.get('/api/profile/:token/party-members', async (req, res) => {
+      await this.handleGetPartyMembers(req, res);
+    });
+
     // API: Get item rolls data
     this.app.get('/api/profile/:token/item-rolls', async (req, res) => {
       await this.handleGetItemRolls(req, res);
@@ -1219,8 +1224,7 @@ class WebServer {
           rsvpAttendingCount: event.rsvpAttending?.length || 0,
           rsvpMaybeCount: event.rsvpMaybe?.length || 0,
           rsvpNotAttendingCount: event.rsvpNotAttending?.length || 0,
-          // Include attendance code when attendance can be recorded
-          attendanceCode: canRecordAttendance ? event.password : null,
+          // Users enter the code manually via 4-digit input panel - do not send code to client
           canRecordAttendance,
           isClosed: event.closed || false
         };
@@ -1805,6 +1809,71 @@ class WebServer {
     } catch (error) {
       console.error('Error getting roster data:', error);
       res.status(500).json({ error: 'Failed to get roster data' });
+    }
+  }
+
+  /**
+   * Handle getting party members data
+   * Returns members in the user's static party
+   */
+  async handleGetPartyMembers(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Find the user's party
+      const party = await this.collections.parties.findOne({
+        guildId,
+        'members.userId': userId,
+        isReserve: { $ne: true }
+      });
+
+      if (!party) {
+        return res.json({ members: [] });
+      }
+
+      // Get guild for member info
+      const guild = await this.client.guilds.fetch(guildId);
+
+      // Enrich party members with display names and avatars
+      const enrichedMembers = await Promise.all(
+        (party.members || []).map(async (member) => {
+          const guildMember = await guild.members.fetch(member.userId).catch(() => null);
+          const displayName = guildMember?.displayName || member.name || 'Unknown';
+          const avatarUrl = guildMember?.user?.displayAvatarURL({ size: 64, format: 'png' }) || null;
+
+          // Get player info for weapons and CP
+          const playerInfo = await this.collections.partyPlayers.findOne({
+            userId: member.userId,
+            guildId
+          });
+
+          return {
+            userId: member.userId,
+            displayName,
+            avatarUrl,
+            weapon1: playerInfo?.weapon1 || member.weapon1 || 'Unknown',
+            weapon2: playerInfo?.weapon2 || member.weapon2 || 'Unknown',
+            cp: playerInfo?.cp || member.cp || 0,
+            role: playerInfo?.role || member.role || 'dps',
+            isCurrentUser: member.userId === userId
+          };
+        })
+      );
+
+      res.json({
+        partyNumber: party.partyNumber,
+        members: enrichedMembers
+      });
+
+    } catch (error) {
+      console.error('Error getting party members:', error);
+      res.status(500).json({ error: 'Failed to get party members' });
     }
   }
 
