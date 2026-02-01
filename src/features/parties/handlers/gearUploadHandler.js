@@ -15,7 +15,7 @@ function getWeaponEmoji(weaponName) {
  * Post gear check embed to configured channel
  */
 async function postGearCheckEmbed(guild, member, playerInfo, collections) {
-  const { guildSettings } = collections;
+  const { guildSettings, partyPlayers } = collections;
 
   // Get the post channel
   const settings = await guildSettings.findOne({ guildId: guild.id });
@@ -27,6 +27,19 @@ async function postGearCheckEmbed(guild, member, playerInfo, collections) {
   if (!channel) {
     console.warn('Gear check post channel not found');
     return;
+  }
+
+  // Delete old gear check embed if it exists
+  if (playerInfo.gearCheckEmbedMessageId) {
+    try {
+      const oldMessage = await channel.messages.fetch(playerInfo.gearCheckEmbedMessageId).catch(() => null);
+      if (oldMessage) {
+        await oldMessage.delete();
+        console.log(`Deleted old gear check embed for user ${member.id}`);
+      }
+    } catch (deleteErr) {
+      console.warn('Could not delete old gear check embed:', deleteErr.message);
+    }
   }
 
   // Build the embed
@@ -67,7 +80,18 @@ async function postGearCheckEmbed(guild, member, playerInfo, collections) {
   embed.setFooter({ text: `User ID: ${member.id}` });
 
   try {
-    await channel.send({ embeds: [embed] });
+    const newMessage = await channel.send({ embeds: [embed] });
+
+    // Store the new embed message ID for future deletion
+    await partyPlayers.updateOne(
+      { userId: member.id, guildId: guild.id },
+      {
+        $set: {
+          gearCheckEmbedMessageId: newMessage.id,
+          gearCheckEmbedChannelId: channel.id
+        }
+      }
+    );
   } catch (err) {
     console.error('Error posting gear check embed:', err);
   }

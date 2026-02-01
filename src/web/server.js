@@ -1188,14 +1188,14 @@ class WebServer {
         const signupDeadline = new Date(event.eventTime.getTime() - 20 * 60 * 1000);
         const signupsClosed = Date.now() > signupDeadline.getTime();
 
-        // Check if attendance can be recorded (30 min before to 6 hours after event)
+        // Check if attendance can be recorded (30 min before to 1 hour after event)
         const eventTime = event.eventTime.getTime();
         const thirtyMinsBefore = eventTime - (30 * 60 * 1000);
-        const sixHoursAfter = eventTime + (6 * 60 * 60 * 1000);
+        const oneHourAfter = eventTime + (60 * 60 * 1000);
         const now = Date.now();
         const canRecordAttendance = signupStatus !== 'none' &&
                                     now >= thirtyMinsBefore &&
-                                    now <= sixHoursAfter &&
+                                    now <= oneHourAfter &&
                                     !hasRecordedAttendance &&
                                     !event.closed;
 
@@ -1578,36 +1578,64 @@ class WebServer {
         return res.status(400).json({ error: 'Image is too large. Maximum size is 8MB.' });
       }
 
-      // Get guild and storage channel
+      // Get guild
       const guild = await this.client.guilds.fetch(guildId);
 
-      // Get or create storage channel
-      const STORAGE_CHANNEL_NAME = 'gear-screenshots-storage';
-      let storageChannel = guild.channels.cache.find(
-        ch => ch.name === STORAGE_CHANNEL_NAME && ch.type === 0 // GuildText
-      );
+      // Get configured storage channel from guildSettings
+      const guildSettings = await this.collections.guildSettings.findOne({ guildId });
+      let storageChannelId = guildSettings?.gearStorageChannelId;
+      let storageChannel = null;
 
+      if (storageChannelId) {
+        storageChannel = await guild.channels.fetch(storageChannelId).catch(() => null);
+      }
+
+      // Fall back to finding/creating default storage channel
       if (!storageChannel) {
-        // Try to create storage channel
+        const STORAGE_CHANNEL_NAME = 'gear-screenshots-storage';
+        storageChannel = guild.channels.cache.find(
+          ch => ch.name === STORAGE_CHANNEL_NAME && ch.type === 0 // GuildText
+        );
+
+        if (!storageChannel) {
+          // Try to create storage channel
+          try {
+            storageChannel = await guild.channels.create({
+              name: STORAGE_CHANNEL_NAME,
+              type: 0, // GuildText
+              topic: 'Bot-only storage for gear screenshots. DO NOT DELETE THIS CHANNEL!',
+              permissionOverwrites: [
+                {
+                  id: guild.id,
+                  deny: ['ViewChannel']
+                },
+                {
+                  id: this.client.user.id,
+                  allow: ['ViewChannel', 'SendMessages', 'AttachFiles', 'EmbedLinks', 'ReadMessageHistory', 'ManageMessages']
+                }
+              ]
+            });
+          } catch (createErr) {
+            console.error('Failed to create storage channel:', createErr);
+            return res.status(500).json({ error: 'Could not create storage channel. Bot may be missing permissions.' });
+          }
+        }
+      }
+
+      // Check if user already has a stored gear screenshot to delete
+      const existingPlayer = await this.collections.partyPlayers.findOne({ userId, guildId });
+      if (existingPlayer?.gearStorageMessageId && existingPlayer?.gearStorageChannelId) {
         try {
-          storageChannel = await guild.channels.create({
-            name: STORAGE_CHANNEL_NAME,
-            type: 0, // GuildText
-            topic: 'Bot-only storage for gear screenshots. DO NOT DELETE THIS CHANNEL!',
-            permissionOverwrites: [
-              {
-                id: guild.id,
-                deny: ['ViewChannel']
-              },
-              {
-                id: this.client.user.id,
-                allow: ['ViewChannel', 'SendMessages', 'AttachFiles', 'EmbedLinks', 'ReadMessageHistory', 'ManageMessages']
-              }
-            ]
-          });
-        } catch (createErr) {
-          console.error('Failed to create storage channel:', createErr);
-          return res.status(500).json({ error: 'Could not create storage channel. Bot may be missing permissions.' });
+          const oldChannel = await guild.channels.fetch(existingPlayer.gearStorageChannelId).catch(() => null);
+          if (oldChannel) {
+            const oldMessage = await oldChannel.messages.fetch(existingPlayer.gearStorageMessageId).catch(() => null);
+            if (oldMessage) {
+              await oldMessage.delete();
+              console.log(`Deleted old gear screenshot for user ${userId}`);
+            }
+          }
+        } catch (deleteErr) {
+          console.warn('Could not delete old gear screenshot:', deleteErr.message);
         }
       }
 
@@ -1628,13 +1656,16 @@ class WebServer {
 
       const screenshotUrl = attachment.url;
 
-      // Update player info with new screenshot
+      // Update player info with new screenshot and storage info
       await this.collections.partyPlayers.updateOne(
         { userId, guildId },
         {
           $set: {
             gearScreenshotUrl: screenshotUrl,
+            gearStorageMessageId: storedMessage.id,
+            gearStorageChannelId: storageChannel.id,
             gearScreenshotUpdatedAt: new Date(),
+            gearScreenshotSource: 'discord_storage',
             updatedAt: new Date()
           }
         },
