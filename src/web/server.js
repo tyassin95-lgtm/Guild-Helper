@@ -1188,13 +1188,13 @@ class WebServer {
         const signupDeadline = new Date(event.eventTime.getTime() - 20 * 60 * 1000);
         const signupsClosed = Date.now() > signupDeadline.getTime();
 
-        // Check if attendance can be recorded (30 min before to 1 hour after event)
+        // Check if attendance can be recorded (5 min before to 1 hour after event)
         const eventTime = event.eventTime.getTime();
-        const thirtyMinsBefore = eventTime - (30 * 60 * 1000);
+        const fiveMinsBefore = eventTime - (5 * 60 * 1000);
         const oneHourAfter = eventTime + (60 * 60 * 1000);
         const now = Date.now();
         const canRecordAttendance = signupStatus !== 'none' &&
-                                    now >= thirtyMinsBefore &&
+                                    now >= fiveMinsBefore &&
                                     now <= oneHourAfter &&
                                     !hasRecordedAttendance &&
                                     !event.closed;
@@ -1524,17 +1524,19 @@ class WebServer {
         { upsert: true }
       );
 
-      // Update wishlist panels in Discord
-      try {
-        await updateWishlistPanels({
-          client: this.client,
-          guildId,
-          collections: this.collections
-        });
-        console.log(`✅ Wishlist panels updated for guild ${guildId}`);
-      } catch (panelErr) {
-        console.error('Failed to update wishlist panels:', panelErr);
-        // Don't fail the request if panel update fails
+      // Only update wishlist panels in Discord when user fully submits
+      if (submit) {
+        try {
+          await updateWishlistPanels({
+            client: this.client,
+            guildId,
+            collections: this.collections
+          });
+          console.log(`✅ Wishlist panels updated for guild ${guildId}`);
+        } catch (panelErr) {
+          console.error('Failed to update wishlist panels:', panelErr);
+          // Don't fail the request if panel update fails
+        }
       }
 
       res.json({ success: true, message: submit ? 'Wishlist submitted successfully' : 'Wishlist saved' });
