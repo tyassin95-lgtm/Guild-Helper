@@ -5,6 +5,36 @@ async function registerSlashCommands(client) {
 
   const commands = [
     {
+      name: 'adminpanel',
+      description: 'Open the admin panel to manage parties, wishlists, reminders, and more.',
+      dm_permission: false
+    },
+    {
+      name: 'adminrole',
+      description: 'Admins: Manage which roles can access the admin panel.',
+      default_member_permissions: ADMIN,
+      dm_permission: false,
+      options: [
+        {
+          type: 3,
+          name: 'action',
+          description: 'What to do',
+          required: true,
+          choices: [
+            { name: 'add (grant access)', value: 'add' },
+            { name: 'remove (revoke access)', value: 'remove' },
+            { name: 'list (show roles with access)', value: 'list' }
+          ]
+        },
+        {
+          type: 8,
+          name: 'role',
+          description: 'Role to grant/revoke access',
+          required: false
+        }
+      ]
+    },
+    {
       name: 'excluderole',
       description: 'Admins: Exclude/include roles from tracking.',
       default_member_permissions: ADMIN,
