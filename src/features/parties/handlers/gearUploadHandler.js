@@ -250,4 +250,4 @@ async function handleGearUpload({ message, collections }) {
   }
 }
 
-module.exports = { handleGearUpload };
+module.exports = { handleGearUpload, postGearCheckEmbed };
