@@ -2148,6 +2148,9 @@
     async function loadWishlistData() {
       try {
         wishlistData = await apiCall('wishlist');
+        // Reset pending wishlist to match server state
+        pendingWishlist = null;
+        hasUnsavedChanges = false;
         renderWishlistStatus();
         renderWishlist();
         // Re-render stats to show wishlist items if profile data is loaded
@@ -2188,16 +2191,37 @@
     }
 
     // Render wishlist
-    function renderWishlist() {
+    // Local pending wishlist state (not yet saved to server)
+    let pendingWishlist = null;
+    let hasUnsavedChanges = false;
+
+    function initPendingWishlist() {
+      if (!wishlistData) return;
       const submission = wishlistData.submission || {};
+      pendingWishlist = {
+        archbossWeapon: [...(submission.archbossWeapon || [])],
+        archbossArmor: [...(submission.archbossArmor || [])],
+        t3Weapons: [...(submission.t3Weapons || [])],
+        t3Armors: [...(submission.t3Armors || [])],
+        t3Accessories: [...(submission.t3Accessories || [])]
+      };
+      hasUnsavedChanges = false;
+    }
+
+    function renderWishlist() {
+      // Initialize pending wishlist if not set
+      if (!pendingWishlist) {
+        initPendingWishlist();
+      }
+
       const canEdit = !wishlistData.isFrozen && !wishlistData.hasSubmitted;
 
       const sections = [
-        { key: 'archbossWeapon', title: 'Archboss Weapons', items: WISHLIST_ITEMS.archbossWeapons, limit: WISHLIST_LIMITS.archbossWeapon, selected: submission.archbossWeapon || [] },
-        { key: 'archbossArmor', title: 'Archboss Armor', items: WISHLIST_ITEMS.archbossArmors, limit: WISHLIST_LIMITS.archbossArmor, selected: submission.archbossArmor || [] },
-        { key: 't3Weapons', title: 'T3 Weapons', items: WISHLIST_ITEMS.t3Weapons, limit: WISHLIST_LIMITS.t3Weapons, selected: submission.t3Weapons || [] },
-        { key: 't3Armors', title: 'T3 Armors', items: WISHLIST_ITEMS.t3Armors, limit: WISHLIST_LIMITS.t3Armors, selected: submission.t3Armors || [] },
-        { key: 't3Accessories', title: 'T3 Accessories', items: WISHLIST_ITEMS.t3Accessories, limit: WISHLIST_LIMITS.t3Accessories, selected: submission.t3Accessories || [] }
+        { key: 'archbossWeapon', title: 'Archboss Weapons', items: WISHLIST_ITEMS.archbossWeapons, limit: WISHLIST_LIMITS.archbossWeapon, selected: pendingWishlist?.archbossWeapon || [] },
+        { key: 'archbossArmor', title: 'Archboss Armor', items: WISHLIST_ITEMS.archbossArmors, limit: WISHLIST_LIMITS.archbossArmor, selected: pendingWishlist?.archbossArmor || [] },
+        { key: 't3Weapons', title: 'T3 Weapons', items: WISHLIST_ITEMS.t3Weapons, limit: WISHLIST_LIMITS.t3Weapons, selected: pendingWishlist?.t3Weapons || [] },
+        { key: 't3Armors', title: 'T3 Armors', items: WISHLIST_ITEMS.t3Armors, limit: WISHLIST_LIMITS.t3Armors, selected: pendingWishlist?.t3Armors || [] },
+        { key: 't3Accessories', title: 'T3 Accessories', items: WISHLIST_ITEMS.t3Accessories, limit: WISHLIST_LIMITS.t3Accessories, selected: pendingWishlist?.t3Accessories || [] }
       ];
 
       const html = sections.map(section => `
@@ -2231,19 +2255,23 @@
       const actionsHtml = canEdit ? `
         <div class="wishlist-actions">
           <button class="btn btn-secondary" onclick="clearWishlist()">Clear All</button>
-          <button class="btn btn-primary" onclick="submitWishlist()">Submit Wishlist</button>
+          <button class="btn btn-primary" onclick="saveWishlist()" id="save-wishlist-btn" ${!hasUnsavedChanges ? 'disabled style="opacity: 0.5;"' : ''}>
+            ${hasUnsavedChanges ? 'Save Changes' : 'Saved'}
+          </button>
+          <button class="btn btn-success" onclick="submitWishlist()">Submit Wishlist</button>
         </div>
+        ${hasUnsavedChanges ? '<p style="color: var(--warning-color); font-size: 12px; margin-top: 8px;">You have unsaved changes</p>' : ''}
       ` : '';
 
       document.getElementById('wishlist-content').innerHTML = html + actionsHtml;
     }
 
-    // Toggle wishlist item
-    async function toggleWishlistItem(category, itemId) {
+    // Toggle wishlist item - instant local update, no API call
+    function toggleWishlistItem(category, itemId) {
       if (wishlistData.isFrozen || wishlistData.hasSubmitted) return;
+      if (!pendingWishlist) initPendingWishlist();
 
-      const submission = wishlistData.submission || {};
-      let items = [...(submission[category] || [])];
+      let items = pendingWishlist[category] || [];
       const limit = WISHLIST_LIMITS[category];
 
       const index = items.indexOf(itemId);
@@ -2253,60 +2281,79 @@
       } else {
         // Item is not selected - try to add it
         if (items.length >= limit) {
-          // At limit - replace the selection instead of showing error
-          // For categories with limit 1, just replace
-          // For categories with higher limits, replace the oldest (first) selection
-          items.shift(); // Remove the oldest selection
-          items.push(itemId); // Add the new selection
-        } else {
-          items.push(itemId);
+          // At limit - replace the oldest selection
+          items.shift();
         }
+        items.push(itemId);
+      }
+
+      pendingWishlist[category] = items;
+      hasUnsavedChanges = true;
+
+      // Re-render instantly without API call
+      renderWishlist();
+    }
+
+    // Save wishlist to server
+    async function saveWishlist() {
+      if (wishlistData.isFrozen || wishlistData.hasSubmitted) return;
+      if (!hasUnsavedChanges) return;
+
+      const saveBtn = document.getElementById('save-wishlist-btn');
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
       }
 
       try {
         await apiCall('update-wishlist', 'POST', {
-          archbossWeapon: category === 'archbossWeapon' ? items : submission.archbossWeapon,
-          archbossArmor: category === 'archbossArmor' ? items : submission.archbossArmor,
-          t3Weapons: category === 't3Weapons' ? items : submission.t3Weapons,
-          t3Armors: category === 't3Armors' ? items : submission.t3Armors,
-          t3Accessories: category === 't3Accessories' ? items : submission.t3Accessories
+          archbossWeapon: pendingWishlist.archbossWeapon || [],
+          archbossArmor: pendingWishlist.archbossArmor || [],
+          t3Weapons: pendingWishlist.t3Weapons || [],
+          t3Armors: pendingWishlist.t3Armors || [],
+          t3Accessories: pendingWishlist.t3Accessories || []
         });
-        await loadWishlistData();
+        hasUnsavedChanges = false;
+        showToast('Wishlist saved', 'success');
+        // Update the stored data to match pending
+        wishlistData.submission = { ...pendingWishlist };
+        renderWishlist();
+        // Also update stats display
+        if (profileData) renderStats();
       } catch (error) {
         showToast(error.message, 'error');
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Changes';
+        }
       }
     }
 
-    // Clear wishlist
-    async function clearWishlist() {
+    // Clear wishlist - instant local update
+    function clearWishlist() {
       if (wishlistData.isFrozen || wishlistData.hasSubmitted) return;
 
-      try {
-        await apiCall('update-wishlist', 'POST', {
-          archbossWeapon: [],
-          archbossArmor: [],
-          t3Weapons: [],
-          t3Armors: [],
-          t3Accessories: []
-        });
-        showToast('Wishlist cleared', 'success');
-        await loadWishlistData();
-      } catch (error) {
-        showToast(error.message, 'error');
-      }
+      pendingWishlist = {
+        archbossWeapon: [],
+        archbossArmor: [],
+        t3Weapons: [],
+        t3Armors: [],
+        t3Accessories: []
+      };
+      hasUnsavedChanges = true;
+      renderWishlist();
     }
 
     // Submit wishlist
     async function submitWishlist() {
       if (wishlistData.isFrozen || wishlistData.hasSubmitted) return;
 
-      const submission = wishlistData.submission;
-      if (!submission ||
-          (!submission.archbossWeapon?.length &&
-           !submission.archbossArmor?.length &&
-           !submission.t3Weapons?.length &&
-           !submission.t3Armors?.length &&
-           !submission.t3Accessories?.length)) {
+      if (!pendingWishlist ||
+          (!pendingWishlist.archbossWeapon?.length &&
+           !pendingWishlist.archbossArmor?.length &&
+           !pendingWishlist.t3Weapons?.length &&
+           !pendingWishlist.t3Armors?.length &&
+           !pendingWishlist.t3Accessories?.length)) {
         showToast('Please select at least one item', 'error');
         return;
       }
@@ -2317,14 +2364,15 @@
 
       try {
         await apiCall('update-wishlist', 'POST', {
-          archbossWeapon: submission.archbossWeapon || [],
-          archbossArmor: submission.archbossArmor || [],
-          t3Weapons: submission.t3Weapons || [],
-          t3Armors: submission.t3Armors || [],
-          t3Accessories: submission.t3Accessories || [],
+          archbossWeapon: pendingWishlist.archbossWeapon || [],
+          archbossArmor: pendingWishlist.archbossArmor || [],
+          t3Weapons: pendingWishlist.t3Weapons || [],
+          t3Armors: pendingWishlist.t3Armors || [],
+          t3Accessories: pendingWishlist.t3Accessories || [],
           submit: true
         });
         showToast('Wishlist submitted!', 'success');
+        hasUnsavedChanges = false;
         await loadWishlistData();
       } catch (error) {
         showToast(error.message, 'error');
