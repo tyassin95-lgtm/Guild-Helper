@@ -784,6 +784,15 @@
       border-color: transparent;
     }
 
+    .roster-sort-btn .sort-arrow {
+      margin-left: 4px;
+      font-size: 10px;
+    }
+
+    .roster-sort-btn:not(.active) .sort-arrow {
+      display: none;
+    }
+
     .roster-summary {
       display: flex;
       gap: 24px;
@@ -904,12 +913,12 @@
       <div class="card">
         <h2 class="card-title">Guild Roster</h2>
         <div class="roster-controls" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;">
-          <button class="btn btn-secondary roster-sort-btn active" data-sort="name">Name</button>
-          <button class="btn btn-secondary roster-sort-btn" data-sort="cp">CP</button>
-          <button class="btn btn-secondary roster-sort-btn" data-sort="role">Role</button>
-          <button class="btn btn-secondary roster-sort-btn" data-sort="classes">Classes</button>
-          <button class="btn btn-secondary roster-sort-btn" data-sort="totalEvents">Total Events</button>
-          <button class="btn btn-secondary roster-sort-btn" data-sort="attendance">Attendance</button>
+          <button class="btn btn-secondary roster-sort-btn active" data-sort="name">Name<span class="sort-arrow">▲</span></button>
+          <button class="btn btn-secondary roster-sort-btn" data-sort="cp">CP<span class="sort-arrow">▼</span></button>
+          <button class="btn btn-secondary roster-sort-btn" data-sort="role">Role<span class="sort-arrow">▲</span></button>
+          <button class="btn btn-secondary roster-sort-btn" data-sort="classes">Classes<span class="sort-arrow">▲</span></button>
+          <button class="btn btn-secondary roster-sort-btn" data-sort="totalEvents">Total Events<span class="sort-arrow">▼</span></button>
+          <button class="btn btn-secondary roster-sort-btn" data-sort="attendance">Attendance<span class="sort-arrow">▼</span></button>
         </div>
         <div id="roster-content">
           <div class="loading">Loading...</div>
@@ -1756,12 +1765,19 @@
             rosterSortAscending = !rosterSortAscending;
           } else {
             rosterSortField = sortField;
+            // Default sort direction based on field type
             rosterSortAscending = sortField === 'name' || sortField === 'role' || sortField === 'classes';
           }
 
-          // Update active button
+          // Update active button and arrow
           document.querySelectorAll('.roster-sort-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
+
+          // Update arrow direction
+          const arrow = btn.querySelector('.sort-arrow');
+          if (arrow) {
+            arrow.textContent = rosterSortAscending ? '▲' : '▼';
+          }
 
           renderRoster();
         });
