@@ -834,6 +834,100 @@
       border-color: transparent;
     }
 
+    /* Stats Wishlist Items */
+    .stats-wishlist-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .stats-wishlist-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stats-wishlist-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .stats-wishlist-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      transition: all 0.2s ease;
+    }
+
+    .stats-wishlist-item:hover {
+      border-color: var(--accent-purple);
+      transform: translateY(-2px);
+    }
+
+    .stats-wishlist-item.received {
+      border-color: var(--gold-color);
+      background: rgba(251, 191, 36, 0.1);
+    }
+
+    .stats-wishlist-item img {
+      width: 40px;
+      height: 40px;
+      border-radius: 6px;
+      background: var(--bg-secondary);
+    }
+
+    .stats-wishlist-item-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stats-wishlist-item-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      max-width: 180px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .stats-wishlist-item-category {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .stats-wishlist-item-badge {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-left: auto;
+    }
+
+    .stats-wishlist-item-badge.received {
+      background: var(--gold-color);
+      color: #1a1a1a;
+    }
+
+    .stats-wishlist-empty {
+      color: var(--text-muted);
+      font-size: 14px;
+      padding: 16px;
+      text-align: center;
+      background: var(--bg-card);
+      border-radius: 8px;
+      border: 1px dashed var(--border-color);
+    }
+
     .roster-summary {
       display: flex;
       gap: 24px;
@@ -1353,6 +1447,84 @@
         ? Math.round((bonuses.eventsAttended / profileData.weeklyTotalEvents) * 100)
         : 0;
 
+      // Get wishlist items if available
+      let wishlistHtml = '';
+      let receivedHtml = '';
+
+      if (wishlistData) {
+        const submission = wishlistData.submission || {};
+        const givenItems = wishlistData.givenItems || [];
+
+        // Collect all wishlisted item IDs
+        const wishlistedIds = [
+          ...(submission.archbossWeapon || []),
+          ...(submission.archbossArmor || []),
+          ...(submission.t3Weapons || []),
+          ...(submission.t3Armors || []),
+          ...(submission.t3Accessories || [])
+        ];
+
+        // Get item details for wishlisted items
+        const wishlistedItems = wishlistedIds.map(id => getItemById(id)).filter(Boolean);
+
+        // Get received items
+        const receivedItemIds = givenItems.map(gi => gi.itemId);
+        const receivedItems = receivedItemIds.map(id => getItemById(id)).filter(Boolean);
+
+        // Build wishlisted items HTML
+        if (wishlistedItems.length > 0) {
+          wishlistHtml = `
+            <div class="stats-wishlist-section">
+              <div class="stats-wishlist-title">📋 Your Wishlist</div>
+              <div class="stats-wishlist-items">
+                ${wishlistedItems.map(item => {
+                  const isReceived = receivedItemIds.includes(item.id);
+                  return `
+                    <div class="stats-wishlist-item ${isReceived ? 'received' : ''}">
+                      <img src="${item.icon}" alt="${item.name}" loading="lazy">
+                      <div class="stats-wishlist-item-info">
+                        <span class="stats-wishlist-item-name" title="${item.name}">${item.name}</span>
+                        <span class="stats-wishlist-item-category">${item.category || item.type}</span>
+                      </div>
+                      ${isReceived ? '<span class="stats-wishlist-item-badge received">RECEIVED</span>' : ''}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        } else {
+          wishlistHtml = `
+            <div class="stats-wishlist-section">
+              <div class="stats-wishlist-title">📋 Your Wishlist</div>
+              <div class="stats-wishlist-empty">No items wishlisted yet. Visit the Wishlist tab to select items.</div>
+            </div>
+          `;
+        }
+
+        // Build received items HTML (only if there are items not in wishlist)
+        const receivedNotInWishlist = receivedItems.filter(item => !wishlistedIds.includes(item.id));
+        if (receivedNotInWishlist.length > 0) {
+          receivedHtml = `
+            <div class="stats-wishlist-section" style="margin-top: 16px; padding-top: 16px;">
+              <div class="stats-wishlist-title">🎁 Other Received Items</div>
+              <div class="stats-wishlist-items">
+                ${receivedNotInWishlist.map(item => `
+                  <div class="stats-wishlist-item received">
+                    <img src="${item.icon}" alt="${item.name}" loading="lazy">
+                    <div class="stats-wishlist-item-info">
+                      <span class="stats-wishlist-item-name" title="${item.name}">${item.name}</span>
+                      <span class="stats-wishlist-item-category">${item.category || item.type}</span>
+                    </div>
+                    <span class="stats-wishlist-item-badge received">RECEIVED</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }
+      }
+
       const html = `
         <div class="stats-grid">
           <div class="stat-card">
@@ -1372,6 +1544,8 @@
             <div class="stat-label">Attendance Rate</div>
           </div>
         </div>
+        ${wishlistHtml}
+        ${receivedHtml}
       `;
 
       document.getElementById('stats-content').innerHTML = html;
@@ -1616,6 +1790,10 @@
         wishlistData = await apiCall('wishlist');
         renderWishlistStatus();
         renderWishlist();
+        // Re-render stats to show wishlist items if profile data is loaded
+        if (profileData) {
+          renderStats();
+        }
       } catch (error) {
         console.error('Error loading wishlist:', error);
         document.getElementById('wishlist-content').innerHTML = '<p class="error">Failed to load wishlist</p>';
