@@ -270,6 +270,11 @@ class WebServer {
       await this.handleGetRosterData(req, res);
     });
 
+    // API: Get item rolls data
+    this.app.get('/api/profile/:token/item-rolls', async (req, res) => {
+      await this.handleGetItemRolls(req, res);
+    });
+
     // 404 handler
     this.app.use((req, res) => {
       res.status(404).send('Page not found');
@@ -1800,6 +1805,97 @@ class WebServer {
     } catch (error) {
       console.error('Error getting roster data:', error);
       res.status(500).json({ error: 'Failed to get roster data' });
+    }
+  }
+
+  /**
+   * Handle getting item rolls data
+   * Returns active rolls and user's roll history
+   */
+  async handleGetItemRolls(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Get all active rolls for this guild
+      const activeRolls = await this.collections.itemRolls.find({
+        guildId,
+        closed: { $ne: true },
+        endsAt: { $gt: new Date() }
+      }).sort({ endsAt: 1 }).toArray();
+
+      // Get rolls where user participated (rolled or passed) - last 20
+      const userRollHistory = await this.collections.itemRolls.find({
+        guildId,
+        closed: true,
+        $or: [
+          { 'rolls.userId': userId },
+          { 'passes.userId': userId }
+        ]
+      }).sort({ closedAt: -1 }).limit(20).toArray();
+
+      // Fetch guild for member info
+      const guild = await this.client.guilds.fetch(guildId).catch(() => null);
+
+      // Helper to enrich roll data with display names
+      const enrichRoll = async (roll) => {
+        // Add display names to rolls
+        const enrichedRolls = await Promise.all(
+          (roll.rolls || []).map(async (r) => {
+            const member = guild ? await guild.members.fetch(r.userId).catch(() => null) : null;
+            return {
+              ...r,
+              displayName: member?.displayName || 'Unknown',
+              avatarUrl: member?.user?.displayAvatarURL({ size: 32, format: 'png' }) || null
+            };
+          })
+        );
+
+        // Add display names to passes
+        const enrichedPasses = await Promise.all(
+          (roll.passes || []).map(async (p) => {
+            const member = guild ? await guild.members.fetch(p.userId).catch(() => null) : null;
+            return {
+              ...p,
+              displayName: member?.displayName || 'Unknown',
+              avatarUrl: member?.user?.displayAvatarURL({ size: 32, format: 'png' }) || null
+            };
+          })
+        );
+
+        return {
+          _id: roll._id.toString(),
+          itemName: roll.itemName,
+          trait: roll.trait,
+          imageUrl: roll.imageUrl,
+          endsAt: roll.endsAt,
+          closedAt: roll.closedAt,
+          closed: roll.closed || false,
+          winnerId: roll.winnerId,
+          eligibleUsers: roll.eligibleUsers || [],
+          rolls: enrichedRolls,
+          passes: enrichedPasses,
+          isTiebreaker: roll.isTiebreaker || false
+        };
+      };
+
+      // Enrich all rolls
+      const enrichedActiveRolls = await Promise.all(activeRolls.map(enrichRoll));
+      const enrichedHistory = await Promise.all(userRollHistory.map(enrichRoll));
+
+      res.json({
+        activeRolls: enrichedActiveRolls,
+        rollHistory: enrichedHistory
+      });
+
+    } catch (error) {
+      console.error('Error getting item rolls:', error);
+      res.status(500).json({ error: 'Failed to get item rolls' });
     }
   }
 

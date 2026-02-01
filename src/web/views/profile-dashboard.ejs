@@ -967,6 +967,188 @@
         height: 24px;
       }
     }
+
+    /* Item Rolls */
+    .item-roll-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      transition: all 0.2s ease;
+    }
+
+    .item-roll-card:hover {
+      border-color: var(--accent-purple);
+    }
+
+    .item-roll-card.closed {
+      opacity: 0.7;
+    }
+
+    .item-roll-card.won {
+      border-color: var(--gold-color);
+      background: rgba(251, 191, 36, 0.1);
+    }
+
+    .item-roll-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .item-roll-image {
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+      background: var(--bg-secondary);
+      object-fit: cover;
+    }
+
+    .item-roll-info {
+      flex: 1;
+    }
+
+    .item-roll-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .item-roll-trait {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .item-roll-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .item-roll-status.active {
+      background: var(--healer-bg);
+      color: var(--healer-color);
+    }
+
+    .item-roll-status.closed {
+      background: var(--bg-card-hover);
+      color: var(--text-muted);
+    }
+
+    .item-roll-status.won {
+      background: rgba(251, 191, 36, 0.2);
+      color: var(--gold-color);
+    }
+
+    .item-roll-time {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .item-roll-participants {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .item-roll-participants-title {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .item-roll-participant {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    .item-roll-participant.winner {
+      background: rgba(251, 191, 36, 0.1);
+      border: 1px solid var(--gold-color);
+    }
+
+    .item-roll-participant.you {
+      border: 1px solid var(--accent-purple);
+    }
+
+    .item-roll-participant-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .item-roll-participant-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+    }
+
+    .item-roll-participant-score {
+      font-weight: 600;
+    }
+
+    .item-roll-participant-score.passed {
+      color: var(--text-muted);
+      font-weight: normal;
+    }
+
+    .item-roll-your-status {
+      margin-top: 12px;
+      padding: 12px;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      border: 1px solid var(--accent-purple);
+    }
+
+    .item-roll-your-status-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .item-roll-your-status-value {
+      font-size: 14px;
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .item-roll-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .item-roll-actions .btn {
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+
+    .no-rolls {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-secondary);
+    }
+
+    .no-rolls-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
@@ -995,6 +1177,9 @@
       </button>
       <button class="tab-btn" data-tab="roster">
         <span>Roster</span>
+      </button>
+      <button class="tab-btn" data-tab="itemrolls">
+        <span>Item Rolls</span>
       </button>
     </div>
 
@@ -1063,6 +1248,22 @@
           </div>
         </div>
         <div id="roster-content">
+          <div class="loading">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item Rolls Tab -->
+    <div id="tab-itemrolls" class="tab-content">
+      <div class="card">
+        <h2 class="card-title">Active Item Rolls</h2>
+        <div id="active-rolls-content">
+          <div class="loading">Loading...</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="card-title">Your Roll History</h2>
+        <div id="roll-history-content">
           <div class="loading">Loading...</div>
         </div>
       </div>
@@ -1204,6 +1405,7 @@
     let eventsData = null;
     let wishlistData = null;
     let currentAttendanceEventId = null;
+    let itemRollsData = null;
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
@@ -1212,6 +1414,7 @@
       loadEventsData();
       loadWishlistData();
       loadRosterData();
+      loadItemRollsData();
     });
 
     // Tab switching
@@ -1241,6 +1444,9 @@
               break;
             case 'roster':
               loadRosterData();
+              break;
+            case 'itemrolls':
+              loadItemRollsData();
               break;
           }
         });
@@ -1341,7 +1547,7 @@
                 <input type="url" class="form-control" id="edit-buildlink" value="${info.buildLink || ''}" placeholder="https://...">
               </div>
             </div>
-            <button type="submit" class="btn btn-primary" style="margin-top: 16px;">Save Changes</button>
+            <button type="submit" class="btn btn-primary" id="save-profile-btn" style="margin-top: 16px;">Save Changes</button>
           </form>
         </div>
 
@@ -1369,8 +1575,23 @@
     }
 
     // Save profile info
+    let isSavingProfile = false;
     async function saveProfileInfo(e) {
       e.preventDefault();
+
+      // Prevent spam - if already saving, ignore
+      if (isSavingProfile) return;
+
+      const saveBtn = document.getElementById('save-profile-btn');
+      if (!saveBtn) return;
+
+      // Set saving state
+      isSavingProfile = true;
+      const originalText = saveBtn.textContent;
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      saveBtn.style.opacity = '0.6';
+      saveBtn.style.cursor = 'not-allowed';
 
       const data = {
         weapon1: document.getElementById('edit-weapon1').value || undefined,
@@ -1385,6 +1606,17 @@
         await loadProfileData();
       } catch (error) {
         showToast(error.message, 'error');
+      } finally {
+        // Reset saving state
+        isSavingProfile = false;
+        // Re-fetch the button since loadProfileData might have re-rendered
+        const btn = document.getElementById('save-profile-btn');
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+          btn.style.opacity = '';
+          btn.style.cursor = '';
+        }
       }
     }
 
@@ -1850,8 +2082,9 @@
             ${section.items.map(item => {
               const isSelected = section.selected.includes(item.id);
               const received = isItemReceived(item.id);
-              const atLimit = section.selected.length >= section.limit && !isSelected;
-              const disabled = !canEdit || atLimit || received;
+              // Items are only disabled if user can't edit or item is received
+              // Items are no longer disabled at limit - clicking will replace selection
+              const disabled = !canEdit || received;
 
               return `
                 <div class="wishlist-item ${isSelected ? 'selected' : ''} ${received ? 'received' : ''} ${disabled && !received ? 'disabled' : ''}"
@@ -1882,17 +2115,24 @@
       if (wishlistData.isFrozen || wishlistData.hasSubmitted) return;
 
       const submission = wishlistData.submission || {};
-      let items = submission[category] || [];
+      let items = [...(submission[category] || [])];
+      const limit = WISHLIST_LIMITS[category];
 
       const index = items.indexOf(itemId);
       if (index > -1) {
+        // Item is already selected - deselect it
         items.splice(index, 1);
       } else {
-        if (items.length >= WISHLIST_LIMITS[category]) {
-          showToast(`Maximum ${WISHLIST_LIMITS[category]} item(s) for this category`, 'error');
-          return;
+        // Item is not selected - try to add it
+        if (items.length >= limit) {
+          // At limit - replace the selection instead of showing error
+          // For categories with limit 1, just replace
+          // For categories with higher limits, replace the oldest (first) selection
+          items.shift(); // Remove the oldest selection
+          items.push(itemId); // Add the new selection
+        } else {
+          items.push(itemId);
         }
-        items.push(itemId);
       }
 
       try {
@@ -2158,6 +2398,207 @@
       `;
 
       document.getElementById('roster-content').innerHTML = summaryHtml + tableHtml;
+    }
+
+    // Item Rolls state
+    let itemRollsUserId = '<%= userId %>';
+
+    // Load item rolls data
+    async function loadItemRollsData() {
+      try {
+        itemRollsData = await apiCall('item-rolls');
+        renderActiveRolls();
+        renderRollHistory();
+      } catch (error) {
+        console.error('Error loading item rolls:', error);
+        document.getElementById('active-rolls-content').innerHTML = '<p class="error">Failed to load item rolls</p>';
+        document.getElementById('roll-history-content').innerHTML = '';
+      }
+    }
+
+    // Format relative time
+    function formatRelativeTime(dateString) {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diff = date - now;
+      const absDiff = Math.abs(diff);
+
+      const seconds = Math.floor(absDiff / 1000);
+      const minutes = Math.floor(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (diff > 0) {
+        // Future
+        if (days > 0) return `Ends in ${days}d ${hours % 24}h`;
+        if (hours > 0) return `Ends in ${hours}h ${minutes % 60}m`;
+        if (minutes > 0) return `Ends in ${minutes}m`;
+        return `Ends in ${seconds}s`;
+      } else {
+        // Past
+        if (days > 0) return `Ended ${days}d ago`;
+        if (hours > 0) return `Ended ${hours}h ago`;
+        if (minutes > 0) return `Ended ${minutes}m ago`;
+        return `Ended just now`;
+      }
+    }
+
+    // Render active item rolls
+    function renderActiveRolls() {
+      if (!itemRollsData || !itemRollsData.activeRolls || itemRollsData.activeRolls.length === 0) {
+        document.getElementById('active-rolls-content').innerHTML = `
+          <div class="no-rolls">
+            <div class="no-rolls-icon">🎲</div>
+            <p>No active item rolls</p>
+            <p style="font-size: 13px; margin-top: 8px;">Check Discord for item roll announcements</p>
+          </div>
+        `;
+        return;
+      }
+
+      const html = itemRollsData.activeRolls.map(roll => renderRollCard(roll, true)).join('');
+      document.getElementById('active-rolls-content').innerHTML = html;
+    }
+
+    // Render roll history
+    function renderRollHistory() {
+      if (!itemRollsData || !itemRollsData.rollHistory || itemRollsData.rollHistory.length === 0) {
+        document.getElementById('roll-history-content').innerHTML = `
+          <div class="no-rolls">
+            <div class="no-rolls-icon">📜</div>
+            <p>No roll history yet</p>
+            <p style="font-size: 13px; margin-top: 8px;">Your past rolls will appear here</p>
+          </div>
+        `;
+        return;
+      }
+
+      const html = itemRollsData.rollHistory.map(roll => renderRollCard(roll, false)).join('');
+      document.getElementById('roll-history-content').innerHTML = html;
+    }
+
+    // Render a single roll card
+    function renderRollCard(roll, isActive) {
+      const userId = itemRollsUserId;
+      const userRoll = roll.rolls.find(r => r.userId === userId);
+      const userPassed = roll.passes.some(p => p.userId === userId);
+      const isWinner = roll.winnerId === userId;
+      const isEligible = roll.eligibleUsers.length === 0 || roll.eligibleUsers.includes(userId);
+
+      // Sort participants by total score
+      const sortedRolls = [...roll.rolls].sort((a, b) => b.total - a.total);
+      const allParticipants = [
+        ...sortedRolls,
+        ...roll.passes.map(p => ({ ...p, isPassed: true }))
+      ];
+
+      // Determine user's status
+      let userStatusHtml = '';
+      if (userRoll) {
+        userStatusHtml = `
+          <div class="item-roll-your-status">
+            <div class="item-roll-your-status-label">Your Roll</div>
+            <div class="item-roll-your-status-value">
+              🎲 ${userRoll.total} (Base: ${userRoll.baseRoll} + Bonus: ${userRoll.bonus})
+              ${isWinner ? ' — Winner!' : ''}
+            </div>
+          </div>
+        `;
+      } else if (userPassed) {
+        userStatusHtml = `
+          <div class="item-roll-your-status">
+            <div class="item-roll-your-status-label">Your Status</div>
+            <div class="item-roll-your-status-value">⏭️ Passed</div>
+          </div>
+        `;
+      } else if (isActive && isEligible) {
+        userStatusHtml = `
+          <div class="item-roll-your-status">
+            <div class="item-roll-your-status-label">Your Status</div>
+            <div class="item-roll-your-status-value">⏳ Waiting for your roll (use Discord to roll)</div>
+          </div>
+        `;
+      } else if (!isEligible) {
+        userStatusHtml = `
+          <div class="item-roll-your-status">
+            <div class="item-roll-your-status-label">Your Status</div>
+            <div class="item-roll-your-status-value">❌ Not eligible for this roll</div>
+          </div>
+        `;
+      }
+
+      // Status badge
+      let statusClass = isActive ? 'active' : (isWinner ? 'won' : 'closed');
+      let statusText = isActive ? 'Active' : (isWinner ? 'You Won!' : 'Closed');
+      if (roll.closed && roll.winnerId && roll.winnerId !== userId) {
+        const winner = allParticipants.find(p => p.userId === roll.winnerId);
+        statusText = winner ? `Won by ${winner.displayName || 'Unknown'}` : 'Closed';
+      }
+
+      // Participants HTML (top 5)
+      const participantsHtml = allParticipants.slice(0, 5).map((p, index) => {
+        const isParticipantWinner = p.userId === roll.winnerId;
+        const isYou = p.userId === userId;
+        const classes = [
+          'item-roll-participant',
+          isParticipantWinner ? 'winner' : '',
+          isYou ? 'you' : ''
+        ].filter(Boolean).join(' ');
+
+        if (p.isPassed) {
+          return `
+            <div class="${classes}">
+              <div class="item-roll-participant-name">
+                ${p.avatarUrl ? `<img src="${p.avatarUrl}" class="item-roll-participant-avatar">` : ''}
+                <span>${p.displayName || 'Unknown'}${isYou ? ' (You)' : ''}</span>
+              </div>
+              <span class="item-roll-participant-score passed">Passed</span>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="${classes}">
+            <div class="item-roll-participant-name">
+              ${index === 0 && !isActive && roll.winnerId ? '👑 ' : ''}
+              ${p.avatarUrl ? `<img src="${p.avatarUrl}" class="item-roll-participant-avatar">` : ''}
+              <span>${p.displayName || 'Unknown'}${isYou ? ' (You)' : ''}</span>
+            </div>
+            <span class="item-roll-participant-score">${p.total} (${p.baseRoll}+${p.bonus})</span>
+          </div>
+        `;
+      }).join('');
+
+      const moreCount = allParticipants.length - 5;
+      const moreHtml = moreCount > 0 ? `<div style="text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 8px;">+${moreCount} more participant${moreCount > 1 ? 's' : ''}</div>` : '';
+
+      const cardClass = [
+        'item-roll-card',
+        !isActive ? 'closed' : '',
+        isWinner ? 'won' : ''
+      ].filter(Boolean).join(' ');
+
+      return `
+        <div class="${cardClass}">
+          <div class="item-roll-header">
+            ${roll.imageUrl ? `<img src="${roll.imageUrl}" alt="${roll.itemName}" class="item-roll-image">` : ''}
+            <div class="item-roll-info">
+              <div class="item-roll-name">${roll.itemName}</div>
+              <div class="item-roll-trait">Trait: ${roll.trait}</div>
+              <span class="item-roll-status ${statusClass}">${statusText}</span>
+              <div class="item-roll-time">${formatRelativeTime(isActive ? roll.endsAt : roll.closedAt || roll.endsAt)}</div>
+            </div>
+          </div>
+          ${userStatusHtml}
+          ${allParticipants.length > 0 ? `
+            <div class="item-roll-participants">
+              <div class="item-roll-participants-title">Participants (${allParticipants.length})</div>
+              ${participantsHtml}
+              ${moreHtml}
+            </div>
+          ` : ''}
+        </div>
+      `;
     }
 
     // Toast notification
