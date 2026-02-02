@@ -178,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 async function checkAdminAccess() {
   try {
-    const response = await fetch(`${getApiUrl('admin-access')}?_=${Date.now()}`);
+    const response = await fetch(`/api/profile/${TOKEN}/admin-access?_=${Date.now()}`);
     if (response.ok) {
       const data = await response.json();
       if (data.hasAccess) {
@@ -198,7 +198,7 @@ async function openAdminPanel() {
   btn.textContent = 'Opening...';
 
   try {
-    const response = await fetch(`${getApiUrl('admin-panel-link')}?_=${Date.now()}`);
+    const response = await fetch(`/api/profile/${TOKEN}/admin-panel-link?_=${Date.now()}`);
     if (response.ok) {
       const data = await response.json();
       window.open(data.url, '_blank');
@@ -269,13 +269,12 @@ async function apiCall(endpoint, method = 'GET', data = null) {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache'
     },
-    cache: 'no-store',
-    credentials: 'same-origin' // Include session cookies
+    cache: 'no-store'
   };
   if (data) options.body = JSON.stringify(data);
 
   const separator = endpoint.includes('?') ? '&' : '?';
-  const url = `${getApiUrl(endpoint)}${separator}_t=${Date.now()}`;
+  const url = `/api/profile/${TOKEN}/${endpoint}${separator}_t=${Date.now()}`;
 
   const response = await fetch(url, options);
   const result = await response.json();
