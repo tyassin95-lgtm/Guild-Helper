@@ -222,12 +222,26 @@ async function loadEventsForParties() {
 }
 
 async function formEventParties(eventId) {
+  // Find and disable the button that was clicked
+  const btn = document.querySelector(`button[onclick="formEventParties('${eventId}')"]`);
+  const originalText = btn ? btn.innerHTML : '';
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = 'Loading...';
+  }
+
   try {
     const result = await apiCall(`/event-party-token/${eventId}`);
     showToast(`Parties processed! ${result.summary.partiesIntact} intact, ${result.summary.membersAvailable} available`, 'success');
     window.open(result.url, '_blank');
   } catch (error) {
     showToast(error.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
   }
 }
 
@@ -243,38 +257,37 @@ async function loadEvents() {
     const result = await apiCall('/events');
     eventsData = result.events;
 
-    if (eventsData.length === 0) {
+    // Filter to only show active events (not closed and not past)
+    const activeEvents = eventsData.filter(e => !e.closed && !e.isPast);
+
+    if (activeEvents.length === 0) {
       container.innerHTML = `
         <div class="no-data">
           <div class="no-data-icon">📅</div>
-          <p>No events found.</p>
+          <p>No active events found.</p>
         </div>
       `;
       return;
     }
 
-    container.innerHTML = eventsData.map(event => `
-      <div class="event-card ${event.closed ? 'closed' : ''}">
+    container.innerHTML = activeEvents.map(event => `
+      <div class="event-card">
         <div class="event-icon">${getEventIcon(event.eventType)}</div>
         <div class="event-info">
           <h4>${event.eventTypeName}${event.location ? ` - ${event.location}` : ''}</h4>
           <div class="event-time">${formatDate(event.eventTime)}</div>
           <div class="event-stats">
-            ${event.attendeesCount} attended | +${event.bonusPoints} bonus points
+            ${event.rsvpAttendingCount} attending, ${event.rsvpMaybeCount} maybe
           </div>
         </div>
-        <span class="event-status ${event.closed ? 'closed' : event.isPast ? 'past' : 'active'}">
-          ${event.closed ? 'Closed' : event.isPast ? 'Past' : 'Active'}
-        </span>
+        <span class="event-status active">Active</span>
         <div class="event-actions">
           <button class="btn btn-sm btn-secondary" onclick="viewEventCode('${event._id}')">
             View Code
           </button>
-          ${!event.closed ? `
-            <button class="btn btn-sm btn-danger" onclick="confirmCancelEvent('${event._id}', '${event.eventTypeName}')">
-              Cancel
-            </button>
-          ` : ''}
+          <button class="btn btn-sm btn-danger" onclick="confirmCancelEvent('${event._id}', '${event.eventTypeName}')">
+            Cancel
+          </button>
         </div>
       </div>
     `).join('');
@@ -863,6 +876,26 @@ document.getElementById('resetWishlistBtn').addEventListener('click', () => {
   };
 
   openModal('confirmModal');
+});
+
+// ==========================================
+// Navigation
+// ==========================================
+
+document.getElementById('backToProfile').addEventListener('click', async (e) => {
+  e.preventDefault();
+  const btn = e.target;
+  btn.textContent = 'Loading...';
+  btn.style.pointerEvents = 'none';
+
+  try {
+    const result = await apiCall('/profile-link');
+    window.location.href = result.url;
+  } catch (error) {
+    showToast('Failed to navigate to profile', 'error');
+    btn.textContent = 'Back to Profile';
+    btn.style.pointerEvents = 'auto';
+  }
 });
 
 // ==========================================
