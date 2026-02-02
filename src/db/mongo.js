@@ -65,7 +65,8 @@ function getCollections(db = _db) {
     automodWarnings: db.collection('automodWarnings'),
     messageTranslations: db.collection('messageTranslations'),
     eventParties: db.collection('eventParties'),
-    staticEvents: db.collection('staticEvents')
+    staticEvents: db.collection('staticEvents'),
+    userSessions: db.collection('userSessions')
   };
 }
 
