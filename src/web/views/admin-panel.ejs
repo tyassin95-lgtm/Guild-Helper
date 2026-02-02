@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel - <%= guildName %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/admin-panel.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </div>
+      <div class="header-info">
+        <h1>Admin Panel</h1>
+        <p class="guild-name"><%= guildName %></p>
+      </div>
+      <a href="javascript:history.back()" class="back-btn">Back to Profile</a>
+    </div>
+
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab="parties">Parties</button>
+      <button class="tab-btn" data-tab="events">Events</button>
+      <button class="tab-btn" data-tab="items">Items</button>
+      <button class="tab-btn" data-tab="reminders">Reminders</button>
+      <button class="tab-btn" data-tab="reset">Reset</button>
+    </nav>
+
+    <!-- Tab Content: Parties -->
+    <div id="tab-parties" class="tab-content active">
+      <div class="card">
+        <h2 class="card-title">Static Party Management</h2>
+        <p class="card-description">Edit and manage your guild's static party assignments. Same as using /viewparties on Discord.</p>
+        <button class="btn btn-primary" id="openStaticPartyEditor">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          Open Static Party Editor
+        </button>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Event Party Formation</h2>
+        <p class="card-description">Form parties for a specific event based on RSVP data. Select an event to form parties.</p>
+        <div id="eventPartiesList" class="event-list">
+          <div class="loading">Loading events...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Events -->
+    <div id="tab-events" class="tab-content">
+      <div class="card">
+        <h2 class="card-title">Event Management</h2>
+        <p class="card-description">View attendance codes and cancel/close events.</p>
+        <div id="eventsList" class="event-list">
+          <div class="loading">Loading events...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Items -->
+    <div id="tab-items" class="tab-content">
+      <div class="card">
+        <h2 class="card-title">Create Item Roll</h2>
+        <p class="card-description">Create a new item roll and send it to a channel. Same as using /itemroll on Discord.</p>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="itemCategory">Category</label>
+            <select id="itemCategory" class="form-control">
+              <option value="">Select category...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="itemSubcategory">Type</label>
+            <select id="itemSubcategory" class="form-control" disabled>
+              <option value="">Select type...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="itemSelect">Item</label>
+            <select id="itemSelect" class="form-control" disabled>
+              <option value="">Select item...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="itemTrait">Trait</label>
+            <input type="text" id="itemTrait" class="form-control" placeholder="e.g., Attack Speed">
+          </div>
+          <div class="form-group">
+            <label for="rollDuration">Duration (hours)</label>
+            <input type="number" id="rollDuration" class="form-control" value="1" min="1" max="72">
+          </div>
+          <div class="form-group">
+            <label for="rollChannel">Channel</label>
+            <select id="rollChannel" class="form-control">
+              <option value="">Select channel...</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Eligible Users (leave empty for everyone)</label>
+          <div class="user-select-container">
+            <input type="text" id="userSearchRoll" class="form-control" placeholder="Search users...">
+            <div id="rollUserList" class="user-checkbox-list"></div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="createItemRoll" disabled>
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v20"/>
+            <path d="M2 12h20"/>
+          </svg>
+          Create Item Roll
+        </button>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Give Items</h2>
+        <p class="card-description">Distribute items to users who have wishlisted them. Same as using /giveitem on Discord.</p>
+
+        <div class="form-group">
+          <label>Select Item</label>
+          <select id="giveItemSelect" class="form-control">
+            <option value="">Select an item...</option>
+          </select>
+        </div>
+
+        <div id="giveItemUsers" class="user-checkbox-list" style="display: none;"></div>
+
+        <div id="giveItemPending" class="pending-distributions" style="display: none;">
+          <h4>Pending Distributions</h4>
+          <div id="pendingList"></div>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-success" id="giveItemBtn" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6L9 17l-5-5"/>
+            </svg>
+            Give Item(s)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Reminders -->
+    <div id="tab-reminders" class="tab-content">
+      <div class="card">
+        <h2 class="card-title">Party Info Reminders</h2>
+        <p class="card-description">Send DM reminders to guild members who haven't set up their party info (/myinfo). Same as using /remindparties on Discord.</p>
+        <div id="partyReminderStats" class="reminder-stats"></div>
+        <button class="btn btn-primary" id="sendPartyReminders">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"/>
+          </svg>
+          Send Party Info Reminders
+        </button>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Wishlist Reminders</h2>
+        <p class="card-description">Send DM reminders to guild members who haven't submitted their wishlist. Same as using /wishlistreminder on Discord.</p>
+        <div id="wishlistReminderStats" class="reminder-stats"></div>
+        <button class="btn btn-primary" id="sendWishlistReminders">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"/>
+          </svg>
+          Send Wishlist Reminders
+        </button>
+      </div>
+    </div>
+
+    <!-- Tab Content: Reset -->
+    <div id="tab-reset" class="tab-content">
+      <div class="card">
+        <h2 class="card-title">Reset User Party Info</h2>
+        <p class="card-description">Reset a user's party info (weapons, CP, role). They will need to use /myinfo again. Same as using /resetparties user on Discord.</p>
+
+        <div class="form-group">
+          <label for="resetPartyUser">Select User</label>
+          <select id="resetPartyUser" class="form-control">
+            <option value="">Select a user...</option>
+          </select>
+        </div>
+
+        <button class="btn btn-danger" id="resetPartyBtn" disabled>
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"/>
+            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+          </svg>
+          Reset Party Info
+        </button>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Reset User Wishlist</h2>
+        <p class="card-description">Reset a user's wishlist submission. Their received items will be preserved. Same as using /resetuserwishlist on Discord.</p>
+
+        <div class="form-group">
+          <label for="resetWishlistUser">Select User</label>
+          <select id="resetWishlistUser" class="form-control">
+            <option value="">Select a user...</option>
+          </select>
+        </div>
+
+        <button class="btn btn-danger" id="resetWishlistBtn" disabled>
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"/>
+            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+          </svg>
+          Reset Wishlist
+        </button>
+      </div>
+    </div>
+
+    <!-- Event Code Modal -->
+    <div id="eventCodeModal" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Event Attendance Code</h2>
+          <button class="modal-close" onclick="closeModal('eventCodeModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div id="eventCodeContent"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('eventCodeModal')">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="confirmModalTitle">Confirm Action</h2>
+          <button class="modal-close" onclick="closeModal('confirmModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p id="confirmModalMessage"></p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('confirmModal')">Cancel</button>
+          <button class="btn btn-danger" id="confirmModalBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script>
+    // Pass data from server to client
+    const TOKEN = '<%= token %>';
+    const GUILD_ID = '<%= guildId %>';
+    const USER_ID = '<%= userId %>';
+  </script>
+  <script src="/static/js/admin-panel.js"></script>
+</body>
+</html>

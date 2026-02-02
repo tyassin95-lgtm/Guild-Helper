@@ -170,7 +170,56 @@ document.addEventListener('DOMContentLoaded', () => {
   loadWishlistData();
   loadRosterData();
   loadItemRollsData();
+  checkAdminAccess();
 });
+
+// ==========================================
+// Admin Panel Access
+// ==========================================
+async function checkAdminAccess() {
+  try {
+    const response = await fetch(`/api/profile/${TOKEN}/admin-access?_=${Date.now()}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.hasAccess) {
+        const adminBtn = document.getElementById('adminPanelBtn');
+        adminBtn.style.display = 'flex';
+        adminBtn.addEventListener('click', openAdminPanel);
+      }
+    }
+  } catch (error) {
+    console.error('Error checking admin access:', error);
+  }
+}
+
+async function openAdminPanel() {
+  const btn = document.getElementById('adminPanelBtn');
+  btn.disabled = true;
+  btn.textContent = 'Opening...';
+
+  try {
+    const response = await fetch(`/api/profile/${TOKEN}/admin-panel-link?_=${Date.now()}`);
+    if (response.ok) {
+      const data = await response.json();
+      window.open(data.url, '_blank');
+    } else {
+      const error = await response.json();
+      showToast(error.error || 'Failed to open admin panel', 'error');
+    }
+  } catch (error) {
+    console.error('Error opening admin panel:', error);
+    showToast('Failed to open admin panel', 'error');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+    Admin Panel
+  `;
+}
 
 // ==========================================
 // Tab Navigation
