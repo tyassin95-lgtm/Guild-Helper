@@ -20,6 +20,7 @@ class WebServer {
     this.activeTokens = new Map(); // In-memory token storage
     this.staticPartyTokens = new Map(); // Tokens for static party editor
     this.profileTokens = new Map(); // Tokens for profile dashboard
+    this.adminPanelTokens = new Map(); // Tokens for admin panel
     this.collections = null;
     this.client = null;
     this.server = null;
@@ -177,6 +178,45 @@ class WebServer {
   }
 
   /**
+   * Generate a secure token for admin panel access
+   */
+  generateAdminPanelToken(guildId, userId, expiresIn = 3600000) { // 1 hour default
+    const token = crypto.randomBytes(32).toString('hex');
+
+    this.adminPanelTokens.set(token, {
+      guildId,
+      userId,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + expiresIn
+    });
+
+    // Auto-cleanup expired token
+    setTimeout(() => {
+      this.adminPanelTokens.delete(token);
+    }, expiresIn);
+
+    return token;
+  }
+
+  /**
+   * Validate admin panel token and return associated data
+   */
+  validateAdminPanelToken(token) {
+    const tokenData = this.adminPanelTokens.get(token);
+
+    if (!tokenData) {
+      return { valid: false, error: 'Token not found' };
+    }
+
+    if (tokenData.expiresAt < Date.now()) {
+      this.adminPanelTokens.delete(token);
+      return { valid: false, error: 'Token expired' };
+    }
+
+    return { valid: true, data: tokenData };
+  }
+
+  /**
    * Register all routes
    */
   registerRoutes() {
@@ -278,6 +318,115 @@ class WebServer {
     // API: Get item rolls data
     this.app.get('/api/profile/:token/item-rolls', async (req, res) => {
       await this.handleGetItemRolls(req, res);
+    });
+
+    // API: Check if user has admin access (for profile dashboard)
+    this.app.get('/api/profile/:token/admin-access', async (req, res) => {
+      await this.handleProfileCheckAdminAccess(req, res);
+    });
+
+    // API: Get admin panel link (for profile dashboard)
+    this.app.get('/api/profile/:token/admin-panel-link', async (req, res) => {
+      await this.handleProfileGetAdminPanelLink(req, res);
+    });
+
+    // ==========================================
+    // Admin Panel Routes
+    // ==========================================
+
+    // Admin panel page
+    this.app.get('/admin-panel/:token', async (req, res) => {
+      await this.handleAdminPanelPage(req, res);
+    });
+
+    // API: Check admin access
+    this.app.get('/api/admin-panel/:token/check-access', async (req, res) => {
+      await this.handleCheckAdminAccess(req, res);
+    });
+
+    // API: Get guild members
+    this.app.get('/api/admin-panel/:token/members', async (req, res) => {
+      await this.handleAdminGetMembers(req, res);
+    });
+
+    // API: Get events
+    this.app.get('/api/admin-panel/:token/events', async (req, res) => {
+      await this.handleAdminGetEvents(req, res);
+    });
+
+    // API: Get text channels for item rolls
+    this.app.get('/api/admin-panel/:token/channels', async (req, res) => {
+      await this.handleAdminGetChannels(req, res);
+    });
+
+    // API: Get static party editor token (redirects to existing editor)
+    this.app.get('/api/admin-panel/:token/static-party-token', async (req, res) => {
+      await this.handleAdminGetStaticPartyToken(req, res);
+    });
+
+    // API: Get event party editor token
+    this.app.get('/api/admin-panel/:token/event-party-token/:eventId', async (req, res) => {
+      await this.handleAdminGetEventPartyToken(req, res);
+    });
+
+    // API: Reset user party info
+    this.app.post('/api/admin-panel/:token/reset-party', async (req, res) => {
+      await this.handleAdminResetParty(req, res);
+    });
+
+    // API: Reset user wishlist
+    this.app.post('/api/admin-panel/:token/reset-wishlist', async (req, res) => {
+      await this.handleAdminResetWishlist(req, res);
+    });
+
+    // API: Get item categories
+    this.app.get('/api/admin-panel/:token/item-categories', async (req, res) => {
+      await this.handleAdminGetItemCategories(req, res);
+    });
+
+    // API: Get item subcategories
+    this.app.get('/api/admin-panel/:token/item-subcategories/:category', async (req, res) => {
+      await this.handleAdminGetItemSubcategories(req, res);
+    });
+
+    // API: Get items
+    this.app.get('/api/admin-panel/:token/items/:category/:subcategory', async (req, res) => {
+      await this.handleAdminGetItems(req, res);
+    });
+
+    // API: Create item roll
+    this.app.post('/api/admin-panel/:token/create-item-roll', async (req, res) => {
+      await this.handleAdminCreateItemRoll(req, res);
+    });
+
+    // API: Get wishlisted items for give item feature
+    this.app.get('/api/admin-panel/:token/wishlisted-items', async (req, res) => {
+      await this.handleAdminGetWishlistedItems(req, res);
+    });
+
+    // API: Give item to users
+    this.app.post('/api/admin-panel/:token/give-item', async (req, res) => {
+      await this.handleAdminGiveItem(req, res);
+    });
+
+    // API: Send party info reminders
+    this.app.post('/api/admin-panel/:token/remind-parties', async (req, res) => {
+      await this.handleAdminRemindParties(req, res);
+    });
+
+    // API: Send wishlist reminders
+    this.app.post('/api/admin-panel/:token/remind-wishlist', async (req, res) => {
+      await this.handleAdminRemindWishlist(req, res);
+    });
+
+    // API: Cancel event
+    this.app.post('/api/admin-panel/:token/cancel-event', async (req, res) => {
+      await this.handleAdminCancelEvent(req, res);
+    });
+
+    // API: View event code
+    this.app.get('/api/admin-panel/:token/event-code/:eventId', async (req, res) => {
+      await this.handleAdminViewEventCode(req, res);
     });
 
     // 404 handler
@@ -1965,6 +2114,1249 @@ class WebServer {
     } catch (error) {
       console.error('Error getting item rolls:', error);
       res.status(500).json({ error: 'Failed to get item rolls' });
+    }
+  }
+
+  /**
+   * Check if profile user has admin access
+   */
+  async handleProfileCheckAdminAccess(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Get guild and member
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+
+      // Check if user has administrator permission
+      const isAdmin = member.permissions.has('Administrator');
+
+      // Check if user has any authorized admin roles
+      const settings = await this.collections.guildSettings.findOne({ guildId });
+      const adminRoles = settings?.adminPanelRoles || settings?.pvpCodeManagers || [];
+      const hasAdminRole = adminRoles.some(roleId => member.roles.cache.has(roleId));
+
+      res.json({
+        hasAccess: isAdmin || hasAdminRole,
+        isAdmin,
+        hasAdminRole
+      });
+
+    } catch (error) {
+      console.error('Error checking admin access:', error);
+      res.status(500).json({ error: 'Failed to check admin access' });
+    }
+  }
+
+  /**
+   * Get admin panel link for profile user
+   */
+  async handleProfileGetAdminPanelLink(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Check admin access first
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+
+      const isAdmin = member.permissions.has('Administrator');
+      const settings = await this.collections.guildSettings.findOne({ guildId });
+      const adminRoles = settings?.adminPanelRoles || settings?.pvpCodeManagers || [];
+      const hasAdminRole = adminRoles.some(roleId => member.roles.cache.has(roleId));
+
+      if (!isAdmin && !hasAdminRole) {
+        return res.status(403).json({ error: 'You do not have admin access' });
+      }
+
+      // Generate admin panel token
+      const adminToken = this.generateAdminPanelToken(guildId, userId);
+      const baseUrl = process.env.WEB_BASE_URL || `http://localhost:${this.port}`;
+
+      res.json({
+        url: `${baseUrl}/admin-panel/${adminToken}`,
+        token: adminToken
+      });
+
+    } catch (error) {
+      console.error('Error getting admin panel link:', error);
+      res.status(500).json({ error: 'Failed to get admin panel link' });
+    }
+  }
+
+  // ==========================================
+  // Admin Panel Handlers
+  // ==========================================
+
+  /**
+   * Handle admin panel page request
+   */
+  async handleAdminPanelPage(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).render('error', {
+          message: validation.error === 'Token expired'
+            ? 'This link has expired (links are valid for 1 hour)'
+            : 'Invalid or expired link'
+        });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Fetch guild
+      const guild = await this.client.guilds.fetch(guildId);
+
+      // Render the admin panel page
+      res.render('admin-panel', {
+        token: req.params.token,
+        guildId,
+        userId,
+        guildName: guild.name
+      });
+
+    } catch (error) {
+      console.error('Error loading admin panel page:', error);
+      res.status(500).render('error', {
+        message: 'Failed to load admin panel. Please try again.'
+      });
+    }
+  }
+
+  /**
+   * Check admin access for a profile user
+   * Used to determine if the admin panel button should be shown
+   */
+  async handleCheckAdminAccess(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Get guild and member
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+
+      // Check if user has administrator permission
+      const isAdmin = member.permissions.has('Administrator');
+
+      // Check if user has any authorized admin roles
+      const settings = await this.collections.guildSettings.findOne({ guildId });
+      const adminRoles = settings?.adminPanelRoles || settings?.pvpCodeManagers || [];
+      const hasAdminRole = adminRoles.some(roleId => member.roles.cache.has(roleId));
+
+      res.json({
+        hasAccess: isAdmin || hasAdminRole,
+        isAdmin,
+        hasAdminRole
+      });
+
+    } catch (error) {
+      console.error('Error checking admin access:', error);
+      res.status(500).json({ error: 'Failed to check admin access' });
+    }
+  }
+
+  /**
+   * Get guild members for user selection
+   */
+  async handleAdminGetMembers(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+
+      // Get guild and fetch members
+      const guild = await this.client.guilds.fetch(guildId);
+      await guild.members.fetch();
+
+      // Get party players for additional info
+      const partyPlayers = await this.collections.partyPlayers
+        .find({ guildId })
+        .toArray();
+      const playerMap = new Map(partyPlayers.map(p => [p.userId, p]));
+
+      // Get wishlist submissions
+      const wishlists = await this.collections.wishlistSubmissions
+        .find({ guildId })
+        .toArray();
+      const wishlistMap = new Map(wishlists.map(w => [w.userId, w]));
+
+      // Build member list (exclude bots)
+      const members = guild.members.cache
+        .filter(m => !m.user.bot)
+        .map(m => {
+          const playerInfo = playerMap.get(m.id);
+          const wishlist = wishlistMap.get(m.id);
+          return {
+            userId: m.id,
+            displayName: m.displayName,
+            username: m.user.username,
+            avatarUrl: m.user.displayAvatarURL({ size: 32, format: 'png' }),
+            hasPartyInfo: !!(playerInfo?.weapon1 && playerInfo?.weapon2 && playerInfo?.cp),
+            hasWishlist: !!wishlist,
+            weapon1: playerInfo?.weapon1,
+            weapon2: playerInfo?.weapon2,
+            cp: playerInfo?.cp,
+            role: playerInfo?.role
+          };
+        })
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+      res.json({ members });
+
+    } catch (error) {
+      console.error('Error getting members:', error);
+      res.status(500).json({ error: 'Failed to get members' });
+    }
+  }
+
+  /**
+   * Get events for the guild
+   */
+  async handleAdminGetEvents(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+
+      // Get upcoming and recent events
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      const events = await this.collections.pvpEvents
+        .find({
+          guildId,
+          eventTime: { $gte: weekAgo }
+        })
+        .sort({ eventTime: 1 })
+        .toArray();
+
+      const eventTypeNames = {
+        siege: 'Siege',
+        riftstone: 'Riftstone Fight',
+        boonstone: 'Boonstone Fight',
+        wargames: 'Wargames',
+        warboss: 'War Boss',
+        guildevent: 'Guild Event'
+      };
+
+      const formattedEvents = events.map(event => ({
+        _id: event._id.toString(),
+        eventType: event.eventType,
+        eventTypeName: eventTypeNames[event.eventType] || event.eventType,
+        location: event.location,
+        eventTime: event.eventTime,
+        closed: event.closed || false,
+        partiesFormed: event.partiesFormed || false,
+        bonusPoints: event.bonusPoints || 10,
+        rsvpAttendingCount: (event.rsvpAttending || []).length,
+        rsvpMaybeCount: (event.rsvpMaybe || []).length,
+        rsvpNotAttendingCount: (event.rsvpNotAttending || []).length,
+        attendeesCount: (event.attendees || []).length,
+        isPast: event.eventTime < now
+      }));
+
+      res.json({ events: formattedEvents });
+
+    } catch (error) {
+      console.error('Error getting events:', error);
+      res.status(500).json({ error: 'Failed to get events' });
+    }
+  }
+
+  /**
+   * Get text channels for item roll destination
+   */
+  async handleAdminGetChannels(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+
+      // Get guild and channels
+      const guild = await this.client.guilds.fetch(guildId);
+
+      // Get text channels (type 0) that the bot can send messages to
+      const channels = guild.channels.cache
+        .filter(c => c.type === 0 && c.permissionsFor(guild.members.me).has('SendMessages'))
+        .map(c => ({
+          id: c.id,
+          name: c.name,
+          category: c.parent?.name || 'No Category'
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      res.json({ channels });
+
+    } catch (error) {
+      console.error('Error getting channels:', error);
+      res.status(500).json({ error: 'Failed to get channels' });
+    }
+  }
+
+  /**
+   * Get static party editor token
+   */
+  async handleAdminGetStaticPartyToken(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Generate a static party token
+      const token = this.generateStaticPartyToken(guildId, userId);
+      const baseUrl = process.env.WEB_BASE_URL || `http://localhost:${this.port}`;
+
+      res.json({
+        url: `${baseUrl}/static-party-editor/${token}`,
+        token
+      });
+
+    } catch (error) {
+      console.error('Error generating static party token:', error);
+      res.status(500).json({ error: 'Failed to generate static party editor link' });
+    }
+  }
+
+  /**
+   * Get event party editor token and process parties
+   */
+  async handleAdminGetEventPartyToken(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+      const { eventId } = req.params;
+
+      // Import party manager functions
+      const { getRoleFromWeapons } = require('../features/parties/roleDetection');
+
+      // Fetch the event
+      const event = await this.collections.pvpEvents.findOne({
+        _id: new ObjectId(eventId)
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Get attendance data
+      const notAttendingSet = new Set(event.rsvpNotAttending || []);
+      const attendingSet = new Set([
+        ...(event.rsvpAttending || []),
+        ...(event.rsvpMaybe || [])
+      ]);
+
+      if (attendingSet.size === 0) {
+        return res.status(400).json({
+          error: 'No members have RSVPd as attending or maybe for this event'
+        });
+      }
+
+      // Get guild
+      const guild = await this.client.guilds.fetch(guildId);
+
+      // Fetch all static parties (exclude reserve)
+      const staticParties = await this.collections.parties.find({
+        guildId,
+        isReserve: { $ne: true }
+      }).sort({ partyNumber: 1 }).toArray();
+
+      // Process each static party
+      const processedParties = [];
+      const availableMembers = [];
+
+      for (const party of staticParties) {
+        const removedMembers = [];
+        const remainingMembers = [];
+
+        for (const member of party.members || []) {
+          const discordMember = await guild.members.fetch(member.userId).catch(() => null);
+          const playerInfo = await this.collections.partyPlayers.findOne({
+            userId: member.userId,
+            guildId
+          });
+
+          const enrichedMember = {
+            userId: member.userId,
+            displayName: discordMember?.displayName || 'Unknown',
+            weapon1: member.weapon1 || playerInfo?.weapon1,
+            weapon2: member.weapon2 || playerInfo?.weapon2,
+            role: member.role || playerInfo?.role || 'dps',
+            cp: member.cp || playerInfo?.cp || 0,
+            isLeader: member.isLeader || false
+          };
+
+          if (notAttendingSet.has(member.userId)) {
+            removedMembers.push(enrichedMember);
+          } else {
+            remainingMembers.push(enrichedMember);
+          }
+        }
+
+        // Decide if party should be disbanded (less than 3 members remaining)
+        if (remainingMembers.length < 3) {
+          availableMembers.push(...remainingMembers.map(m => ({
+            ...m,
+            source: `Party ${party.partyNumber} (disbanded)`
+          })));
+        } else {
+          const status = removedMembers.length > 0 ? 'modified' : 'intact';
+          const composition = { tank: 0, healer: 0, dps: 0 };
+          remainingMembers.forEach(m => composition[m.role]++);
+
+          processedParties.push({
+            partyNumber: party.partyNumber,
+            status,
+            members: remainingMembers,
+            removedMembers,
+            composition
+          });
+        }
+      }
+
+      // Find unassigned attendees
+      const assignedUserIds = new Set(
+        processedParties.flatMap(p => p.members.map(m => m.userId))
+      );
+      const availableFromDisbanded = new Set(availableMembers.map(m => m.userId));
+
+      for (const usrId of attendingSet) {
+        if (!assignedUserIds.has(usrId) && !availableFromDisbanded.has(usrId)) {
+          const discordMember = await guild.members.fetch(usrId).catch(() => null);
+          const playerInfo = await this.collections.partyPlayers.findOne({
+            userId: usrId,
+            guildId
+          });
+
+          if (playerInfo?.weapon1 && playerInfo?.weapon2) {
+            const role = playerInfo.role || getRoleFromWeapons(playerInfo.weapon1, playerInfo.weapon2);
+            availableMembers.push({
+              userId: usrId,
+              displayName: discordMember?.displayName || 'Unknown',
+              weapon1: playerInfo.weapon1,
+              weapon2: playerInfo.weapon2,
+              role,
+              cp: playerInfo.cp || 0,
+              isLeader: false,
+              source: 'Unassigned'
+            });
+          }
+        }
+      }
+
+      // Calculate summary
+      const summary = {
+        totalAttending: attendingSet.size,
+        partiesIntact: processedParties.filter(p => p.status === 'intact').length,
+        partiesModified: processedParties.filter(p => p.status === 'modified').length,
+        partiesDisbanded: staticParties.length - processedParties.length,
+        membersAvailable: availableMembers.length
+      };
+
+      // Store the formation
+      await this.collections.eventParties.updateOne(
+        { eventId: new ObjectId(eventId) },
+        {
+          $set: {
+            eventId: new ObjectId(eventId),
+            guildId,
+            processedParties,
+            availableMembers,
+            summary,
+            status: 'pending',
+            createdBy: userId,
+            createdAt: new Date(),
+            approved: false
+          }
+        },
+        { upsert: true }
+      );
+
+      // Generate party editor token
+      const token = this.generateToken(eventId, userId);
+      const baseUrl = process.env.WEB_BASE_URL || `http://localhost:${this.port}`;
+
+      res.json({
+        url: `${baseUrl}/party-editor/${token}`,
+        token,
+        summary
+      });
+
+    } catch (error) {
+      console.error('Error generating event party token:', error);
+      res.status(500).json({ error: 'Failed to generate event party editor link' });
+    }
+  }
+
+  /**
+   * Reset user party info
+   */
+  async handleAdminResetParty(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+      const { userId } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({ error: 'User ID is required' });
+      }
+
+      // Delete the player's info
+      const deleteResult = await this.collections.partyPlayers.deleteOne({
+        guildId,
+        userId
+      });
+
+      if (deleteResult.deletedCount === 0) {
+        return res.status(404).json({ error: 'User has no party info to reset' });
+      }
+
+      // Remove the user from all parties
+      const party = await this.collections.parties.findOne({
+        guildId,
+        'members.userId': userId
+      });
+
+      if (party) {
+        const member = party.members.find(m => m.userId === userId);
+
+        await this.collections.parties.updateOne(
+          { _id: party._id },
+          {
+            $pull: { members: { userId } },
+            $inc: {
+              totalCP: -(member?.cp || 0),
+              [`roleComposition.${member?.role || 'dps'}`]: -1
+            }
+          }
+        );
+      }
+
+      // Get user display name for response
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId).catch(() => null);
+
+      res.json({
+        success: true,
+        message: `Party info reset for ${member?.displayName || userId}`,
+        wasInParty: !!party
+      });
+
+    } catch (error) {
+      console.error('Error resetting party:', error);
+      res.status(500).json({ error: 'Failed to reset party info' });
+    }
+  }
+
+  /**
+   * Reset user wishlist
+   */
+  async handleAdminResetWishlist(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+      const { userId } = req.body;
+
+      if (!userId) {
+        return res.status(400).json({ error: 'User ID is required' });
+      }
+
+      // Check if user has a wishlist
+      const existingWishlist = await this.collections.wishlistSubmissions.findOne({
+        userId,
+        guildId
+      });
+
+      if (!existingWishlist) {
+        return res.status(404).json({ error: 'User does not have a wishlist to reset' });
+      }
+
+      // Check if user has received items
+      const receivedItems = await this.collections.wishlistGivenItems.find({
+        userId,
+        guildId
+      }).toArray();
+
+      // Delete the wishlist submission (keep given items as historical record)
+      await this.collections.wishlistSubmissions.deleteOne({
+        userId,
+        guildId
+      });
+
+      // Update wishlist panels
+      await updateWishlistPanels({
+        client: this.client,
+        guildId,
+        collections: this.collections
+      });
+
+      // Send DM to user
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId).catch(() => null);
+
+      if (member) {
+        const dmMessage = receivedItems.length > 0
+          ? `📋 **Wishlist Reset Notification**\n\nYour wishlist in **${guild.name}** has been reset by an administrator.\n\n✅ **Your ${receivedItems.length} previously received item(s) are preserved.** You can only modify items you haven't received yet.\n\nYou can now update your wishlist using the \`/mywishlist\` command.`
+          : `📋 **Wishlist Reset Notification**\n\nYour wishlist in **${guild.name}** has been reset by an administrator.\n\nYou can now submit a new wishlist using the \`/mywishlist\` command.`;
+
+        await member.send({ content: dmMessage }).catch(() => {});
+      }
+
+      res.json({
+        success: true,
+        message: `Wishlist reset for ${member?.displayName || userId}`,
+        hadReceivedItems: receivedItems.length > 0,
+        receivedItemsCount: receivedItems.length
+      });
+
+    } catch (error) {
+      console.error('Error resetting wishlist:', error);
+      res.status(500).json({ error: 'Failed to reset wishlist' });
+    }
+  }
+
+  /**
+   * Get item categories for item roll
+   */
+  async handleAdminGetItemCategories(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { getCategories } = require('../features/itemroll/data/items');
+      res.json({ categories: getCategories() });
+
+    } catch (error) {
+      console.error('Error getting item categories:', error);
+      res.status(500).json({ error: 'Failed to get item categories' });
+    }
+  }
+
+  /**
+   * Get item subcategories
+   */
+  async handleAdminGetItemSubcategories(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { category } = req.params;
+      const { getSubcategories } = require('../features/itemroll/data/items');
+
+      res.json({ subcategories: getSubcategories(category) });
+
+    } catch (error) {
+      console.error('Error getting item subcategories:', error);
+      res.status(500).json({ error: 'Failed to get item subcategories' });
+    }
+  }
+
+  /**
+   * Get items for a category/subcategory
+   */
+  async handleAdminGetItems(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { category, subcategory } = req.params;
+      const { getItems } = require('../features/itemroll/data/items');
+
+      res.json({ items: getItems(category, subcategory) });
+
+    } catch (error) {
+      console.error('Error getting items:', error);
+      res.status(500).json({ error: 'Failed to get items' });
+    }
+  }
+
+  /**
+   * Create item roll
+   */
+  async handleAdminCreateItemRoll(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+      const { itemValue, trait, duration, channelId, eligibleUsers } = req.body;
+
+      if (!itemValue || !trait || !duration || !channelId) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Get item data
+      const { getItemFromValue } = require('../features/itemroll/data/items');
+      const itemData = getItemFromValue(itemValue);
+
+      if (!itemData) {
+        return res.status(400).json({ error: 'Invalid item selection' });
+      }
+
+      // Parse duration
+      const durationHours = parseInt(duration);
+      if (isNaN(durationHours) || durationHours < 1) {
+        return res.status(400).json({ error: 'Duration must be at least 1 hour' });
+      }
+
+      const endsAt = new Date(Date.now() + durationHours * 60 * 60 * 1000);
+
+      // Create item roll
+      const itemRoll = {
+        itemName: itemData.name,
+        imageUrl: itemData.imageUrl,
+        trait,
+        guildId,
+        channelId,
+        userId,
+        eligibleUsers: eligibleUsers || [], // Empty means everyone
+        rolls: [],
+        passes: [],
+        closed: false,
+        createdAt: new Date(),
+        endsAt
+      };
+
+      const result = await this.collections.itemRolls.insertOne(itemRoll);
+      itemRoll._id = result.insertedId;
+
+      // Get channel and send the embed
+      const guild = await this.client.guilds.fetch(guildId);
+      const channel = await guild.channels.fetch(channelId);
+
+      if (!channel) {
+        await this.collections.itemRolls.deleteOne({ _id: itemRoll._id });
+        return res.status(400).json({ error: 'Channel not found' });
+      }
+
+      // Create and send the embed
+      const { createItemRollEmbed } = require('../features/itemroll/itemRollEmbed');
+      const { embed, components } = await createItemRollEmbed(
+        itemRoll,
+        this.client,
+        this.collections
+      );
+
+      // Create mention string
+      let mentions = '';
+      if (eligibleUsers && eligibleUsers.length > 0) {
+        mentions = eligibleUsers.map(id => `<@${id}>`).join(' ');
+      }
+
+      const rollMessage = await channel.send({
+        content: mentions || undefined,
+        embeds: [embed],
+        components,
+        allowedMentions: mentions ? { parse: ['users'] } : undefined
+      });
+
+      // Save message ID
+      await this.collections.itemRolls.updateOne(
+        { _id: itemRoll._id },
+        { $set: { messageId: rollMessage.id } }
+      );
+
+      // Schedule auto-close
+      const { scheduleItemRollClose } = require('../features/itemroll/handlers/itemRollButtons');
+      scheduleItemRollClose(itemRoll, this.client, this.collections);
+
+      res.json({
+        success: true,
+        message: 'Item roll created successfully',
+        rollId: itemRoll._id.toString(),
+        messageUrl: rollMessage.url,
+        endsAt
+      });
+
+    } catch (error) {
+      console.error('Error creating item roll:', error);
+      res.status(500).json({ error: 'Failed to create item roll' });
+    }
+  }
+
+  /**
+   * Get wishlisted items for give item feature
+   */
+  async handleAdminGetWishlistedItems(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+
+      // Get all wishlist submissions
+      const submissions = await this.collections.wishlistSubmissions
+        .find({ guildId })
+        .toArray();
+
+      if (submissions.length === 0) {
+        return res.json({ items: [] });
+      }
+
+      // Collect all wishlisted items with users
+      const itemUserMap = new Map();
+
+      const processItems = (itemIds, userId) => {
+        if (!itemIds) return;
+        for (const itemId of itemIds) {
+          if (!itemUserMap.has(itemId)) {
+            itemUserMap.set(itemId, []);
+          }
+          itemUserMap.get(itemId).push(userId);
+        }
+      };
+
+      for (const submission of submissions) {
+        processItems(submission.archbossWeapon, submission.userId);
+        processItems(submission.archbossArmor, submission.userId);
+        processItems(submission.t3Weapons, submission.userId);
+        processItems(submission.t3Armors, submission.userId);
+        processItems(submission.t3Accessories, submission.userId);
+      }
+
+      // Get item details
+      const { getItemById } = require('../features/wishlist/utils/items');
+
+      const guild = await this.client.guilds.fetch(guildId);
+
+      const items = [];
+      for (const [itemId, userIds] of itemUserMap) {
+        const item = getItemById(itemId);
+        if (item) {
+          // Get user display names
+          const users = await Promise.all(userIds.map(async (uid) => {
+            const member = await guild.members.fetch(uid).catch(() => null);
+            return {
+              userId: uid,
+              displayName: member?.displayName || 'Unknown'
+            };
+          }));
+
+          items.push({
+            id: item.id,
+            name: item.name,
+            category: item.category || item.type,
+            imageUrl: item.imageUrl,
+            users
+          });
+        }
+      }
+
+      // Sort by category, then by name
+      items.sort((a, b) => {
+        if (a.category !== b.category) return a.category.localeCompare(b.category);
+        return a.name.localeCompare(b.name);
+      });
+
+      res.json({ items });
+
+    } catch (error) {
+      console.error('Error getting wishlisted items:', error);
+      res.status(500).json({ error: 'Failed to get wishlisted items' });
+    }
+  }
+
+  /**
+   * Give item to users
+   */
+  async handleAdminGiveItem(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId: adminUserId } = validation.data;
+      const { distributions } = req.body;
+
+      if (!distributions || !Array.isArray(distributions) || distributions.length === 0) {
+        return res.status(400).json({ error: 'No distributions provided' });
+      }
+
+      const now = new Date();
+      let totalGiven = 0;
+
+      // Process each distribution
+      for (const { itemId, userIds } of distributions) {
+        if (!itemId || !userIds || !Array.isArray(userIds)) continue;
+
+        for (const uid of userIds) {
+          await this.collections.wishlistGivenItems.updateOne(
+            { guildId, userId: uid, itemId },
+            {
+              $set: {
+                givenAt: now,
+                givenBy: adminUserId
+              }
+            },
+            { upsert: true }
+          );
+          totalGiven++;
+        }
+      }
+
+      // Update wishlist panels
+      await updateWishlistPanels({
+        client: this.client,
+        guildId,
+        collections: this.collections
+      });
+
+      res.json({
+        success: true,
+        message: `Successfully distributed ${totalGiven} item(s)`,
+        totalGiven
+      });
+
+    } catch (error) {
+      console.error('Error giving items:', error);
+      res.status(500).json({ error: 'Failed to give items' });
+    }
+  }
+
+  /**
+   * Send party info reminders
+   */
+  async handleAdminRemindParties(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId: adminUserId } = validation.data;
+
+      // Get excluded roles
+      const settings = await this.collections.guildSettings.findOne({ guildId });
+      const excludedRoles = settings?.excludedRoles || [];
+
+      // Get guild and fetch members
+      const guild = await this.client.guilds.fetch(guildId);
+      await guild.members.fetch();
+
+      // Filter out bots and excluded roles
+      const humans = guild.members.cache.filter(m => {
+        if (m.user.bot) return false;
+        if (excludedRoles.length > 0) {
+          const hasExcludedRole = m.roles.cache.some(role => excludedRoles.includes(role.id));
+          if (hasExcludedRole) return false;
+        }
+        return true;
+      });
+
+      // Get all players who have complete party info
+      const playersWithInfo = await this.collections.partyPlayers.find({
+        guildId,
+        weapon1: { $exists: true },
+        weapon2: { $exists: true },
+        cp: { $exists: true }
+      }).toArray();
+
+      const playersWithCompleteInfo = new Set(playersWithInfo.map(p => p.userId));
+
+      // Find users who haven't set up their party info
+      const needsSetup = humans.filter(m => !playersWithCompleteInfo.has(m.id));
+
+      if (needsSetup.size === 0) {
+        return res.json({
+          success: true,
+          message: 'All members have already set up their party info!',
+          successCount: 0,
+          failCount: 0
+        });
+      }
+
+      // Prepare reminder embed
+      const reminderEmbed = new EmbedBuilder()
+        .setColor('#5865F2')
+        .setTitle('Party Info Setup Reminder')
+        .setDescription(
+          `Hello! This is a reminder from **${guild.name}**.\n\n` +
+          `You haven't set up your party information yet! This information is needed for party assignments.\n\n` +
+          `**Please use the \`/myinfo\` command in the server to set up your info:**\n\n` +
+          `• Primary Weapon\n` +
+          `• Secondary Weapon\n` +
+          `• Combat Power (CP)\n` +
+          `• Gear Check (mandatory)\n\n` +
+          `This will only take a moment and helps us organize our parties better. Thank you!`
+        )
+        .setTimestamp();
+
+      // Send DMs with delay
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const member of needsSetup.values()) {
+        try {
+          await member.send({ embeds: [reminderEmbed] });
+          successCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (err) {
+          failCount++;
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Sent reminders to ${successCount} user(s)`,
+        successCount,
+        failCount,
+        totalNeeded: needsSetup.size
+      });
+
+    } catch (error) {
+      console.error('Error sending party reminders:', error);
+      res.status(500).json({ error: 'Failed to send party reminders' });
+    }
+  }
+
+  /**
+   * Send wishlist reminders
+   */
+  async handleAdminRemindWishlist(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+
+      // Get excluded roles
+      const settings = await this.collections.guildSettings.findOne({ guildId });
+      const excludedRoles = settings?.excludedRoles || [];
+
+      // Get guild and fetch members
+      const guild = await this.client.guilds.fetch(guildId);
+      await guild.members.fetch();
+
+      // Get all users who have submitted wishlists
+      const submittedUsers = await this.collections.wishlistSubmissions
+        .find({ guildId })
+        .toArray();
+
+      const submittedUserIds = new Set(submittedUsers.map(s => s.userId));
+
+      // Filter members who need reminders
+      const needReminder = guild.members.cache.filter(member => {
+        if (member.user.bot) return false;
+        if (submittedUserIds.has(member.id)) return false;
+        const memberRoleIds = member.roles.cache.map(r => r.id);
+        if (memberRoleIds.some(roleId => excludedRoles.includes(roleId))) return false;
+        return true;
+      });
+
+      if (needReminder.size === 0) {
+        return res.json({
+          success: true,
+          message: 'All eligible members have already submitted their wishlists!',
+          successCount: 0,
+          failCount: 0
+        });
+      }
+
+      // Send reminders
+      let successCount = 0;
+      let failCount = 0;
+
+      const reminderMessage = `📋 **Wishlist Reminder**\n\nHello! You haven't submitted your wishlist yet in **${guild.name}**.\n\nPlease use the \`/mywishlist\` command to set up your wishlist and help coordinate gear distribution.\n\nThank you!`;
+
+      for (const [, member] of needReminder) {
+        try {
+          await member.send({ content: reminderMessage });
+          successCount++;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (err) {
+          failCount++;
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Sent reminders to ${successCount} user(s)`,
+        successCount,
+        failCount,
+        totalNeeded: needReminder.size
+      });
+
+    } catch (error) {
+      console.error('Error sending wishlist reminders:', error);
+      res.status(500).json({ error: 'Failed to send wishlist reminders' });
+    }
+  }
+
+  /**
+   * Cancel event
+   */
+  async handleAdminCancelEvent(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+      const { eventId } = req.body;
+
+      if (!eventId) {
+        return res.status(400).json({ error: 'Event ID is required' });
+      }
+
+      // Get the event
+      const event = await this.collections.pvpEvents.findOne({
+        _id: new ObjectId(eventId),
+        guildId
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Close the event
+      await this.collections.pvpEvents.updateOne(
+        { _id: new ObjectId(eventId) },
+        { $set: { closed: true } }
+      );
+
+      // Update calendar asynchronously
+      const { updateCalendar } = require('../features/pvp/calendar/calendarUpdate');
+      updateCalendar(this.client, guildId, this.collections).catch(err =>
+        console.error('Failed to update calendar after closing event:', err)
+      );
+
+      // Update event embed
+      try {
+        const channel = await this.client.channels.fetch(event.channelId).catch(() => null);
+        if (channel && event.messageId) {
+          await updateEventEmbed(event._id.toString(), this.client, this.collections);
+        }
+      } catch (err) {
+        console.error('Failed to update event embed:', err);
+      }
+
+      res.json({
+        success: true,
+        message: 'Event has been cancelled/closed'
+      });
+
+    } catch (error) {
+      console.error('Error cancelling event:', error);
+      res.status(500).json({ error: 'Failed to cancel event' });
+    }
+  }
+
+  /**
+   * View event code
+   */
+  async handleAdminViewEventCode(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+      const { eventId } = req.params;
+
+      // Get the event
+      const event = await this.collections.pvpEvents.findOne({
+        _id: new ObjectId(eventId),
+        guildId
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      const eventTypeNames = {
+        siege: 'Siege',
+        riftstone: 'Riftstone Fight',
+        boonstone: 'Boonstone Fight',
+        wargames: 'Wargames',
+        warboss: 'War Boss',
+        guildevent: 'Guild Event'
+      };
+
+      res.json({
+        code: event.password,
+        eventType: eventTypeNames[event.eventType] || event.eventType,
+        location: event.location,
+        eventTime: event.eventTime,
+        bonusPoints: event.bonusPoints || 10,
+        closed: event.closed || false
+      });
+
+    } catch (error) {
+      console.error('Error viewing event code:', error);
+      res.status(500).json({ error: 'Failed to get event code' });
     }
   }
 
