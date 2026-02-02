@@ -12,6 +12,8 @@ let channelsData = [];
 let wishlistedItemsData = [];
 let pendingDistributions = new Map(); // itemId -> Set of userIds
 let selectedRollUsers = new Set();
+let templatesData = [];
+let selectedEventType = null;
 
 // ==========================================
 // Utility Functions
@@ -128,7 +130,12 @@ async function loadTabData(tabId) {
       await loadEventsForParties();
       break;
     case 'events':
-      await loadEvents();
+      await Promise.all([
+        loadEvents(),
+        loadChannelsForEvents(),
+        loadDescriptionTemplates()
+      ]);
+      initEventCreationForm();
       break;
     case 'items':
       await loadItemCategories();
@@ -339,6 +346,347 @@ function confirmCancelEvent(eventId, eventName) {
   };
 
   openModal('confirmModal');
+}
+
+// ==========================================
+// Event Creation
+// ==========================================
+
+/**
+ * Initialize event creation form
+ */
+function initEventCreationForm() {
+  // Set default date to today
+  const today = new Date();
+  const dateStr = today.toISOString().split('T')[0];
+  document.getElementById('eventDate').value = dateStr;
+  document.getElementById('eventDate').min = dateStr;
+
+  // Set default time
+  const hours = String(today.getHours()).padStart(2, '0');
+  const minutes = String(Math.ceil(today.getMinutes() / 15) * 15).padStart(2, '0');
+  document.getElementById('eventTime').value = `${hours}:${minutes === '60' ? '00' : minutes}`;
+
+  // Event type selection
+  document.querySelectorAll('.event-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Remove selection from all
+      document.querySelectorAll('.event-type-btn').forEach(b => b.classList.remove('selected'));
+
+      // Select this one
+      btn.classList.add('selected');
+      selectedEventType = btn.dataset.type;
+
+      // Show/hide location field
+      const needsLocation = btn.dataset.needsLocation === 'true';
+      document.getElementById('locationGroup').style.display = needsLocation ? 'block' : 'none';
+
+      // Clear location if not needed
+      if (!needsLocation) {
+        document.getElementById('eventLocation').value = '';
+      }
+
+      updateCreateEventButton();
+    });
+  });
+
+  // Description character counter
+  const descTextarea = document.getElementById('eventDescription');
+  descTextarea.addEventListener('input', () => {
+    document.getElementById('descCharCount').textContent = descTextarea.value.length;
+    updateCreateEventButton();
+  });
+
+  // Form field listeners
+  document.getElementById('eventDate').addEventListener('change', updateCreateEventButton);
+  document.getElementById('eventTime').addEventListener('change', updateCreateEventButton);
+  document.getElementById('eventLocation').addEventListener('input', updateCreateEventButton);
+  document.getElementById('eventBonusPoints').addEventListener('input', updateCreateEventButton);
+  document.getElementById('eventChannel').addEventListener('change', updateCreateEventButton);
+
+  // Template dropdown toggle
+  document.getElementById('templateDropdownBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const dropdown = document.getElementById('templateDropdown');
+    dropdown.classList.toggle('show');
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('templateDropdown');
+    const btn = document.getElementById('templateDropdownBtn');
+    if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+      dropdown.classList.remove('show');
+    }
+  });
+
+  // Create event button
+  document.getElementById('createEventBtn').addEventListener('click', createEvent);
+
+  // Save template button in modal
+  document.getElementById('confirmSaveTemplate').addEventListener('click', confirmSaveTemplate);
+}
+
+/**
+ * Load channels for event creation
+ */
+async function loadChannelsForEvents() {
+  try {
+    const result = await apiCall('/channels');
+    channelsData = result.channels;
+    const select = document.getElementById('eventChannel');
+    select.innerHTML = '<option value="">Select channel...</option>' +
+      channelsData.map(ch => `<option value="${ch.id}">#${ch.name}</option>`).join('');
+  } catch (error) {
+    console.error('Failed to load channels:', error);
+  }
+}
+
+/**
+ * Load description templates
+ */
+async function loadDescriptionTemplates() {
+  try {
+    const result = await apiCall('/description-templates');
+    templatesData = result.templates || [];
+    renderTemplateList();
+  } catch (error) {
+    console.error('Failed to load templates:', error);
+    templatesData = [];
+    renderTemplateList();
+  }
+}
+
+/**
+ * Render template list in dropdown
+ */
+function renderTemplateList() {
+  const container = document.getElementById('templateList');
+
+  if (templatesData.length === 0) {
+    container.innerHTML = `
+      <div class="template-empty">
+        No templates saved yet.<br>
+        Create your first template by writing a description and clicking "Save Current".
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = templatesData.map(template => `
+    <div class="template-item" onclick="useTemplate('${template.id}')">
+      <div class="template-item-info">
+        <div class="template-item-name">${escapeHtml(template.name)}</div>
+        <div class="template-item-preview">${escapeHtml(template.content.substring(0, 50))}${template.content.length > 50 ? '...' : ''}</div>
+      </div>
+      <button type="button" class="template-item-delete" onclick="event.stopPropagation(); deleteTemplate('${template.id}')" title="Delete template">
+        &times;
+      </button>
+    </div>
+  `).join('');
+}
+
+/**
+ * Use a template
+ */
+function useTemplate(templateId) {
+  const template = templatesData.find(t => t.id === templateId);
+  if (template) {
+    document.getElementById('eventDescription').value = template.content;
+    document.getElementById('descCharCount').textContent = template.content.length;
+    closeTemplateDropdown();
+    updateCreateEventButton();
+    showToast('Template applied', 'success');
+  }
+}
+
+/**
+ * Close template dropdown
+ */
+function closeTemplateDropdown() {
+  document.getElementById('templateDropdown').classList.remove('show');
+}
+
+/**
+ * Save current description as template
+ */
+function saveCurrentAsTemplate() {
+  const content = document.getElementById('eventDescription').value.trim();
+
+  if (!content) {
+    showToast('Please enter a description first', 'error');
+    return;
+  }
+
+  // Show save template modal
+  document.getElementById('templatePreview').textContent = content;
+  document.getElementById('templateName').value = '';
+  closeTemplateDropdown();
+  openModal('saveTemplateModal');
+}
+
+/**
+ * Confirm save template
+ */
+async function confirmSaveTemplate() {
+  const name = document.getElementById('templateName').value.trim();
+  const content = document.getElementById('eventDescription').value.trim();
+
+  if (!name) {
+    showToast('Please enter a template name', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('confirmSaveTemplate');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    await apiCall('/description-templates', 'POST', { name, content });
+    showToast('Template saved successfully', 'success');
+    closeModal('saveTemplateModal');
+    await loadDescriptionTemplates();
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Save Template';
+}
+
+/**
+ * Delete a template
+ */
+async function deleteTemplate(templateId) {
+  if (!confirm('Are you sure you want to delete this template?')) {
+    return;
+  }
+
+  try {
+    await apiCall(`/description-templates/${templateId}`, 'DELETE');
+    showToast('Template deleted', 'success');
+    await loadDescriptionTemplates();
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+/**
+ * Update create event button state
+ */
+function updateCreateEventButton() {
+  const eventType = selectedEventType;
+  const eventDate = document.getElementById('eventDate').value;
+  const eventTime = document.getElementById('eventTime').value;
+  const description = document.getElementById('eventDescription').value.trim();
+  const channel = document.getElementById('eventChannel').value;
+  const location = document.getElementById('eventLocation').value.trim();
+
+  // Check if location is required for this event type
+  const needsLocation = ['riftstone', 'boonstone', 'warboss', 'guildevent'].includes(eventType);
+
+  const isValid = eventType &&
+    eventDate &&
+    eventTime &&
+    description &&
+    channel &&
+    (!needsLocation || location);
+
+  document.getElementById('createEventBtn').disabled = !isValid;
+}
+
+/**
+ * Create event
+ */
+async function createEvent() {
+  const btn = document.getElementById('createEventBtn');
+  btn.disabled = true;
+  btn.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin">
+      <circle cx="12" cy="12" r="10"/>
+    </svg>
+    Creating Event...
+  `;
+
+  try {
+    const eventDate = document.getElementById('eventDate').value;
+    const eventTime = document.getElementById('eventTime').value;
+    const eventDateTime = new Date(`${eventDate}T${eventTime}`);
+
+    const eventData = {
+      eventType: selectedEventType,
+      location: document.getElementById('eventLocation').value.trim() || null,
+      eventTime: eventDateTime.toISOString(),
+      bonusPoints: parseInt(document.getElementById('eventBonusPoints').value) || 10,
+      imageUrl: document.getElementById('eventImageUrl').value.trim() || null,
+      message: document.getElementById('eventDescription').value.trim(),
+      channelId: document.getElementById('eventChannel').value
+    };
+
+    const result = await apiCall('/create-event', 'POST', eventData);
+
+    // Show success modal with code
+    document.getElementById('newEventCode').textContent = result.password;
+    openModal('eventCreatedModal');
+
+    // Reset form
+    resetEventForm();
+
+    // Reload events list
+    await loadEvents();
+
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+      <line x1="12" y1="14" x2="12" y2="18"/>
+      <line x1="10" y1="16" x2="14" y2="16"/>
+    </svg>
+    Create Event
+  `;
+  updateCreateEventButton();
+}
+
+/**
+ * Reset event form
+ */
+function resetEventForm() {
+  // Deselect event type
+  document.querySelectorAll('.event-type-btn').forEach(b => b.classList.remove('selected'));
+  selectedEventType = null;
+
+  // Hide location
+  document.getElementById('locationGroup').style.display = 'none';
+  document.getElementById('eventLocation').value = '';
+
+  // Reset date/time to defaults
+  const today = new Date();
+  document.getElementById('eventDate').value = today.toISOString().split('T')[0];
+  const hours = String(today.getHours()).padStart(2, '0');
+  const minutes = String(Math.ceil(today.getMinutes() / 15) * 15).padStart(2, '0');
+  document.getElementById('eventTime').value = `${hours}:${minutes === '60' ? '00' : minutes}`;
+
+  // Reset other fields
+  document.getElementById('eventBonusPoints').value = '10';
+  document.getElementById('eventImageUrl').value = '';
+  document.getElementById('eventDescription').value = '';
+  document.getElementById('descCharCount').textContent = '0';
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 // ==========================================

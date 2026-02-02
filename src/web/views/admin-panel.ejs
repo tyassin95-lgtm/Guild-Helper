@@ -62,9 +62,138 @@
 
     <!-- Tab Content: Events -->
     <div id="tab-events" class="tab-content">
+      <!-- Create Event Card -->
       <div class="card">
-        <h2 class="card-title">Event Management</h2>
-        <p class="card-description">View attendance codes and cancel/close events.</p>
+        <h2 class="card-title">Create PvP Event</h2>
+        <p class="card-description">Create a new PvP event - same as using /pvpevent on Discord.</p>
+
+        <div class="event-creation-form">
+          <!-- Event Type Selection -->
+          <div class="form-group">
+            <label for="eventType">Event Type</label>
+            <div class="event-type-grid">
+              <button type="button" class="event-type-btn" data-type="siege" data-needs-location="false">
+                <span class="event-type-emoji">🏰</span>
+                <span class="event-type-name">Siege</span>
+              </button>
+              <button type="button" class="event-type-btn" data-type="riftstone" data-needs-location="true">
+                <span class="event-type-emoji">💎</span>
+                <span class="event-type-name">Riftstone</span>
+              </button>
+              <button type="button" class="event-type-btn" data-type="boonstone" data-needs-location="true">
+                <span class="event-type-emoji">✨</span>
+                <span class="event-type-name">Boonstone</span>
+              </button>
+              <button type="button" class="event-type-btn" data-type="wargames" data-needs-location="false">
+                <span class="event-type-emoji">⚔️</span>
+                <span class="event-type-name">Wargames</span>
+              </button>
+              <button type="button" class="event-type-btn" data-type="warboss" data-needs-location="true">
+                <span class="event-type-emoji">👹</span>
+                <span class="event-type-name">War Boss</span>
+              </button>
+              <button type="button" class="event-type-btn" data-type="guildevent" data-needs-location="true">
+                <span class="event-type-emoji">🎮</span>
+                <span class="event-type-name">Guild Event</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Location (shown only for certain event types) -->
+          <div class="form-group" id="locationGroup" style="display: none;">
+            <label for="eventLocation">Location</label>
+            <input type="text" id="eventLocation" class="form-control" placeholder="e.g., Stonegard Castle, Riftstone Valley">
+          </div>
+
+          <!-- Date and Time Picker -->
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="eventDate">Event Date</label>
+              <input type="date" id="eventDate" class="form-control">
+            </div>
+            <div class="form-group">
+              <label for="eventTime">Event Time</label>
+              <input type="time" id="eventTime" class="form-control">
+            </div>
+          </div>
+
+          <!-- Bonus Points and Image -->
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="eventBonusPoints">Bonus Points</label>
+              <input type="number" id="eventBonusPoints" class="form-control" value="10" min="1" max="9999" placeholder="10">
+            </div>
+            <div class="form-group">
+              <label for="eventImageUrl">Image URL (Optional)</label>
+              <input type="text" id="eventImageUrl" class="form-control" placeholder="Leave blank for default image">
+            </div>
+          </div>
+
+          <!-- Channel Selection -->
+          <div class="form-group">
+            <label for="eventChannel">Post to Channel</label>
+            <select id="eventChannel" class="form-control">
+              <option value="">Select channel...</option>
+            </select>
+          </div>
+
+          <!-- Description with Templates -->
+          <div class="form-group">
+            <label for="eventDescription">
+              Event Description
+              <button type="button" class="template-dropdown-btn" id="templateDropdownBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                Templates
+              </button>
+            </label>
+            <div class="template-dropdown" id="templateDropdown">
+              <div class="template-dropdown-header">
+                <span>Description Templates</span>
+                <button type="button" class="template-close-btn" onclick="closeTemplateDropdown()">&times;</button>
+              </div>
+              <div class="template-list" id="templateList">
+                <div class="loading-small">Loading templates...</div>
+              </div>
+              <div class="template-actions">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="saveCurrentAsTemplate()">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                    <polyline points="17 21 17 13 7 13 7 21"/>
+                    <polyline points="7 3 7 8 15 8"/>
+                  </svg>
+                  Save Current
+                </button>
+              </div>
+            </div>
+            <textarea id="eventDescription" class="form-control textarea-large" placeholder="Enter event details, instructions, and any important information..." maxlength="2000"></textarea>
+            <div class="char-counter"><span id="descCharCount">0</span>/2000</div>
+          </div>
+
+          <!-- Create Button -->
+          <button class="btn btn-primary btn-lg" id="createEventBtn" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+              <line x1="12" y1="14" x2="12" y2="18"/>
+              <line x1="10" y1="16" x2="14" y2="16"/>
+            </svg>
+            Create Event
+          </button>
+        </div>
+      </div>
+
+      <!-- Active Events Card -->
+      <div class="card">
+        <h2 class="card-title">Active Events</h2>
+        <p class="card-description">View attendance codes and manage existing events.</p>
         <div id="eventsList" class="event-list">
           <div class="loading">Loading events...</div>
         </div>
@@ -227,6 +356,54 @@
           </svg>
           Reset Wishlist
         </button>
+      </div>
+    </div>
+
+    <!-- Save Template Modal -->
+    <div id="saveTemplateModal" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Save Description Template</h2>
+          <button class="modal-close" onclick="closeModal('saveTemplateModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="templateName">Template Name</label>
+            <input type="text" id="templateName" class="form-control" placeholder="e.g., Standard Siege, Weekly Riftstone">
+          </div>
+          <div class="form-group">
+            <label>Preview</label>
+            <div class="template-preview" id="templatePreview"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('saveTemplateModal')">Cancel</button>
+          <button class="btn btn-primary" id="confirmSaveTemplate">Save Template</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Event Created Modal -->
+    <div id="eventCreatedModal" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Event Created Successfully</h2>
+          <button class="modal-close" onclick="closeModal('eventCreatedModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="event-created-content">
+            <div class="event-created-icon">✅</div>
+            <p>Your event has been created and posted!</p>
+            <div class="event-code-display">
+              <div class="code-label">Attendance Code</div>
+              <div class="code" id="newEventCode"></div>
+            </div>
+            <p class="event-created-note">Share this code with participants to record their attendance.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" onclick="closeModal('eventCreatedModal')">Done</button>
+        </div>
       </div>
     </div>
 

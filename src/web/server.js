@@ -434,6 +434,26 @@ class WebServer {
       await this.handleAdminGetProfileLink(req, res);
     });
 
+    // API: Create event
+    this.app.post('/api/admin-panel/:token/create-event', async (req, res) => {
+      await this.handleAdminCreateEvent(req, res);
+    });
+
+    // API: Get description templates
+    this.app.get('/api/admin-panel/:token/description-templates', async (req, res) => {
+      await this.handleAdminGetDescriptionTemplates(req, res);
+    });
+
+    // API: Save description template
+    this.app.post('/api/admin-panel/:token/description-templates', async (req, res) => {
+      await this.handleAdminSaveDescriptionTemplate(req, res);
+    });
+
+    // API: Delete description template
+    this.app.delete('/api/admin-panel/:token/description-templates/:templateId', async (req, res) => {
+      await this.handleAdminDeleteDescriptionTemplate(req, res);
+    });
+
     // 404 handler
     this.app.use((req, res) => {
       res.status(404).send('Page not found');
@@ -3389,6 +3409,291 @@ class WebServer {
     } catch (error) {
       console.error('Error getting profile link:', error);
       res.status(500).json({ error: 'Failed to get profile link' });
+    }
+  }
+
+  /**
+   * Create a new PvP event
+   */
+  async handleAdminCreateEvent(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+      const { eventType, location, eventTime, bonusPoints, imageUrl, message, channelId } = req.body;
+
+      // Validate required fields
+      if (!eventType) {
+        return res.status(400).json({ error: 'Event type is required' });
+      }
+
+      if (!eventTime) {
+        return res.status(400).json({ error: 'Event time is required' });
+      }
+
+      if (!message || message.trim().length === 0) {
+        return res.status(400).json({ error: 'Event description is required' });
+      }
+
+      if (!channelId) {
+        return res.status(400).json({ error: 'Channel is required' });
+      }
+
+      // Validate bonus points
+      const parsedBonusPoints = parseInt(bonusPoints) || 10;
+      if (parsedBonusPoints < 1 || parsedBonusPoints > 9999) {
+        return res.status(400).json({ error: 'Bonus points must be between 1 and 9999' });
+      }
+
+      // Validate event type
+      const validEventTypes = ['siege', 'riftstone', 'boonstone', 'wargames', 'warboss', 'guildevent'];
+      if (!validEventTypes.includes(eventType)) {
+        return res.status(400).json({ error: 'Invalid event type' });
+      }
+
+      // Check if location is required
+      const locationRequired = ['riftstone', 'boonstone', 'warboss', 'guildevent'].includes(eventType);
+      if (locationRequired && (!location || location.trim().length === 0)) {
+        return res.status(400).json({ error: 'Location is required for this event type' });
+      }
+
+      // Parse the event time
+      const eventDate = new Date(eventTime);
+      if (isNaN(eventDate.getTime())) {
+        return res.status(400).json({ error: 'Invalid event time format' });
+      }
+
+      // Check if date is in the past
+      if (eventDate < new Date()) {
+        return res.status(400).json({ error: 'Event time cannot be in the past' });
+      }
+
+      // Validate message length
+      if (message.length > 2000) {
+        return res.status(400).json({ error: 'Description cannot exceed 2000 characters' });
+      }
+
+      // Get the channel
+      const channel = await this.client.channels.fetch(channelId).catch(() => null);
+      if (!channel) {
+        return res.status(400).json({ error: 'Channel not found' });
+      }
+
+      // Verify the channel belongs to the guild
+      if (channel.guildId !== guildId) {
+        return res.status(403).json({ error: 'Channel does not belong to this guild' });
+      }
+
+      // Default event images
+      const DEFAULT_EVENT_IMAGES = {
+        siege: 'https://i.imgur.com/GVJjTpu.jpeg',
+        riftstone: 'https://i.imgur.com/3izMckr.jpeg',
+        boonstone: 'https://i.imgur.com/Ax4pkYA.jpeg',
+        wargames: 'https://i.imgur.com/qtY18tv.jpeg',
+        warboss: 'https://i.imgur.com/hsvWdXJ.png',
+        guildevent: 'https://i.imgur.com/RLVX4iT.jpeg'
+      };
+
+      // Determine image URL
+      const finalImageUrl = (imageUrl && imageUrl.trim().length > 0)
+        ? imageUrl.trim()
+        : DEFAULT_EVENT_IMAGES[eventType];
+
+      // Generate 4-digit password
+      const password = Math.floor(1000 + Math.random() * 9000).toString();
+
+      // Create event in database
+      const event = {
+        guildId,
+        channelId,
+        eventType,
+        location: locationRequired ? location.trim() : null,
+        eventTime: eventDate,
+        bonusPoints: parsedBonusPoints,
+        imageUrl: finalImageUrl,
+        message: message.trim(),
+        password,
+        attendees: [],
+        rsvpAttending: [],
+        rsvpNotAttending: [],
+        rsvpMaybe: [],
+        closed: false,
+        createdBy: userId,
+        createdAt: new Date()
+      };
+
+      const result = await this.collections.pvpEvents.insertOne(event);
+      event._id = result.insertedId;
+
+      // Create the event embed
+      const { createEventEmbed } = require('../features/pvp/embed');
+      const { embed, components } = await createEventEmbed(event, this.client, this.collections);
+
+      const eventMessage = await channel.send({
+        content: '@everyone',
+        embeds: [embed],
+        components,
+        allowedMentions: { parse: ['everyone'] }
+      });
+
+      // Save message ID
+      await this.collections.pvpEvents.updateOne(
+        { _id: event._id },
+        { $set: { messageId: eventMessage.id } }
+      );
+
+      // Update calendar asynchronously
+      const { updateCalendar } = require('../features/pvp/calendar/calendarUpdate');
+      updateCalendar(this.client, guildId, this.collections).catch(err =>
+        console.error('Failed to update calendar after creating event:', err)
+      );
+
+      res.json({
+        success: true,
+        message: 'Event created successfully',
+        eventId: event._id.toString(),
+        password: password,
+        messageUrl: eventMessage.url
+      });
+
+    } catch (error) {
+      console.error('Error creating event:', error);
+      res.status(500).json({ error: 'Failed to create event' });
+    }
+  }
+
+  /**
+   * Get description templates
+   */
+  async handleAdminGetDescriptionTemplates(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+
+      // Get templates from database
+      const templates = await this.collections.guildSettings.findOne(
+        { guildId },
+        { projection: { descriptionTemplates: 1 } }
+      );
+
+      res.json({
+        templates: templates?.descriptionTemplates || []
+      });
+
+    } catch (error) {
+      console.error('Error getting description templates:', error);
+      res.status(500).json({ error: 'Failed to get templates' });
+    }
+  }
+
+  /**
+   * Save description template
+   */
+  async handleAdminSaveDescriptionTemplate(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+      const { name, content } = req.body;
+
+      // Validate inputs
+      if (!name || name.trim().length === 0) {
+        return res.status(400).json({ error: 'Template name is required' });
+      }
+
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({ error: 'Template content is required' });
+      }
+
+      if (name.length > 50) {
+        return res.status(400).json({ error: 'Template name cannot exceed 50 characters' });
+      }
+
+      if (content.length > 2000) {
+        return res.status(400).json({ error: 'Template content cannot exceed 2000 characters' });
+      }
+
+      // Generate template ID
+      const templateId = new ObjectId().toString();
+
+      // Add template to guild settings
+      await this.collections.guildSettings.updateOne(
+        { guildId },
+        {
+          $push: {
+            descriptionTemplates: {
+              id: templateId,
+              name: name.trim(),
+              content: content.trim(),
+              createdBy: userId,
+              createdAt: new Date()
+            }
+          }
+        },
+        { upsert: true }
+      );
+
+      res.json({
+        success: true,
+        message: 'Template saved successfully',
+        templateId
+      });
+
+    } catch (error) {
+      console.error('Error saving description template:', error);
+      res.status(500).json({ error: 'Failed to save template' });
+    }
+  }
+
+  /**
+   * Delete description template
+   */
+  async handleAdminDeleteDescriptionTemplate(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
+      const { templateId } = req.params;
+
+      if (!templateId) {
+        return res.status(400).json({ error: 'Template ID is required' });
+      }
+
+      // Remove template from guild settings
+      await this.collections.guildSettings.updateOne(
+        { guildId },
+        {
+          $pull: {
+            descriptionTemplates: { id: templateId }
+          }
+        }
+      );
+
+      res.json({
+        success: true,
+        message: 'Template deleted successfully'
+      });
+
+    } catch (error) {
+      console.error('Error deleting description template:', error);
+      res.status(500).json({ error: 'Failed to delete template' });
     }
   }
 
