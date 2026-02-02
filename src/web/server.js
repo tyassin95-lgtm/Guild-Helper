@@ -341,9 +341,13 @@ class WebServer {
 
         const userGuilds = guildsResponse.data;
 
-        // Find which guilds the bot is in that the user is also in
-        const botGuildIds = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',').map(id => id.trim()) : [];
+        // Find which guilds the bot is in that the user is also in (dynamic detection)
+        const botGuildIds = this.client.guilds.cache.map(g => g.id);
         const commonGuilds = userGuilds.filter(g => botGuildIds.includes(g.id));
+
+        console.log('Bot is in guilds:', this.client.guilds.cache.map(g => `${g.name} (${g.id})`));
+        console.log('User is in guilds:', userGuilds.map(g => `${g.name} (${g.id})`));
+        console.log('Common guilds:', commonGuilds.map(g => `${g.name} (${g.id})`));
 
         if (commonGuilds.length === 0) {
           return res.status(403).render('error', {
