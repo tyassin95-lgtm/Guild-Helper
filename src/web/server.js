@@ -429,6 +429,11 @@ class WebServer {
       await this.handleAdminViewEventCode(req, res);
     });
 
+    // API: Get profile link from admin panel
+    this.app.get('/api/admin-panel/:token/profile-link', async (req, res) => {
+      await this.handleAdminGetProfileLink(req, res);
+    });
+
     // 404 handler
     this.app.use((req, res) => {
       res.status(404).send('Page not found');
@@ -2286,9 +2291,8 @@ class WebServer {
 
       const { guildId } = validation.data;
 
-      // Get guild and fetch members
+      // Get guild - use cache to avoid rate limits
       const guild = await this.client.guilds.fetch(guildId);
-      await guild.members.fetch();
 
       // Get party players for additional info
       const partyPlayers = await this.collections.partyPlayers
@@ -2302,7 +2306,8 @@ class WebServer {
         .toArray();
       const wishlistMap = new Map(wishlists.map(w => [w.userId, w]));
 
-      // Build member list (exclude bots)
+      // Build member list from cache (exclude bots)
+      // Use existing cache to avoid rate limit errors
       const members = guild.members.cache
         .filter(m => !m.user.bot)
         .map(m => {
@@ -3095,11 +3100,10 @@ class WebServer {
       const settings = await this.collections.guildSettings.findOne({ guildId });
       const excludedRoles = settings?.excludedRoles || [];
 
-      // Get guild and fetch members
+      // Get guild - use cache to avoid rate limits
       const guild = await this.client.guilds.fetch(guildId);
-      await guild.members.fetch();
 
-      // Filter out bots and excluded roles
+      // Filter out bots and excluded roles using cache
       const humans = guild.members.cache.filter(m => {
         if (m.user.bot) return false;
         if (excludedRoles.length > 0) {
@@ -3147,7 +3151,7 @@ class WebServer {
         )
         .setTimestamp();
 
-      // Send DMs with delay
+      // Send DMs with longer delay to avoid rate limits (2 seconds between DMs)
       let successCount = 0;
       let failCount = 0;
 
@@ -3155,7 +3159,8 @@ class WebServer {
         try {
           await member.send({ embeds: [reminderEmbed] });
           successCount++;
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Increased delay to 2 seconds to avoid Discord rate limits
+          await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (err) {
           failCount++;
         }
@@ -3192,9 +3197,8 @@ class WebServer {
       const settings = await this.collections.guildSettings.findOne({ guildId });
       const excludedRoles = settings?.excludedRoles || [];
 
-      // Get guild and fetch members
+      // Get guild - use cache to avoid rate limits
       const guild = await this.client.guilds.fetch(guildId);
-      await guild.members.fetch();
 
       // Get all users who have submitted wishlists
       const submittedUsers = await this.collections.wishlistSubmissions
@@ -3203,7 +3207,7 @@ class WebServer {
 
       const submittedUserIds = new Set(submittedUsers.map(s => s.userId));
 
-      // Filter members who need reminders
+      // Filter members who need reminders using cache
       const needReminder = guild.members.cache.filter(member => {
         if (member.user.bot) return false;
         if (submittedUserIds.has(member.id)) return false;
@@ -3221,7 +3225,7 @@ class WebServer {
         });
       }
 
-      // Send reminders
+      // Send reminders with longer delay to avoid rate limits
       let successCount = 0;
       let failCount = 0;
 
@@ -3231,7 +3235,8 @@ class WebServer {
         try {
           await member.send({ content: reminderMessage });
           successCount++;
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Increased delay to 2 seconds to avoid Discord rate limits
+          await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (err) {
           failCount++;
         }
@@ -3357,6 +3362,33 @@ class WebServer {
     } catch (error) {
       console.error('Error viewing event code:', error);
       res.status(500).json({ error: 'Failed to get event code' });
+    }
+  }
+
+  /**
+   * Get profile link from admin panel
+   */
+  async handleAdminGetProfileLink(req, res) {
+    try {
+      const validation = this.validateAdminPanelToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Generate a new profile token
+      const profileToken = this.generateProfileToken(guildId, userId);
+      const baseUrl = process.env.WEB_BASE_URL || `http://localhost:${this.port}`;
+
+      res.json({
+        url: `${baseUrl}/profile/${profileToken}`
+      });
+
+    } catch (error) {
+      console.error('Error getting profile link:', error);
+      res.status(500).json({ error: 'Failed to get profile link' });
     }
   }
 
