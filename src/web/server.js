@@ -3,6 +3,9 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const crypto = require('crypto');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const axios = require('axios');
 const { ObjectId } = require('mongodb');
 const { EmbedBuilder } = require('discord.js');
 
@@ -34,9 +37,37 @@ class WebServer {
     this.client = client;
 
     // Middleware
-    this.app.use(cors());
+    this.app.use(cors({
+      origin: true,
+      credentials: true
+    }));
     this.app.use(bodyParser.json({ limit: '10mb' }));
     this.app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+
+    // Session middleware with MongoDB store for persistent sessions
+    const sessionSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+    this.app.use(session({
+      secret: sessionSecret,
+      resave: false,
+      saveUninitialized: false,
+      store: MongoStore.create({
+        mongoUrl: process.env.MONGODB_URI,
+        dbName: 'guildhelper',
+        collectionName: 'sessions',
+        ttl: 30 * 24 * 60 * 60 // 30 days
+      }),
+      cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        sameSite: 'lax'
+      }
+    }));
+
+    // Trust proxy for secure cookies behind reverse proxy
+    if (process.env.NODE_ENV === 'production') {
+      this.app.set('trust proxy', 1);
+    }
 
     // Disable caching for API routes to ensure fresh data
     this.app.use('/api', (req, res, next) => {
@@ -223,6 +254,312 @@ class WebServer {
     // Health check
     this.app.get('/health', (req, res) => {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+
+    // ==========================================
+    // OAuth2 Authentication Routes
+    // ==========================================
+
+    // Root - Login page or redirect to dashboard if authenticated
+    this.app.get('/', (req, res) => {
+      if (req.session && req.session.user) {
+        return res.redirect('/dashboard');
+      }
+      res.render('login', {
+        discordClientId: process.env.DISCORD_CLIENT_ID,
+        baseUrl: process.env.WEB_BASE_URL || `http://localhost:${this.port}`
+      });
+    });
+
+    // Discord OAuth2 login redirect
+    this.app.get('/auth/discord', (req, res) => {
+      const clientId = process.env.DISCORD_CLIENT_ID;
+      const redirectUri = encodeURIComponent(`${process.env.WEB_BASE_URL || `http://localhost:${this.port}`}/auth/discord/callback`);
+      const scope = encodeURIComponent('identify guilds');
+      const state = crypto.randomBytes(16).toString('hex');
+
+      // Store state in session to prevent CSRF
+      req.session.oauthState = state;
+
+      const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
+      res.redirect(discordAuthUrl);
+    });
+
+    // Discord OAuth2 callback
+    this.app.get('/auth/discord/callback', async (req, res) => {
+      try {
+        const { code, state } = req.query;
+
+        // Verify state to prevent CSRF
+        if (!state || state !== req.session.oauthState) {
+          return res.status(403).render('error', { message: 'Invalid OAuth state. Please try logging in again.' });
+        }
+
+        delete req.session.oauthState;
+
+        if (!code) {
+          return res.status(400).render('error', { message: 'No authorization code received from Discord.' });
+        }
+
+        const clientId = process.env.DISCORD_CLIENT_ID;
+        const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+        const redirectUri = `${process.env.WEB_BASE_URL || `http://localhost:${this.port}`}/auth/discord/callback`;
+
+        // Exchange code for access token
+        const tokenResponse = await axios.post('https://discord.com/api/oauth2/token',
+          new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: redirectUri
+          }),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }
+          }
+        );
+
+        const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+        // Fetch user info from Discord
+        const userResponse = await axios.get('https://discord.com/api/users/@me', {
+          headers: {
+            Authorization: `Bearer ${access_token}`
+          }
+        });
+
+        const discordUser = userResponse.data;
+
+        // Fetch user's guilds
+        const guildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
+          headers: {
+            Authorization: `Bearer ${access_token}`
+          }
+        });
+
+        const userGuilds = guildsResponse.data;
+
+        // Find which guilds the bot is in that the user is also in
+        const botGuildIds = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',').map(id => id.trim()) : [];
+        const commonGuilds = userGuilds.filter(g => botGuildIds.includes(g.id));
+
+        if (commonGuilds.length === 0) {
+          return res.status(403).render('error', {
+            message: 'You are not a member of any guild that uses this bot. Please join a supported guild first.'
+          });
+        }
+
+        // Store user data in session
+        req.session.user = {
+          id: discordUser.id,
+          username: discordUser.username,
+          discriminator: discordUser.discriminator,
+          avatar: discordUser.avatar,
+          guilds: commonGuilds.map(g => ({ id: g.id, name: g.name, icon: g.icon })),
+          selectedGuildId: commonGuilds[0].id, // Default to first guild
+          accessToken: access_token,
+          refreshToken: refresh_token,
+          tokenExpiresAt: Date.now() + (expires_in * 1000)
+        };
+
+        // Store/update user session in database
+        await this.collections.userSessions.updateOne(
+          { discordId: discordUser.id },
+          {
+            $set: {
+              discordId: discordUser.id,
+              username: discordUser.username,
+              avatar: discordUser.avatar,
+              guilds: commonGuilds.map(g => ({ id: g.id, name: g.name })),
+              lastLogin: new Date(),
+              accessToken: access_token,
+              refreshToken: refresh_token,
+              tokenExpiresAt: new Date(Date.now() + (expires_in * 1000))
+            }
+          },
+          { upsert: true }
+        );
+
+        res.redirect('/dashboard');
+
+      } catch (error) {
+        console.error('OAuth2 callback error:', error.response?.data || error.message);
+        res.status(500).render('error', { message: 'Failed to authenticate with Discord. Please try again.' });
+      }
+    });
+
+    // Logout
+    this.app.get('/auth/logout', (req, res) => {
+      req.session.destroy((err) => {
+        if (err) {
+          console.error('Error destroying session:', err);
+        }
+        res.redirect('/');
+      });
+    });
+
+    // Dashboard - Session-based profile (requires authentication)
+    this.app.get('/dashboard', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.redirect('/');
+      }
+
+      try {
+        const { id: userId, selectedGuildId: guildId, username } = req.session.user;
+
+        // Fetch guild and member info
+        const guild = await this.client.guilds.fetch(guildId);
+        const member = await guild.members.fetch(userId).catch(() => null);
+
+        if (!member) {
+          return res.status(403).render('error', {
+            message: 'You are no longer a member of this guild.'
+          });
+        }
+
+        // Render the profile dashboard with session-based auth
+        res.render('profile-dashboard', {
+          token: null, // No token needed - using session
+          guildId,
+          userId,
+          guildName: guild.name,
+          userName: member?.displayName || username,
+          userAvatar: member?.user?.displayAvatarURL({ size: 128, format: 'png' }) || null,
+          isSessionAuth: true,
+          availableGuilds: req.session.user.guilds
+        });
+
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+        res.status(500).render('error', { message: 'Failed to load dashboard' });
+      }
+    });
+
+    // Switch guild (for users in multiple guilds)
+    this.app.post('/api/switch-guild', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      const { guildId } = req.body;
+      const userGuilds = req.session.user.guilds;
+
+      if (!userGuilds.find(g => g.id === guildId)) {
+        return res.status(403).json({ error: 'You are not a member of this guild' });
+      }
+
+      req.session.user.selectedGuildId = guildId;
+      res.json({ success: true });
+    });
+
+    // ==========================================
+    // Session-based API routes (for /dashboard)
+    // ==========================================
+
+    // API: Get profile data (session-based)
+    this.app.get('/api/session/profile/data', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleGetProfileDataBySession(req, res);
+    });
+
+    // API: Update player info (session-based)
+    this.app.post('/api/session/profile/update-info', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleUpdatePlayerInfoBySession(req, res);
+    });
+
+    // API: Get events data (session-based)
+    this.app.get('/api/session/profile/events', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleGetProfileEventsBySession(req, res);
+    });
+
+    // API: Update event RSVP (session-based)
+    this.app.post('/api/session/profile/event-rsvp', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleProfileEventRsvpBySession(req, res);
+    });
+
+    // API: Get wishlist data (session-based)
+    this.app.get('/api/session/profile/wishlist', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleGetProfileWishlistBySession(req, res);
+    });
+
+    // API: Update wishlist (session-based)
+    this.app.post('/api/session/profile/update-wishlist', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleUpdateProfileWishlistBySession(req, res);
+    });
+
+    // API: Upload gear screenshot (session-based)
+    this.app.post('/api/session/profile/upload-gear', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleUploadGearScreenshotBySession(req, res);
+    });
+
+    // API: Get roster data (session-based)
+    this.app.get('/api/session/profile/roster', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleGetRosterDataBySession(req, res);
+    });
+
+    // API: Get party members data (session-based)
+    this.app.get('/api/session/profile/party-members', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleGetPartyMembersBySession(req, res);
+    });
+
+    // API: Get item rolls data (session-based)
+    this.app.get('/api/session/profile/item-rolls', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleGetItemRollsBySession(req, res);
+    });
+
+    // API: Check admin access (session-based)
+    this.app.get('/api/session/profile/admin-access', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleProfileCheckAdminAccessBySession(req, res);
+    });
+
+    // API: Get admin panel link (session-based)
+    this.app.get('/api/session/profile/admin-panel-link', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleProfileGetAdminPanelLinkBySession(req, res);
+    });
+
+    // API: Record event attendance (session-based)
+    this.app.post('/api/session/profile/event-attendance', async (req, res) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      await this.handleProfileEventAttendanceBySession(req, res);
     });
 
     // Party editor page
@@ -2217,6 +2554,661 @@ class WebServer {
     } catch (error) {
       console.error('Error getting admin panel link:', error);
       res.status(500).json({ error: 'Failed to get admin panel link' });
+    }
+  }
+
+  // ==========================================
+  // Session-based Profile Handlers (OAuth2)
+  // ==========================================
+
+  /**
+   * Get profile data using session authentication
+   */
+  async handleGetProfileDataBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+
+      // Get player info
+      const playerInfo = await this.collections.partyPlayers.findOne({
+        userId,
+        guildId
+      });
+
+      // Get party assignment
+      const party = await this.collections.parties.findOne({
+        guildId,
+        'members.userId': userId,
+        isReserve: { $ne: true }
+      });
+
+      // Get PvP bonuses
+      const bonuses = await this.collections.pvpBonuses.findOne({
+        userId,
+        guildId
+      });
+
+      // Get activity ranking
+      const activity = await this.collections.pvpActivityRanking.findOne({
+        userId,
+        guildId
+      });
+
+      // Get guild settings for weekly total
+      const guildSettings = await this.collections.guildSettings.findOne({
+        guildId
+      });
+
+      // Get user avatar
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId).catch(() => null);
+
+      res.json({
+        playerInfo: playerInfo || {},
+        partyNumber: party?.partyNumber || null,
+        bonuses: bonuses || { bonusCount: 0, eventsAttended: 0 },
+        totalEvents: activity?.totalEvents || 0,
+        weeklyTotalEvents: guildSettings?.weeklyTotalEvents || 0,
+        userName: member?.displayName || 'Unknown',
+        userAvatar: member?.user?.displayAvatarURL({ size: 128, format: 'png' }) || null
+      });
+
+    } catch (error) {
+      console.error('Error getting profile data (session):', error);
+      res.status(500).json({ error: 'Failed to get profile data' });
+    }
+  }
+
+  /**
+   * Update player info using session authentication
+   */
+  async handleUpdatePlayerInfoBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+      const { weapon1, weapon2, cp, buildLink } = req.body;
+
+      // Validate CP
+      if (cp !== undefined && (isNaN(cp) || cp < 0 || cp > 10000000)) {
+        return res.status(400).json({ error: 'Invalid CP value (0-10,000,000)' });
+      }
+
+      // Validate build link
+      if (buildLink !== undefined && buildLink.length > 500) {
+        return res.status(400).json({ error: 'Build link too long (max 500 characters)' });
+      }
+
+      // Build update object
+      const updateFields = {};
+      if (weapon1 !== undefined) updateFields.weapon1 = weapon1;
+      if (weapon2 !== undefined) updateFields.weapon2 = weapon2;
+      if (cp !== undefined) updateFields.cp = parseInt(cp);
+      if (buildLink !== undefined) {
+        updateFields.buildLink = buildLink;
+        updateFields.buildLinkUpdatedAt = new Date();
+      }
+
+      if (Object.keys(updateFields).length === 0) {
+        return res.status(400).json({ error: 'No fields to update' });
+      }
+
+      updateFields.updatedAt = new Date();
+
+      await this.collections.partyPlayers.updateOne(
+        { userId, guildId },
+        { $set: updateFields },
+        { upsert: true }
+      );
+
+      // Update guild roster if it exists
+      try {
+        await updateGuildRoster(this.collections, this.client, guildId);
+      } catch (rosterError) {
+        console.error('Error updating guild roster:', rosterError);
+      }
+
+      res.json({ success: true });
+
+    } catch (error) {
+      console.error('Error updating player info (session):', error);
+      res.status(500).json({ error: 'Failed to update player info' });
+    }
+  }
+
+  /**
+   * Get profile events using session authentication
+   */
+  async handleGetProfileEventsBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+
+      // Get upcoming PvP events
+      const now = new Date();
+      const pvpEvents = await this.collections.pvpEvents.find({
+        guildId,
+        closed: { $ne: true },
+        eventTime: { $gte: now }
+      }).sort({ eventTime: 1 }).limit(10).toArray();
+
+      // Get static events
+      const staticEvents = await this.collections.staticEvents.find({
+        guildId
+      }).sort({ dayOfWeek: 1, hour: 1 }).toArray();
+
+      // Format events with user's RSVP status
+      const formattedEvents = pvpEvents.map(event => ({
+        id: event._id.toString(),
+        title: event.eventType || event.title || 'PvP Event',
+        description: event.description,
+        eventTime: event.eventTime,
+        attendees: event.attendees?.length || 0,
+        maxAttendees: event.maxAttendees,
+        userStatus: event.attendees?.find(a => a.userId === userId)?.status ||
+                    (event.attendees?.some(a => a.userId === userId) ? 'attending' : null),
+        eventCode: event.eventCode
+      }));
+
+      res.json({
+        events: formattedEvents,
+        staticEvents: staticEvents
+      });
+
+    } catch (error) {
+      console.error('Error getting profile events (session):', error);
+      res.status(500).json({ error: 'Failed to get events' });
+    }
+  }
+
+  /**
+   * Handle event RSVP using session authentication
+   */
+  async handleProfileEventRsvpBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+      const { eventId, status } = req.body;
+
+      if (!eventId || !['attending', 'maybe', 'not_attending'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid eventId or status' });
+      }
+
+      const event = await this.collections.pvpEvents.findOne({
+        _id: new ObjectId(eventId),
+        guildId
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Update or add user's RSVP
+      const existingIndex = event.attendees?.findIndex(a => a.userId === userId);
+
+      if (existingIndex >= 0) {
+        await this.collections.pvpEvents.updateOne(
+          { _id: new ObjectId(eventId) },
+          { $set: { [`attendees.${existingIndex}.status`]: status } }
+        );
+      } else {
+        const guild = await this.client.guilds.fetch(guildId);
+        const member = await guild.members.fetch(userId).catch(() => null);
+
+        await this.collections.pvpEvents.updateOne(
+          { _id: new ObjectId(eventId) },
+          {
+            $push: {
+              attendees: {
+                odiscordId: userId,
+                userId: userId,
+                displayName: member?.displayName || 'Unknown',
+                status: status,
+                rsvpAt: new Date()
+              }
+            }
+          }
+        );
+      }
+
+      // Update event embed
+      try {
+        await updateEventEmbed(this.collections, this.client, eventId);
+      } catch (embedError) {
+        console.error('Error updating event embed:', embedError);
+      }
+
+      res.json({ success: true });
+
+    } catch (error) {
+      console.error('Error updating RSVP (session):', error);
+      res.status(500).json({ error: 'Failed to update RSVP' });
+    }
+  }
+
+  /**
+   * Get profile wishlist using session authentication
+   */
+  async handleGetProfileWishlistBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+
+      const wishlist = await this.collections.wishlistSubmissions.findOne({
+        userId,
+        guildId
+      });
+
+      const settings = await this.collections.wishlistSettings.findOne({
+        guildId
+      });
+
+      const givenItems = await this.collections.wishlistGivenItems.find({
+        userId,
+        guildId
+      }).toArray();
+
+      res.json({
+        wishlist: wishlist?.items || [],
+        settings: settings || {},
+        givenItems: givenItems.map(g => g.itemId)
+      });
+
+    } catch (error) {
+      console.error('Error getting wishlist (session):', error);
+      res.status(500).json({ error: 'Failed to get wishlist' });
+    }
+  }
+
+  /**
+   * Update profile wishlist using session authentication
+   */
+  async handleUpdateProfileWishlistBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+      const { items } = req.body;
+
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ error: 'Invalid items format' });
+      }
+
+      await this.collections.wishlistSubmissions.updateOne(
+        { userId, guildId },
+        {
+          $set: {
+            items,
+            updatedAt: new Date()
+          },
+          $setOnInsert: {
+            submittedAt: new Date()
+          }
+        },
+        { upsert: true }
+      );
+
+      // Update wishlist panels
+      try {
+        await updateWishlistPanels(this.collections, this.client, guildId);
+      } catch (panelError) {
+        console.error('Error updating wishlist panels:', panelError);
+      }
+
+      res.json({ success: true });
+
+    } catch (error) {
+      console.error('Error updating wishlist (session):', error);
+      res.status(500).json({ error: 'Failed to update wishlist' });
+    }
+  }
+
+  /**
+   * Upload gear screenshot using session authentication
+   */
+  async handleUploadGearScreenshotBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+      const { imageData } = req.body;
+
+      if (!imageData) {
+        return res.status(400).json({ error: 'No image data provided' });
+      }
+
+      // Upload to Discord storage
+      const settings = await this.collections.guildSettings.findOne({ guildId });
+      if (!settings?.gearStorageChannelId) {
+        return res.status(400).json({ error: 'Gear storage channel not configured' });
+      }
+
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId).catch(() => null);
+
+      const result = await uploadToDiscordStorage(
+        this.client,
+        settings.gearStorageChannelId,
+        imageData,
+        `gear_${userId}.png`,
+        member?.displayName || 'Unknown'
+      );
+
+      if (!result.success) {
+        return res.status(500).json({ error: 'Failed to upload gear screenshot' });
+      }
+
+      // Update player record
+      await this.collections.partyPlayers.updateOne(
+        { userId, guildId },
+        {
+          $set: {
+            gearScreenshotUrl: result.url,
+            gearStorageMessageId: result.messageId,
+            gearScreenshotUpdatedAt: new Date(),
+            updatedAt: new Date()
+          }
+        },
+        { upsert: true }
+      );
+
+      // Post gear check embed
+      try {
+        await postGearCheckEmbed(this.collections, this.client, guildId, userId, result.url);
+      } catch (embedError) {
+        console.error('Error posting gear check embed:', embedError);
+      }
+
+      // Update guild roster
+      try {
+        await updateGuildRoster(this.collections, this.client, guildId);
+      } catch (rosterError) {
+        console.error('Error updating guild roster:', rosterError);
+      }
+
+      res.json({ success: true, url: result.url });
+
+    } catch (error) {
+      console.error('Error uploading gear screenshot (session):', error);
+      res.status(500).json({ error: 'Failed to upload gear screenshot' });
+    }
+  }
+
+  /**
+   * Get roster data using session authentication
+   */
+  async handleGetRosterDataBySession(req, res) {
+    try {
+      const { selectedGuildId: guildId } = req.session.user;
+
+      const players = await this.collections.partyPlayers.find({
+        guildId
+      }).toArray();
+
+      const parties = await this.collections.parties.find({
+        guildId
+      }).toArray();
+
+      // Get member display names from Discord
+      const guild = await this.client.guilds.fetch(guildId);
+      const membersCache = new Map();
+
+      for (const player of players) {
+        try {
+          const member = await guild.members.fetch(player.userId).catch(() => null);
+          if (member) {
+            membersCache.set(player.userId, {
+              displayName: member.displayName,
+              avatar: member.user.displayAvatarURL({ size: 64, format: 'png' })
+            });
+          }
+        } catch (e) {
+          // Member not found
+        }
+      }
+
+      const rosterData = players.map(player => {
+        const memberInfo = membersCache.get(player.userId) || {};
+        const partyInfo = parties.find(p => p.members?.some(m => m.userId === player.userId));
+
+        return {
+          odiscordId: player.userId,
+          odisplayName: memberInfo.displayName || player.displayName || 'Unknown',
+          avatar: memberInfo.avatar,
+          weapon1: player.weapon1,
+          weapon2: player.weapon2,
+          cp: player.cp,
+          role: player.role,
+          partyNumber: partyInfo?.partyNumber,
+          gearScreenshotUrl: player.gearScreenshotUrl,
+          gearScreenshotUpdatedAt: player.gearScreenshotUpdatedAt,
+          buildLink: player.buildLink
+        };
+      });
+
+      res.json({ roster: rosterData });
+
+    } catch (error) {
+      console.error('Error getting roster data (session):', error);
+      res.status(500).json({ error: 'Failed to get roster data' });
+    }
+  }
+
+  /**
+   * Get party members using session authentication
+   */
+  async handleGetPartyMembersBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+
+      // Find user's party
+      const party = await this.collections.parties.findOne({
+        guildId,
+        'members.userId': userId,
+        isReserve: { $ne: true }
+      });
+
+      if (!party) {
+        return res.json({ members: [] });
+      }
+
+      const guild = await this.client.guilds.fetch(guildId);
+
+      const members = await Promise.all(party.members.map(async (m) => {
+        const member = await guild.members.fetch(m.userId).catch(() => null);
+        const playerInfo = await this.collections.partyPlayers.findOne({
+          userId: m.userId,
+          guildId
+        });
+
+        return {
+          odiscordId: m.userId,
+          displayName: member?.displayName || m.displayName || 'Unknown',
+          avatar: member?.user?.displayAvatarURL({ size: 64, format: 'png' }),
+          weapon1: playerInfo?.weapon1,
+          weapon2: playerInfo?.weapon2,
+          cp: playerInfo?.cp,
+          role: playerInfo?.role || m.role
+        };
+      }));
+
+      res.json({
+        partyNumber: party.partyNumber,
+        members
+      });
+
+    } catch (error) {
+      console.error('Error getting party members (session):', error);
+      res.status(500).json({ error: 'Failed to get party members' });
+    }
+  }
+
+  /**
+   * Get item rolls using session authentication
+   */
+  async handleGetItemRollsBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+
+      const itemRolls = await this.collections.itemRolls.find({
+        guildId,
+        'rolls.userId': userId
+      }).sort({ createdAt: -1 }).limit(50).toArray();
+
+      const formattedRolls = itemRolls.map(roll => {
+        const userRoll = roll.rolls.find(r => r.userId === userId);
+        return {
+          id: roll._id.toString(),
+          itemName: roll.itemName,
+          category: roll.category,
+          subcategory: roll.subcategory,
+          imageUrl: roll.imageUrl,
+          userRoll: userRoll?.rollValue,
+          winner: roll.winner,
+          closed: roll.closed,
+          createdAt: roll.createdAt,
+          endsAt: roll.endsAt
+        };
+      });
+
+      res.json({ itemRolls: formattedRolls });
+
+    } catch (error) {
+      console.error('Error getting item rolls (session):', error);
+      res.status(500).json({ error: 'Failed to get item rolls' });
+    }
+  }
+
+  /**
+   * Check admin access using session authentication
+   */
+  async handleProfileCheckAdminAccessBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+
+      const isAdmin = member.permissions.has('Administrator');
+      const settings = await this.collections.guildSettings.findOne({ guildId });
+      const adminRoles = settings?.adminPanelRoles || settings?.pvpCodeManagers || [];
+      const hasAdminRole = adminRoles.some(roleId => member.roles.cache.has(roleId));
+
+      res.json({ hasAccess: isAdmin || hasAdminRole });
+
+    } catch (error) {
+      console.error('Error checking admin access (session):', error);
+      res.status(500).json({ error: 'Failed to check admin access' });
+    }
+  }
+
+  /**
+   * Get admin panel link using session authentication
+   */
+  async handleProfileGetAdminPanelLinkBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+
+      // Check admin access first
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+
+      const isAdmin = member.permissions.has('Administrator');
+      const settings = await this.collections.guildSettings.findOne({ guildId });
+      const adminRoles = settings?.adminPanelRoles || settings?.pvpCodeManagers || [];
+      const hasAdminRole = adminRoles.some(roleId => member.roles.cache.has(roleId));
+
+      if (!isAdmin && !hasAdminRole) {
+        return res.status(403).json({ error: 'You do not have admin access' });
+      }
+
+      // Generate admin panel token
+      const adminToken = this.generateAdminPanelToken(guildId, userId);
+      const baseUrl = process.env.WEB_BASE_URL || `http://localhost:${this.port}`;
+
+      res.json({
+        url: `${baseUrl}/admin-panel/${adminToken}`,
+        token: adminToken
+      });
+
+    } catch (error) {
+      console.error('Error getting admin panel link (session):', error);
+      res.status(500).json({ error: 'Failed to get admin panel link' });
+    }
+  }
+
+  /**
+   * Record event attendance using session authentication
+   */
+  async handleProfileEventAttendanceBySession(req, res) {
+    try {
+      const { id: userId, selectedGuildId: guildId } = req.session.user;
+      const { eventId, eventCode } = req.body;
+
+      if (!eventId || !eventCode) {
+        return res.status(400).json({ error: 'Missing eventId or eventCode' });
+      }
+
+      const event = await this.collections.pvpEvents.findOne({
+        _id: new ObjectId(eventId),
+        guildId
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      if (event.eventCode !== eventCode) {
+        return res.status(400).json({ error: 'Invalid event code' });
+      }
+
+      // Check if already marked attendance
+      const existingAttendance = event.attendees?.find(a => a.userId === userId && a.attended);
+      if (existingAttendance) {
+        return res.status(400).json({ error: 'You have already marked attendance for this event' });
+      }
+
+      // Mark attendance
+      const attendeeIndex = event.attendees?.findIndex(a => a.userId === userId);
+      if (attendeeIndex >= 0) {
+        await this.collections.pvpEvents.updateOne(
+          { _id: new ObjectId(eventId) },
+          { $set: { [`attendees.${attendeeIndex}.attended`]: true, [`attendees.${attendeeIndex}.attendedAt`]: new Date() } }
+        );
+      } else {
+        const guild = await this.client.guilds.fetch(guildId);
+        const member = await guild.members.fetch(userId).catch(() => null);
+
+        await this.collections.pvpEvents.updateOne(
+          { _id: new ObjectId(eventId) },
+          {
+            $push: {
+              attendees: {
+                userId,
+                displayName: member?.displayName || 'Unknown',
+                attended: true,
+                attendedAt: new Date()
+              }
+            }
+          }
+        );
+      }
+
+      // Update PvP bonuses
+      await this.collections.pvpBonuses.updateOne(
+        { userId, guildId },
+        {
+          $inc: { eventsAttended: 1 },
+          $set: { lastEventAt: new Date() }
+        },
+        { upsert: true }
+      );
+
+      // Update activity ranking
+      await this.collections.pvpActivityRanking.updateOne(
+        { userId, guildId },
+        {
+          $inc: { totalEvents: 1 },
+          $set: { lastEventAt: new Date() }
+        },
+        { upsert: true }
+      );
+
+      res.json({ success: true });
+
+    } catch (error) {
+      console.error('Error recording attendance (session):', error);
+      res.status(500).json({ error: 'Failed to record attendance' });
     }
   }
 

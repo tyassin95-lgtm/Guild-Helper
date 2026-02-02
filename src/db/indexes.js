@@ -40,7 +40,8 @@ async function ensureIndexes({
   automodWarnings,
   messageTranslations,
   eventParties,
-  staticEvents
+  staticEvents,
+  userSessions
 }) {
   await guildSettings.createIndex({ guildId: 1 }, { unique: true });
 
@@ -232,6 +233,11 @@ async function ensureIndexes({
   await staticEvents.createIndex({ guildId: 1 });
   await staticEvents.createIndex({ guildId: 1, dayOfWeek: 1 });
   await staticEvents.createIndex({ createdAt: -1 });
+
+  // User Sessions indexes (OAuth2)
+  await userSessions.createIndex({ discordId: 1 }, { unique: true });
+  await userSessions.createIndex({ discordId: 1, guildId: 1 });
+  await userSessions.createIndex({ lastLogin: -1 });
 
   console.log('All indexes created successfully');
 }
