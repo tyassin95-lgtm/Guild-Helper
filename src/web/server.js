@@ -1372,10 +1372,10 @@ class WebServer {
         const signupDeadline = new Date(event.eventTime.getTime() - 20 * 60 * 1000);
         const signupsClosed = Date.now() > signupDeadline.getTime();
 
-        // Check if attendance can be recorded (5 min before to 1 hour after event)
+        // Check if attendance can be recorded (5 min before to 2 hour after event)
         const eventTime = event.eventTime.getTime();
         const fiveMinsBefore = eventTime - (5 * 60 * 1000);
-        const oneHourAfter = eventTime + (60 * 60 * 1000);
+        const oneHourAfter = eventTime + (120 * 60 * 1000);
         const now = Date.now();
         const canRecordAttendance = signupStatus !== 'none' &&
                                     now >= fiveMinsBefore &&
