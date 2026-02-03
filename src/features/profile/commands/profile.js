@@ -1,42 +1,34 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 /**
- * Handle /profile command - Generate a unique profile dashboard link
+ * Handle /profile command - Direct users to Oathly website
  */
 async function handleProfile({ interaction, collections, webServer }) {
   await interaction.deferReply({ flags: 64 }); // ephemeral
 
   try {
-    const userId = interaction.user.id;
-    const guildId = interaction.guildId;
-
-    // Generate a secure profile token (1 hour expiry)
-    const token = webServer.generateProfileToken(guildId, userId, 3600000);
-
-    const baseUrl = process.env.WEB_BASE_URL || `http://localhost:${process.env.WEB_PORT || 3001}`;
-    const profileUrl = `${baseUrl}/profile/${token}`;
-
     // Create the embed
     const embed = new EmbedBuilder()
       .setColor('#8b5cf6')
-      .setTitle('Your Profile Dashboard')
-      .setDescription('Click the button below to open your personal profile dashboard.\n\nYou can view and edit:')
+      .setTitle('Guild Profile & Management')
+      .setDescription('Visit Oathly to access your guild profile and management tools.\n\nOn Oathly you can:')
       .addFields(
-        { name: 'My Info', value: 'Your class, weapons, CP, build link, and gear screenshot', inline: false },
+        { name: 'My Info', value: 'View and edit your class, weapons, CP, build link, and gear', inline: false },
         { name: 'Events', value: 'View upcoming events, your signup status, and register for events', inline: false },
+        { name: 'Roster', value: 'View guild roster, party assignments, and attendance tracking', inline: false },
         { name: 'Wishlist', value: 'View and manage your item wishlist', inline: false }
       )
-      .setFooter({ text: 'This link expires in 1 hour' })
+      .setFooter({ text: 'Visit Oathly for full guild management features' })
       .setTimestamp();
 
-    // Create button to open profile
+    // Create button to open Oathly
     const row = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
-          .setLabel('Open Profile Dashboard')
+          .setLabel('Visit Oathly')
           .setStyle(ButtonStyle.Link)
-          .setURL(profileUrl)
-          .setEmoji('🔗')
+          .setURL('https://oathly.net')
+          .setEmoji('🌐')
       );
 
     await interaction.editReply({
@@ -47,7 +39,7 @@ async function handleProfile({ interaction, collections, webServer }) {
   } catch (error) {
     console.error('Error handling profile command:', error);
     await interaction.editReply({
-      content: 'Failed to generate profile link. Please try again later.',
+      content: 'Failed to generate profile info. Please try again later.',
     });
   }
 }
