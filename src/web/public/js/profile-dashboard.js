@@ -282,16 +282,23 @@ async function apiCall(endpoint, method = 'GET', data = null) {
   // Use API_BASE which is set based on auth method (OAuth or token)
   const url = `${API_BASE}/${endpoint}${separator}_t=${Date.now()}`;
 
+  console.log('[API Debug] Calling:', method, url);
+  console.log('[API Debug] IS_OAUTH:', IS_OAUTH, 'API_BASE:', API_BASE);
+
   const response = await fetch(url, options);
+
+  console.log('[API Debug] Response status:', response.status);
 
   // Handle authentication errors
   if (response.status === 401 && IS_OAUTH) {
+    console.log('[API Debug] 401 - Session expired, redirecting to login');
     // Session expired, redirect to login
     window.location.href = '/';
     return;
   }
 
   const result = await response.json();
+  console.log('[API Debug] Response data:', result);
 
   if (!response.ok) {
     throw new Error(result.error || 'Request failed');

@@ -4027,7 +4027,12 @@ class WebServer {
    * Middleware to verify OAuth session for dashboard API routes
    */
   verifyOAuthSession(req) {
+    console.log('[OAuth Debug] Checking session for:', req.path);
+    console.log('[OAuth Debug] Session ID:', req.sessionID);
+    console.log('[OAuth Debug] Session user:', req.session?.user ? `${req.session.user.id}` : 'missing');
+
     if (!req.session || !req.session.user) {
+      console.log('[OAuth Debug] FAILED - no session or user');
       return { valid: false, error: 'Not authenticated' };
     }
     return { valid: true, user: req.session.user };
