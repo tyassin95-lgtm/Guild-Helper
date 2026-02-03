@@ -260,8 +260,17 @@ class WebServer {
    */
   registerRoutes() {
     // ==========================================
-    // Authentication Routes
+    // Root and Authentication Routes
     // ==========================================
+
+    // Root route - redirect to login
+    this.app.get('/', (req, res) => {
+      // If already logged in, redirect to profile
+      if (req.session && req.session.userId) {
+        return res.redirect('/profile');
+      }
+      res.redirect('/login');
+    });
 
     // Login page
     this.app.get('/login', (req, res) => {
