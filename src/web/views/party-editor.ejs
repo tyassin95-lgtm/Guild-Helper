@@ -1667,6 +1667,9 @@
           throw new Error('Parties section not found');
         }
         
+        // Wait for DOM to be fully rendered/painted
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         // Use html2canvas to capture the screenshot
         const canvas = await html2canvas(partiesSection, {
           backgroundColor: '#111827',
@@ -1677,18 +1680,23 @@
         });
 
         // Convert canvas to blob
-        const blob = await new Promise(resolve => canvas.toBlob(blob => resolve(blob), 'image/png'));
-
-        // Convert blob to base64
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        
-        await new Promise((resolve, reject) => {
-          reader.onloadend = resolve;
-          reader.onerror = reject;
+        const blob = await new Promise((resolve, reject) => {
+          canvas.toBlob(blob => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to create blob from canvas'));
+            }
+          }, 'image/png');
         });
 
-        const base64Image = reader.result;
+        // Convert blob to base64
+        const base64Image = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
 
         loadingText.textContent = 'Posting to Discord...';
 
