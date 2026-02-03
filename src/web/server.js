@@ -260,6 +260,19 @@ class WebServer {
    */
   registerRoutes() {
     // ==========================================
+    // Root Routes
+    // ==========================================
+
+    // Root route - redirect to login
+    this.app.get('/', (req, res) => {
+      // If already logged in, redirect to profile
+      if (req.session && req.session.userId) {
+        return res.redirect('/profile');
+      }
+      res.redirect('/login');
+    });
+
+    // ==========================================
     // Authentication Routes
     // ==========================================
 
@@ -348,7 +361,12 @@ class WebServer {
       await this.handleSaveStaticParties(req, res);
     });
 
-    // Profile dashboard page
+    // Profile dashboard with token (from Discord command)
+    this.app.get('/profile/:token', async (req, res) => {
+      await this.handleProfileTokenPage(req, res);
+    });
+
+    // Profile dashboard page (authenticated)
     this.app.get('/profile', requireAuth, async (req, res) => {
       await this.handleProfilePage(req, res);
     });
@@ -1202,6 +1220,61 @@ class WebServer {
     } catch (error) {
       console.error('Error saving static parties:', error);
       res.status(500).json({ error: 'Failed to save parties' });
+    }
+  }
+
+  /**
+   * Handle profile dashboard page with token (from Discord command)
+   */
+  async handleProfileTokenPage(req, res) {
+    try {
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).render('error', { 
+          message: validation.error === 'Token expired' 
+            ? 'This link has expired (links are valid for 1 hour)' 
+            : 'Invalid or expired link'
+        });
+      }
+
+      const { guildId, userId } = validation.data;
+
+      // Enrich session with user data
+      req.session.guildId = guildId;
+      req.session.userId = userId;
+
+      // Fetch guild and member to enrich session
+      try {
+        const guild = await this.client.guilds.fetch(guildId);
+        const member = await guild.members.fetch(userId).catch(() => null);
+        
+        if (member) {
+          req.session.userName = member.displayName;
+          req.session.userTag = member.user.tag;
+          req.session.userAvatar = member.user.displayAvatarURL({ size: 128, format: 'png' });
+          req.session.guilds = [{ id: guildId, name: guild.name }];
+        }
+      } catch (error) {
+        console.error('Error enriching session from token:', error);
+      }
+
+      // Save session and redirect to authenticated profile route
+      req.session.save((err) => {
+        if (err) {
+          console.error('Error saving session:', err);
+          return res.status(500).render('error', {
+            message: 'Failed to establish session. Please try again.'
+          });
+        }
+        res.redirect('/profile');
+      });
+
+    } catch (error) {
+      console.error('Error handling profile token page:', error);
+      res.status(500).render('error', {
+        message: 'Failed to load profile dashboard. Please try again.'
+      });
     }
   }
 
