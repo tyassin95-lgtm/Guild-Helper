@@ -2,6 +2,13 @@
 
 A Discord bot for managing guilds, parties, events, and more in Throne and Liberty.
 
+## 🚨 Important: Website "Not Found" Error?
+
+If your bot is running but visiting your website shows **"Page Not Found"**, you need to set up a reverse proxy. The bot runs on `localhost:3001` and is not accessible from the internet without nginx.
+
+**Quick Solution**: See **[QUICKFIX.md](QUICKFIX.md)** for immediate steps.  
+**Full Guide**: See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete production setup.
+
 ## Features
 
 - **Party Management**: Create and manage party compositions
