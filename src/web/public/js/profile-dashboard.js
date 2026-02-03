@@ -201,7 +201,7 @@ async function openAdminPanel() {
     const response = await fetch(`/api/profile/${TOKEN}/admin-panel-link?_=${Date.now()}`);
     if (response.ok) {
       const data = await response.json();
-      window.open(data.url, '_blank');
+      window.location.href = data.url;
     } else {
       const error = await response.json();
       showToast(error.error || 'Failed to open admin panel', 'error');
