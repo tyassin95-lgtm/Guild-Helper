@@ -1677,7 +1677,7 @@
         });
 
         // Convert canvas to blob
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        const blob = await new Promise(resolve => canvas.toBlob(blob => resolve(blob), 'image/png'));
 
         // Convert blob to base64
         const reader = new FileReader();
