@@ -43,6 +43,12 @@ class WebServer {
     this.app.use(bodyParser.json({ limit: '10mb' }));
     this.app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
+    // Trust proxy - required when behind nginx reverse proxy
+    // This ensures secure cookies work properly and req.protocol is correct
+    if (process.env.NODE_ENV === 'production') {
+      this.app.set('trust proxy', 1);
+    }
+
     // Session configuration
     const sessionSecret = process.env.SESSION_SECRET;
     if (!sessionSecret) {
@@ -76,6 +82,43 @@ class WebServer {
     const passportInstance = configurePassport(collections, client);
     this.app.use(passportInstance.initialize());
     this.app.use(passportInstance.session());
+
+    // Sync deserialized user data from req.user to req.session
+    // This ensures req.session.userId is available after passport deserializes the user
+    // Passport stores minimal data during serialize/deserialize, but we need it in req.session for auth checks
+    // Note: This middleware performs a database query but rate limiting is not needed because:
+    // 1. It only runs once per session (when req.session.userId is missing)
+    // 2. It requires authentication (req.user must exist)
+    // 3. After first run, req.session.userId is set and prevents further queries
+    this.app.use(async (req, res, next) => {
+      if (req.user && req.user.userId) {
+        // User was deserialized by passport, ensure session has the userId
+        if (!req.session.userId) {
+          // Session data is missing, need to re-enrich from passport user data
+          // This can happen if session store fails or session was cleared
+          console.info(`Re-enriching session for user ${req.user.userId}`);
+          req.session.userId = req.user.userId;
+          req.session.guildId = req.user.guildId;
+          
+          // Try to get additional user data from database if available
+          try {
+            if (req.session.guildId && collections && collections.guildSettings) {
+              const guildSettings = await collections.guildSettings.findOne({ 
+                guildId: req.session.guildId 
+              });
+              if (guildSettings) {
+                req.session.guildSettings = guildSettings;
+              }
+            }
+          } catch (error) {
+            // Log error but continue - missing guild settings is not critical
+            // User can still access the dashboard with basic session data
+            console.error('Error re-enriching session data:', error);
+          }
+        }
+      }
+      next();
+    });
 
     // Disable caching for API routes to ensure fresh data
     this.app.use('/api', (req, res, next) => {
