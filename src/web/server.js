@@ -520,6 +520,11 @@ class WebServer {
       await this.handleAdminGetEventPartyToken(req, res);
     });
 
+    // API: Get party history
+    this.app.get('/api/admin-panel/party-history', requireAdmin, async (req, res) => {
+      await this.handleAdminGetPartyHistory(req, res);
+    });
+
     // API: Reset user party info
     this.app.post('/api/admin-panel/reset-party', requireAdmin, async (req, res) => {
       await this.handleAdminResetParty(req, res);
@@ -2698,6 +2703,70 @@ class WebServer {
     } catch (error) {
       console.error('Error generating event party token:', error);
       res.status(500).json({ error: 'Failed to generate event party editor link' });
+    }
+  }
+
+  /**
+   * Get party history (submitted event parties)
+   */
+  async handleAdminGetPartyHistory(req, res) {
+    try {
+      const { guildId } = req.session;
+
+      // Fetch all approved event parties for this guild
+      const eventParties = await this.collections.eventParties.find({
+        guildId,
+        approved: true
+      })
+      .sort({ approvedAt: -1 })
+      .limit(50)
+      .toArray();
+
+      // Fetch corresponding events for each party
+      const partyHistory = await Promise.all(
+        eventParties.map(async (partyData) => {
+          const event = await this.collections.pvpEvents.findOne({
+            _id: partyData.eventId
+          });
+
+          if (!event) {
+            return null;
+          }
+
+          const eventTypeNames = {
+            siege: 'Siege',
+            riftstone: 'Riftstone',
+            boonstone: 'Boonstone',
+            wargames: 'Wargames',
+            warboss: 'War Boss',
+            guildevent: 'Guild Event'
+          };
+
+          return {
+            _id: partyData._id,
+            eventId: partyData.eventId,
+            eventType: event.eventType,
+            eventTypeName: eventTypeNames[event.eventType] || event.eventType,
+            location: event.location,
+            eventTime: event.eventTime,
+            processedParties: partyData.processedParties,
+            availableMembers: partyData.availableMembers,
+            summary: partyData.summary,
+            approvedBy: partyData.approvedBy,
+            approvedAt: partyData.approvedAt,
+            createdAt: partyData.createdAt
+          };
+        })
+      );
+
+      // Filter out null entries (where event was not found)
+      const validHistory = partyHistory.filter(h => h !== null);
+
+      res.json({ history: validHistory });
+
+    } catch (error) {
+      console.error('Error getting party history:', error);
+      res.status(500).json({ error: 'Failed to get party history' });
     }
   }
 

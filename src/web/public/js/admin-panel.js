@@ -128,6 +128,7 @@ async function loadTabData(tabId) {
   switch (tabId) {
     case 'parties':
       await loadEventsForParties();
+      await loadPartyHistory();
       break;
     case 'events':
       await Promise.all([
@@ -249,6 +250,142 @@ async function formEventParties(eventId) {
       btn.disabled = false;
       btn.innerHTML = originalText;
     }
+  }
+}
+
+async function loadPartyHistory() {
+  const container = document.getElementById('partyHistoryList');
+  container.innerHTML = '<div class="loading">Loading history...</div>';
+
+  try {
+    const result = await apiCall('/party-history');
+    const history = result.history;
+
+    if (history.length === 0) {
+      container.innerHTML = `
+        <div class="no-data">
+          <div class="no-data-icon">📜</div>
+          <p>No party history yet. Form and submit parties for events to see them here.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = history.map((item, index) => {
+      const eventIcon = getEventIcon(item.eventType);
+      const totalParties = item.processedParties.length;
+      const totalMembers = item.processedParties.reduce((sum, p) => sum + p.members.length, 0);
+      
+      return `
+        <div class="history-item" data-index="${index}">
+          <div class="history-header">
+            <div class="history-event-info">
+              <div class="history-icon">${eventIcon}</div>
+              <div class="history-details">
+                <h4>${item.eventTypeName}${item.location ? ` - ${item.location}` : ''}</h4>
+                <div class="history-time">${formatDate(item.eventTime)}</div>
+                <div class="history-meta">
+                  Submitted: ${formatDate(item.approvedAt)} • ${totalParties} parties • ${totalMembers} members
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-sm btn-secondary" data-toggle-history="${index}">
+              <span class="expand-icon">▼</span> View Details
+            </button>
+          </div>
+          <div class="history-details-panel" id="history-details-${index}" style="display: none;">
+            <div class="history-stats">
+              <div class="stat-box">
+                <div class="stat-value">${item.summary?.partiesIntact || 0}</div>
+                <div class="stat-label">Parties Intact</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value">${item.summary?.partiesModified || 0}</div>
+                <div class="stat-label">Parties Modified</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value">${item.summary?.partiesDisbanded || 0}</div>
+                <div class="stat-label">Parties Disbanded</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-value">${item.summary?.membersAvailable || 0}</div>
+                <div class="stat-label">Available Members</div>
+              </div>
+            </div>
+            <div class="history-parties">
+              ${item.processedParties.map(party => `
+                <div class="history-party">
+                  <div class="history-party-header">
+                    <h5>Party ${party.partyNumber}</h5>
+                    <span class="party-status-badge ${party.status}">${party.status}</span>
+                    <div class="party-comp">
+                      <span title="Tanks">🛡️ ${party.composition?.tank || 0}</span>
+                      <span title="Healers">💚 ${party.composition?.healer || 0}</span>
+                      <span title="DPS">⚔️ ${party.composition?.dps || 0}</span>
+                    </div>
+                  </div>
+                  <div class="history-party-members">
+                    ${party.members.map(member => {
+                      const roleIcon = member.role === 'tank' ? '🛡️' : member.role === 'healer' ? '💚' : '⚔️';
+                      const leaderBadge = member.isLeader ? ' <span class="leader-badge">★</span>' : '';
+                      return `
+                        <div class="history-member">
+                          <span class="member-role">${roleIcon}</span>
+                          <span class="member-name">${member.displayName}${leaderBadge}</span>
+                          <span class="member-cp">${member.cp?.toLocaleString() || 0} CP</span>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+              `).join('')}
+              ${item.availableMembers && item.availableMembers.length > 0 ? `
+                <div class="history-available">
+                  <h5>Available Members (${item.availableMembers.length})</h5>
+                  <div class="available-members-grid">
+                    ${item.availableMembers.map(member => {
+                      const roleIcon = member.role === 'tank' ? '🛡️' : member.role === 'healer' ? '💚' : '⚔️';
+                      return `
+                        <div class="available-member">
+                          <span class="member-role">${roleIcon}</span>
+                          <span class="member-name">${member.displayName}</span>
+                          <span class="member-cp">${member.cp?.toLocaleString() || 0} CP</span>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Add event delegation for toggle buttons
+    container.addEventListener('click', (e) => {
+      const toggleBtn = e.target.closest('[data-toggle-history]');
+      if (toggleBtn) {
+        const index = toggleBtn.dataset.toggleHistory;
+        togglePartyDetails(index);
+      }
+    });
+
+  } catch (error) {
+    container.innerHTML = `<div class="no-data">Failed to load party history: ${error.message}</div>`;
+  }
+}
+
+function togglePartyDetails(index) {
+  const panel = document.getElementById(`history-details-${index}`);
+  const btn = panel.previousElementSibling.querySelector('.btn');
+  
+  if (panel.style.display === 'none') {
+    panel.style.display = 'block';
+    btn.innerHTML = '<span class="expand-icon">▲</span> Hide Details';
+  } else {
+    panel.style.display = 'none';
+    btn.innerHTML = '<span class="expand-icon">▼</span> View Details';
   }
 }
 
