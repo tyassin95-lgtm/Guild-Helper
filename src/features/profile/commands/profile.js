@@ -10,7 +10,11 @@ async function handleProfile({ interaction, collections, webServer }) {
   } catch (error) {
     // If deferReply fails, the interaction has likely expired
     // Log the error but don't throw - the error handler will manage it
-    console.error('Failed to defer reply for profile command:', error.message);
+    console.error('Failed to defer reply for profile command:', {
+      message: error.message,
+      code: error.code,
+      name: error.name
+    });
     // If we can't defer, we also can't send any response
     // The interaction has expired and user won't see anything
     return;
@@ -54,7 +58,11 @@ async function handleProfile({ interaction, collections, webServer }) {
       });
     } catch (editError) {
       // If we can't edit the reply, the interaction is no longer valid
-      console.error('Failed to edit reply (interaction may have expired):', editError.message);
+      console.error('Failed to edit reply (interaction may have expired):', {
+        message: editError.message,
+        code: editError.code,
+        name: editError.name
+      });
     }
   }
 }
