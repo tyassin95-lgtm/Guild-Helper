@@ -86,21 +86,20 @@ class WebServer {
     // Sync deserialized user data from req.user to req.session
     // This ensures req.session.userId is available after passport deserializes the user
     // Passport stores minimal data during serialize/deserialize, but we need it in req.session for auth checks
-    const collectionsRef = collections;
     this.app.use(async (req, res, next) => {
       if (req.user && req.user.userId) {
         // User was deserialized by passport, ensure session has the userId
         if (!req.session.userId) {
           // Session data is missing, need to re-enrich from passport user data
           // This can happen if session store fails or session was cleared
-          console.log(`Re-enriching session for user ${req.user.userId}`);
+          console.info(`Re-enriching session for user ${req.user.userId}`);
           req.session.userId = req.user.userId;
           req.session.guildId = req.user.guildId;
           
           // Try to get additional user data from database if available
           try {
-            if (req.session.guildId && collectionsRef && collectionsRef.guildSettings) {
-              const guildSettings = await collectionsRef.guildSettings.findOne({ 
+            if (req.session.guildId && collections && collections.guildSettings) {
+              const guildSettings = await collections.guildSettings.findOne({ 
                 guildId: req.session.guildId 
               });
               if (guildSettings) {
@@ -108,6 +107,8 @@ class WebServer {
               }
             }
           } catch (error) {
+            // Log error but continue - missing guild settings is not critical
+            // User can still access the dashboard with basic session data
             console.error('Error re-enriching session data:', error);
           }
         }
