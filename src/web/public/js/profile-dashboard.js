@@ -1388,7 +1388,7 @@ function renderRoster() {
                 <td class="roster-weapons">${player.weapon1} / ${player.weapon2}</td>
                 <td class="roster-cp">${formatCP(player.cp)}</td>
                 <td class="roster-stat">${player.totalEvents}</td>
-                <td class="roster-stat">+${player.bonusCount || 0}</td>
+                <td class="roster-stat">${player.bonusCount > 0 ? '+' + player.bonusCount : player.bonusCount || 0}</td>
                 <td class="roster-stat ${attendanceClass}">${player.attendancePercent}%</td>
               </tr>
             `;
