@@ -289,7 +289,7 @@ async function loadPartyHistory() {
                 </div>
               </div>
             </div>
-            <button class="btn btn-sm btn-secondary" onclick="togglePartyDetails(${index})">
+            <button class="btn btn-sm btn-secondary" data-toggle-history="${index}">
               <span class="expand-icon">▼</span> View Details
             </button>
           </div>
@@ -362,6 +362,15 @@ async function loadPartyHistory() {
       `;
     }).join('');
 
+    // Add event delegation for toggle buttons
+    container.addEventListener('click', (e) => {
+      const toggleBtn = e.target.closest('[data-toggle-history]');
+      if (toggleBtn) {
+        const index = toggleBtn.dataset.toggleHistory;
+        togglePartyDetails(index);
+      }
+    });
+
   } catch (error) {
     container.innerHTML = `<div class="no-data">Failed to load party history: ${error.message}</div>`;
   }
@@ -370,15 +379,12 @@ async function loadPartyHistory() {
 function togglePartyDetails(index) {
   const panel = document.getElementById(`history-details-${index}`);
   const btn = panel.previousElementSibling.querySelector('.btn');
-  const icon = btn.querySelector('.expand-icon');
   
   if (panel.style.display === 'none') {
     panel.style.display = 'block';
-    icon.textContent = '▲';
     btn.innerHTML = '<span class="expand-icon">▲</span> Hide Details';
   } else {
     panel.style.display = 'none';
-    icon.textContent = '▼';
     btn.innerHTML = '<span class="expand-icon">▼</span> View Details';
   }
 }
