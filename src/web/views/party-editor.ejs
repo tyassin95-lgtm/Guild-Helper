@@ -932,6 +932,8 @@
     // Global state
     const TOKEN = '<%= token %>';
     const DEFAULT_AVATAR = 'https://cdn.discordapp.com/embed/avatars/0.png';
+    // DOM paint delay for screenshot capture - ensures all DOM updates are rendered before html2canvas captures
+    const DOM_PAINT_DELAY_MS = 100;
     let parties = [];
     let availableMembers = [];
     let draggedMember = null;
@@ -1668,7 +1670,7 @@
         }
         
         // Wait for DOM to be fully rendered/painted
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, DOM_PAINT_DELAY_MS));
         
         // Use html2canvas to capture the screenshot
         const canvas = await html2canvas(partiesSection, {
