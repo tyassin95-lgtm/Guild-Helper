@@ -1283,6 +1283,9 @@ function sortRosterPlayers(players) {
       case 'totalEvents':
         comparison = a.totalEvents - b.totalEvents;
         break;
+      case 'weeklyBonus':
+        comparison = (a.bonusCount || 0) - (b.bonusCount || 0);
+        break;
       case 'attendance':
         comparison = a.attendancePercent - b.attendancePercent;
         break;
@@ -1358,6 +1361,7 @@ function renderRoster() {
             <th>Weapons</th>
             <th>CP</th>
             <th>Total Events</th>
+            <th>Weekly Bonus</th>
             <th>Attendance</th>
           </tr>
         </thead>
@@ -1384,6 +1388,7 @@ function renderRoster() {
                 <td class="roster-weapons">${player.weapon1} / ${player.weapon2}</td>
                 <td class="roster-cp">${formatCP(player.cp)}</td>
                 <td class="roster-stat">${player.totalEvents}</td>
+                <td class="roster-stat">+${player.bonusCount || 0}</td>
                 <td class="roster-stat ${attendanceClass}">${player.attendancePercent}%</td>
               </tr>
             `;

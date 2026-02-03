@@ -1275,6 +1275,23 @@ class WebServer {
     try {
       const { guildId, userId } = req.session;
 
+      // Check if user is in a guild where the bot is present
+      if (!guildId) {
+        // Get list of guilds where the bot is present
+        const botGuilds = this.client.guilds.cache.map(g => ({
+          id: g.id,
+          name: g.name,
+          icon: g.iconURL({ size: 128, format: 'png' }),
+          memberCount: g.memberCount
+        }));
+
+        return res.status(403).render('error', {
+          message: 'You are not a member of any server where this bot is active.',
+          showGuildLinks: true,
+          botGuilds: botGuilds
+        });
+      }
+
       // Fetch guild
       const guild = await this.client.guilds.fetch(guildId);
       const member = await guild.members.fetch(userId).catch(() => null);
@@ -3263,9 +3280,10 @@ class WebServer {
 
       // Update event embed
       try {
-        const channel = await this.client.channels.fetch(event.channelId).catch(() => null);
-        if (channel && event.messageId) {
-          await updateEventEmbed(event._id.toString(), this.client, this.collections);
+        if (event.channelId && event.messageId) {
+          const mockInteraction = { client: this.client };
+          await updateEventEmbed(mockInteraction, event, this.collections);
+          console.log(`✅ PvP event embed updated after canceling event ${eventId}`);
         }
       } catch (err) {
         console.error('Failed to update event embed:', err);
