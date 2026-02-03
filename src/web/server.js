@@ -295,7 +295,10 @@ class WebServer {
           // Save session to persist the enriched data
           req.session.save((err) => {
             if (err) {
-              console.error('Session save error:', err);
+              console.error('Session save error during OAuth callback:', err, {
+                userId: req.session.userId,
+                sessionID: req.sessionID
+              });
               return res.redirect('/login');
             }
             
