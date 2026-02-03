@@ -1293,7 +1293,29 @@ class WebServer {
       }
 
       // Fetch guild
-      const guild = await this.client.guilds.fetch(guildId);
+      let guild;
+      try {
+        guild = await this.client.guilds.fetch(guildId);
+      } catch (guildError) {
+        // If guild fetch fails (e.g., bot is not in that guild), show available guilds
+        if (guildError.code === 10004) {
+          console.log(`Guild ${guildId} not found (bot not in guild). Showing available guilds.`);
+          const botGuilds = this.client.guilds.cache.map(g => ({
+            id: g.id,
+            name: g.name,
+            icon: g.iconURL({ size: 128, format: 'png' }),
+            memberCount: g.memberCount
+          }));
+
+          return res.status(403).render('error', {
+            message: 'The guild in your session is no longer available. Please select a server where this bot is active.',
+            showGuildLinks: true,
+            botGuilds: botGuilds
+          });
+        }
+        throw guildError; // Re-throw if it's a different error
+      }
+
       const member = await guild.members.fetch(userId).catch(() => null);
 
       // Render the profile page
