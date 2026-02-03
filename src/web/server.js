@@ -361,12 +361,12 @@ class WebServer {
       await this.handleSaveStaticParties(req, res);
     });
 
-    // Profile dashboard page (authenticated) - must come before /profile/:token
+    // Profile dashboard page (authenticated) - exact match route
     this.app.get('/profile', requireAuth, async (req, res) => {
       await this.handleProfilePage(req, res);
     });
 
-    // Profile dashboard with token (from Discord command)
+    // Profile dashboard with token (from Discord command) - parameterized route
     this.app.get('/profile/:token', async (req, res) => {
       await this.handleProfileTokenPage(req, res);
     });
@@ -1247,12 +1247,15 @@ class WebServer {
       // Fetch guild and member to enrich session
       try {
         const guild = await this.client.guilds.fetch(guildId);
-        const member = await guild.members.fetch(userId).catch(() => null);
+        const member = await guild.members.fetch(userId).catch((err) => {
+          console.error(`Error fetching member ${userId} from guild ${guildId}:`, err);
+          return null;
+        });
         
         if (member) {
           req.session.userName = member.displayName;
           req.session.userTag = member.user.tag;
-          req.session.userAvatar = member.user.displayAvatarURL({ size: 128, format: 'png' });
+          req.session.userAvatar = member.user.displayAvatarURL({ size: 128 });
           req.session.guilds = [{ id: guildId, name: guild.name }];
         }
       } catch (error) {
@@ -1267,7 +1270,7 @@ class WebServer {
             message: 'Failed to establish session. Please try again.'
           });
         }
-        res.redirect('/profile');
+        return res.redirect('/profile');
       });
 
     } catch (error) {
