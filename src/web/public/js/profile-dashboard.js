@@ -178,7 +178,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 async function checkAdminAccess() {
   try {
-    const response = await fetch(`/api/profile/${TOKEN}/admin-access?_=${Date.now()}`);
+    const response = await fetch(`${API_BASE}/admin-access?_=${Date.now()}`, {
+      credentials: 'include'
+    });
     if (response.ok) {
       const data = await response.json();
       if (data.hasAccess) {
@@ -198,7 +200,9 @@ async function openAdminPanel() {
   btn.textContent = 'Opening...';
 
   try {
-    const response = await fetch(`/api/profile/${TOKEN}/admin-panel-link?_=${Date.now()}`);
+    const response = await fetch(`${API_BASE}/admin-panel-link?_=${Date.now()}`, {
+      credentials: 'include'
+    });
     if (response.ok) {
       const data = await response.json();
       window.open(data.url, '_blank');
