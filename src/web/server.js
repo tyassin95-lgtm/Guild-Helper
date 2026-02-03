@@ -361,14 +361,14 @@ class WebServer {
       await this.handleSaveStaticParties(req, res);
     });
 
+    // Profile dashboard page (authenticated) - must come before /profile/:token
+    this.app.get('/profile', requireAuth, async (req, res) => {
+      await this.handleProfilePage(req, res);
+    });
+
     // Profile dashboard with token (from Discord command)
     this.app.get('/profile/:token', async (req, res) => {
       await this.handleProfileTokenPage(req, res);
-    });
-
-    // Profile dashboard page (authenticated)
-    this.app.get('/profile', requireAuth, async (req, res) => {
-      await this.handleProfilePage(req, res);
     });
 
     // API: Get profile data
