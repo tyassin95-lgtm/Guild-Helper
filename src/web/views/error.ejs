@@ -147,12 +147,16 @@
   </style>
 </head>
 <body>
+  <% 
+    // Helper variable for checking if we should show guild links
+    const shouldShowGuildLinks = typeof showGuildLinks !== 'undefined' && showGuildLinks;
+  %>
   <div class="error-container">
-    <div class="error-icon"><% if (typeof showGuildLinks !== 'undefined' && showGuildLinks) { %>🚪<% } else { %>❌<% } %></div>
-    <h1><% if (typeof showGuildLinks !== 'undefined' && showGuildLinks) { %>Guild Membership Required<% } else { %>Oops! Something went wrong<% } %></h1>
+    <div class="error-icon"><% if (shouldShowGuildLinks) { %>🚪<% } else { %>❌<% } %></div>
+    <h1><% if (shouldShowGuildLinks) { %>Guild Membership Required<% } else { %>Oops! Something went wrong<% } %></h1>
     <p><%= message %></p>
     
-    <% if (typeof showGuildLinks !== 'undefined' && showGuildLinks && typeof botGuilds !== 'undefined') { %>
+    <% if (shouldShowGuildLinks && typeof botGuilds !== 'undefined') { %>
       <div class="guilds-section">
         <h2>Join one of these servers:</h2>
         <div class="guild-list">
