@@ -292,10 +292,18 @@ class WebServer {
           // Enrich session with user data
           await enrichSessionData(req, this.collections, this.client);
           
-          // Redirect to return URL or profile
-          const returnTo = req.session.returnTo || '/profile';
-          delete req.session.returnTo;
-          res.redirect(returnTo);
+          // Save session to persist the enriched data
+          req.session.save((err) => {
+            if (err) {
+              console.error('Session save error:', err);
+              return res.redirect('/login');
+            }
+            
+            // Redirect to return URL or profile
+            const returnTo = req.session.returnTo || '/profile';
+            delete req.session.returnTo;
+            res.redirect(returnTo);
+          });
         } catch (error) {
           console.error('Error in OAuth callback:', error);
           res.redirect('/login');
