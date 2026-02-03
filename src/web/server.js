@@ -77,6 +77,20 @@ class WebServer {
     this.app.use(passportInstance.initialize());
     this.app.use(passportInstance.session());
 
+    // Sync deserialized user data from req.user to req.session
+    // This ensures req.session.userId is available after passport deserializes the user
+    // Passport stores minimal data during serialize/deserialize, but we need it in req.session for auth checks
+    this.app.use((req, res, next) => {
+      if (req.user && req.user.userId) {
+        // User was deserialized by passport, ensure session has the userId
+        if (!req.session.userId) {
+          req.session.userId = req.user.userId;
+          req.session.guildId = req.user.guildId;
+        }
+      }
+      next();
+    });
+
     // Disable caching for API routes to ensure fresh data
     this.app.use('/api', (req, res, next) => {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
