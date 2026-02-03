@@ -938,11 +938,22 @@
     let draggedFromParty = null;
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       loadData();
       formatEventTime();
-      loadChannels();
+      await loadChannels();
       loadSavedScreenshotPreferences();
+
+      // Setup auto-save listeners for screenshot preferences
+      const channelSelect = document.getElementById('screenshot-channel-select');
+      const titleInput = document.getElementById('screenshot-title');
+      
+      if (channelSelect) {
+        channelSelect.addEventListener('change', saveScreenshotPreferences);
+      }
+      if (titleInput) {
+        titleInput.addEventListener('change', saveScreenshotPreferences);
+      }
     });
 
     // Format event time
@@ -1630,19 +1641,6 @@
         console.error('Error saving screenshot preferences:', error);
       }
     }
-
-    // Auto-save when channel or title changes
-    document.addEventListener('DOMContentLoaded', () => {
-      const channelSelect = document.getElementById('screenshot-channel-select');
-      const titleInput = document.getElementById('screenshot-title');
-      
-      if (channelSelect) {
-        channelSelect.addEventListener('change', saveScreenshotPreferences);
-      }
-      if (titleInput) {
-        titleInput.addEventListener('change', saveScreenshotPreferences);
-      }
-    });
 
     // Take screenshot and post to Discord
     async function takeAndPostScreenshot() {

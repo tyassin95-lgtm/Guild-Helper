@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const crypto = require('crypto');
 const { ObjectId } = require('mongodb');
-const { EmbedBuilder, ChannelType } = require('discord.js');
+const { EmbedBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
 const session = require('express-session');
 const { default: MongoStore } = require('connect-mongo');
 const passport = require('passport');
@@ -1041,10 +1041,14 @@ class WebServer {
       
       // Get text channels that the bot can send messages to
       const channels = guild.channels.cache
-        .filter(channel => 
-          channel.type === ChannelType.GuildText &&
-          channel.permissionsFor(guild.members.me).has(['ViewChannel', 'SendMessages', 'AttachFiles'])
-        )
+        .filter(channel => {
+          if (channel.type !== ChannelType.GuildText) return false;
+          const permissions = channel.permissionsFor(guild.members.me);
+          return permissions && 
+                 permissions.has(PermissionFlagsBits.ViewChannel) &&
+                 permissions.has(PermissionFlagsBits.SendMessages) &&
+                 permissions.has(PermissionFlagsBits.AttachFiles);
+        })
         .map(channel => ({
           id: channel.id,
           name: channel.name
