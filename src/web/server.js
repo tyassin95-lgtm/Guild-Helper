@@ -2227,7 +2227,6 @@ class WebServer {
 
       // Render the admin panel page
       res.render('admin-panel', {
-        token: req.params.token,
         guildId,
         userId,
         guildName: guild.name
