@@ -342,12 +342,18 @@ sudo ufw status
 
 3. **Test Local Connection**:
    ```bash
-   curl http://localhost:3001
+   # Test root route (should redirect to /login)
+   curl -L http://localhost:3001
+   
+   # Or test health endpoint
+   curl http://localhost:3001/health
    ```
-   Should return HTML content
+   Health endpoint should return: `{"status":"ok","timestamp":"..."}`
+   Root URL should redirect to login page
 
 4. **Test Public HTTPS**:
    - Open browser and go to `https://yourdomain.com`
+   - Should automatically redirect to `https://yourdomain.com/login`
    - Should see the Guild Helper login page
    - Certificate should be valid (green padlock icon)
 

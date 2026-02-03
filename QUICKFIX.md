@@ -82,12 +82,23 @@ sudo ufw allow 443/tcp
 
 ### 6. Verify it works
 ```bash
-# Check app is running
-curl http://localhost:3001
+# Check app is running (should redirect to /login)
+curl -L http://localhost:3001
 
-# Check nginx is forwarding
-curl https://oathly.net
+# Or check health endpoint
+curl http://localhost:3001/health
+
+# Check nginx is forwarding (should redirect to /login)
+curl -L https://oathly.net
+
+# Or directly access login page
+curl https://oathly.net/login
 ```
+
+**Expected Results**:
+- Root URL (`/`) redirects to `/login`
+- `/health` returns JSON: `{"status":"ok","timestamp":"..."}`
+- `/login` shows the login page HTML
 
 ## Common Issues
 
