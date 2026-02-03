@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Oathly Guild Helper</title>
+  <link rel="stylesheet" href="/static/css/login.css">
+</head>
+<body>
+  <div class="animated-background"></div>
+  
+  <div class="login-container">
+    <div class="login-card">
+      <!-- Logo/Brand -->
+      <div class="brand">
+        <div class="logo">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="3"/>
+            <path d="M50 20 L65 45 L50 40 L35 45 Z" fill="currentColor"/>
+            <circle cx="50" cy="55" r="15" fill="none" stroke="currentColor" stroke-width="3"/>
+            <path d="M35 70 L50 85 L65 70" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h1>Oathly</h1>
+        <p class="subtitle">Guild Management Helper</p>
+      </div>
+
+      <!-- Welcome Message -->
+      <div class="welcome">
+        <h2>Welcome Back</h2>
+        <p>Sign in with Discord to manage your guild</p>
+      </div>
+
+      <!-- Discord Login Button -->
+      <a href="/auth/discord" class="discord-login-btn">
+        <svg class="discord-icon" viewBox="0 0 127.14 96.36" xmlns="http://www.w3.org/2000/svg">
+          <path fill="currentColor" d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/>
+        </svg>
+        <span>Sign in with Discord</span>
+      </a>
+
+      <!-- Additional Info -->
+      <div class="info">
+        <p>By signing in, you agree to our <a href="/TERMS_OF_SERVICE.md">Terms of Service</a> and <a href="/PRIVACY_POLICY.md">Privacy Policy</a></p>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">⚔️</div>
+        <h3>Event Management</h3>
+        <p>Organize PvP events and manage party compositions</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📊</div>
+        <h3>Profile Dashboard</h3>
+        <p>Track your character progress and wishlists</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">👥</div>
+        <h3>Guild Administration</h3>
+        <p>Manage members, roles, and guild settings</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

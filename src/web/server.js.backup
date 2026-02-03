@@ -351,62 +351,62 @@ class WebServer {
     });
 
     // API: Update player info
-    this.app.post('/api/profile/update-info', requireAuth, async (req, res) => {
+    this.app.post('/api/profile/:token/update-info', async (req, res) => {
       await this.handleUpdatePlayerInfo(req, res);
     });
 
     // API: Get events data
-    this.app.get('/api/profile/events', requireAuth, async (req, res) => {
+    this.app.get('/api/profile/:token/events', async (req, res) => {
       await this.handleGetProfileEvents(req, res);
     });
 
     // API: Update event RSVP
-    this.app.post('/api/profile/event-rsvp', requireAuth, async (req, res) => {
+    this.app.post('/api/profile/:token/event-rsvp', async (req, res) => {
       await this.handleProfileEventRsvp(req, res);
     });
 
     // API: Record event attendance
-    this.app.post('/api/profile/event-attendance', requireAuth, async (req, res) => {
+    this.app.post('/api/profile/:token/event-attendance', async (req, res) => {
       await this.handleProfileEventAttendance(req, res);
     });
 
     // API: Get wishlist data
-    this.app.get('/api/profile/wishlist', requireAuth, async (req, res) => {
+    this.app.get('/api/profile/:token/wishlist', async (req, res) => {
       await this.handleGetProfileWishlist(req, res);
     });
 
     // API: Update wishlist
-    this.app.post('/api/profile/update-wishlist', requireAuth, async (req, res) => {
+    this.app.post('/api/profile/:token/update-wishlist', async (req, res) => {
       await this.handleUpdateProfileWishlist(req, res);
     });
 
     // API: Upload gear screenshot
-    this.app.post('/api/profile/upload-gear', requireAuth, async (req, res) => {
+    this.app.post('/api/profile/:token/upload-gear', async (req, res) => {
       await this.handleUploadGearScreenshot(req, res);
     });
 
     // API: Get roster data
-    this.app.get('/api/profile/roster', requireAuth, async (req, res) => {
+    this.app.get('/api/profile/:token/roster', async (req, res) => {
       await this.handleGetRosterData(req, res);
     });
 
     // API: Get party members data
-    this.app.get('/api/profile/party-members', requireAuth, async (req, res) => {
+    this.app.get('/api/profile/:token/party-members', async (req, res) => {
       await this.handleGetPartyMembers(req, res);
     });
 
     // API: Get item rolls data
-    this.app.get('/api/profile/item-rolls', requireAuth, async (req, res) => {
+    this.app.get('/api/profile/:token/item-rolls', async (req, res) => {
       await this.handleGetItemRolls(req, res);
     });
 
     // API: Check if user has admin access (for profile dashboard)
-    this.app.get('/api/profile/admin-access', requireAuth, async (req, res) => {
+    this.app.get('/api/profile/:token/admin-access', async (req, res) => {
       await this.handleProfileCheckAdminAccess(req, res);
     });
 
     // API: Get admin panel link (for profile dashboard)
-    this.app.get('/api/profile/admin-panel-link', requireAuth, async (req, res) => {
+    this.app.get('/api/profile/:token/admin-panel-link', async (req, res) => {
       await this.handleProfileGetAdminPanelLink(req, res);
     });
 
@@ -415,122 +415,122 @@ class WebServer {
     // ==========================================
 
     // Admin panel page
-    this.app.get('/admin-panel', requireAdmin, async (req, res) => {
+    this.app.get('/admin-panel/:token', async (req, res) => {
       await this.handleAdminPanelPage(req, res);
     });
 
     // API: Check admin access
-    this.app.get('/api/admin-panel/check-access', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/check-access', async (req, res) => {
       await this.handleCheckAdminAccess(req, res);
     });
 
     // API: Get guild members
-    this.app.get('/api/admin-panel/members', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/members', async (req, res) => {
       await this.handleAdminGetMembers(req, res);
     });
 
     // API: Get events
-    this.app.get('/api/admin-panel/events', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/events', async (req, res) => {
       await this.handleAdminGetEvents(req, res);
     });
 
     // API: Get text channels for item rolls
-    this.app.get('/api/admin-panel/channels', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/channels', async (req, res) => {
       await this.handleAdminGetChannels(req, res);
     });
 
     // API: Get static party editor token (redirects to existing editor)
-    this.app.get('/api/admin-panel/static-party-token', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/static-party-token', async (req, res) => {
       await this.handleAdminGetStaticPartyToken(req, res);
     });
 
     // API: Get event party editor token
-    this.app.get('/api/admin-panel/event-party-token/:eventId', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/event-party-token/:eventId', async (req, res) => {
       await this.handleAdminGetEventPartyToken(req, res);
     });
 
     // API: Reset user party info
-    this.app.post('/api/admin-panel/reset-party', requireAdmin, async (req, res) => {
+    this.app.post('/api/admin-panel/:token/reset-party', async (req, res) => {
       await this.handleAdminResetParty(req, res);
     });
 
     // API: Reset user wishlist
-    this.app.post('/api/admin-panel/reset-wishlist', requireAdmin, async (req, res) => {
+    this.app.post('/api/admin-panel/:token/reset-wishlist', async (req, res) => {
       await this.handleAdminResetWishlist(req, res);
     });
 
     // API: Get item categories
-    this.app.get('/api/admin-panel/item-categories', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/item-categories', async (req, res) => {
       await this.handleAdminGetItemCategories(req, res);
     });
 
     // API: Get item subcategories
-    this.app.get('/api/admin-panel/item-subcategories/:category', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/item-subcategories/:category', async (req, res) => {
       await this.handleAdminGetItemSubcategories(req, res);
     });
 
     // API: Get items
-    this.app.get('/api/admin-panel/items/:category/:subcategory', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/items/:category/:subcategory', async (req, res) => {
       await this.handleAdminGetItems(req, res);
     });
 
     // API: Create item roll
-    this.app.post('/api/admin-panel/create-item-roll', requireAdmin, async (req, res) => {
+    this.app.post('/api/admin-panel/:token/create-item-roll', async (req, res) => {
       await this.handleAdminCreateItemRoll(req, res);
     });
 
     // API: Get wishlisted items for give item feature
-    this.app.get('/api/admin-panel/wishlisted-items', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/wishlisted-items', async (req, res) => {
       await this.handleAdminGetWishlistedItems(req, res);
     });
 
     // API: Give item to users
-    this.app.post('/api/admin-panel/give-item', requireAdmin, async (req, res) => {
+    this.app.post('/api/admin-panel/:token/give-item', async (req, res) => {
       await this.handleAdminGiveItem(req, res);
     });
 
     // API: Send party info reminders
-    this.app.post('/api/admin-panel/remind-parties', requireAdmin, async (req, res) => {
+    this.app.post('/api/admin-panel/:token/remind-parties', async (req, res) => {
       await this.handleAdminRemindParties(req, res);
     });
 
     // API: Send wishlist reminders
-    this.app.post('/api/admin-panel/remind-wishlist', requireAdmin, async (req, res) => {
+    this.app.post('/api/admin-panel/:token/remind-wishlist', async (req, res) => {
       await this.handleAdminRemindWishlist(req, res);
     });
 
     // API: Cancel event
-    this.app.post('/api/admin-panel/cancel-event', requireAdmin, async (req, res) => {
+    this.app.post('/api/admin-panel/:token/cancel-event', async (req, res) => {
       await this.handleAdminCancelEvent(req, res);
     });
 
     // API: View event code
-    this.app.get('/api/admin-panel/event-code/:eventId', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/event-code/:eventId', async (req, res) => {
       await this.handleAdminViewEventCode(req, res);
     });
 
     // API: Get profile link from admin panel
-    this.app.get('/api/admin-panel/profile-link', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/profile-link', async (req, res) => {
       await this.handleAdminGetProfileLink(req, res);
     });
 
     // API: Create event
-    this.app.post('/api/admin-panel/create-event', requireAdmin, async (req, res) => {
+    this.app.post('/api/admin-panel/:token/create-event', async (req, res) => {
       await this.handleAdminCreateEvent(req, res);
     });
 
     // API: Get description templates
-    this.app.get('/api/admin-panel/description-templates', requireAdmin, async (req, res) => {
+    this.app.get('/api/admin-panel/:token/description-templates', async (req, res) => {
       await this.handleAdminGetDescriptionTemplates(req, res);
     });
 
     // API: Save description template
-    this.app.post('/api/admin-panel/description-templates', requireAdmin, async (req, res) => {
+    this.app.post('/api/admin-panel/:token/description-templates', async (req, res) => {
       await this.handleAdminSaveDescriptionTemplate(req, res);
     });
 
     // API: Delete description template
-    this.app.delete('/api/admin-panel/description-templates/:templateId', requireAdmin, async (req, res) => {
+    this.app.delete('/api/admin-panel/:token/description-templates/:templateId', async (req, res) => {
       await this.handleAdminDeleteDescriptionTemplate(req, res);
     });
 
@@ -1202,7 +1202,17 @@ class WebServer {
    */
   async handleProfilePage(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).render('error', {
+          message: validation.error === 'Token expired'
+            ? 'This link has expired (links are valid for 1 hour)'
+            : 'Invalid or expired link'
+        });
+      }
+
+      const { guildId, userId } = validation.data;
 
       // Fetch guild
       const guild = await this.client.guilds.fetch(guildId);
@@ -1210,6 +1220,7 @@ class WebServer {
 
       // Render the profile page
       res.render('profile-dashboard', {
+        token: req.params.token,
         guildId,
         userId,
         guildName: guild.name,
@@ -1230,7 +1241,13 @@ class WebServer {
    */
   async handleGetProfileData(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
 
       // Get player info
       const playerInfo = await this.collections.partyPlayers.findOne({
@@ -1287,7 +1304,13 @@ class WebServer {
    */
   async handleUpdatePlayerInfo(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
       const { weapon1, weapon2, cp, buildLink } = req.body;
 
       // Validate CP
@@ -1394,7 +1417,13 @@ class WebServer {
    */
   async handleGetProfileEvents(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
 
       // Get upcoming PvP events (not closed, event time in future or recent past)
       const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
@@ -1479,7 +1508,13 @@ class WebServer {
    */
   async handleProfileEventRsvp(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
       const { eventId, status } = req.body;
 
       if (!eventId || !['attending', 'not_attending', 'maybe'].includes(status)) {
@@ -1553,7 +1588,13 @@ class WebServer {
    */
   async handleProfileEventAttendance(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
       const { eventId, code } = req.body;
 
       if (!eventId || !code) {
@@ -1643,7 +1684,13 @@ class WebServer {
    */
   async handleGetProfileWishlist(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
 
       // Get user's wishlist submission
       const submission = await this.collections.wishlistSubmissions.findOne({
@@ -1683,7 +1730,13 @@ class WebServer {
    */
   async handleUpdateProfileWishlist(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
       const { archbossWeapon, archbossArmor, t3Weapons, t3Armors, t3Accessories, submit } = req.body;
 
       // Check if wishlists are frozen
@@ -1762,7 +1815,13 @@ class WebServer {
    */
   async handleUploadGearScreenshot(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
       const { imageData } = req.body;
 
       if (!imageData) {
@@ -1918,7 +1977,13 @@ class WebServer {
    */
   async handleGetRosterData(req, res) {
     try {
-      const { guildId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId } = validation.data;
 
       // Get all players with info submitted
       const players = await this.collections.partyPlayers.find({
@@ -2007,7 +2072,13 @@ class WebServer {
    */
   async handleGetPartyMembers(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
 
       // Find the user's party
       const party = await this.collections.parties.findOne({
@@ -2066,7 +2137,13 @@ class WebServer {
    */
   async handleGetItemRolls(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
 
       // Get all active rolls for this guild
       const activeRolls = await this.collections.itemRolls.find({
@@ -2150,7 +2227,13 @@ class WebServer {
    */
   async handleProfileCheckAdminAccess(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
 
       // Get guild and member
       const guild = await this.client.guilds.fetch(guildId);
@@ -2181,7 +2264,13 @@ class WebServer {
    */
   async handleProfileGetAdminPanelLink(req, res) {
     try {
-      const { guildId, userId } = req.session;
+      const validation = this.validateProfileToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { guildId, userId } = validation.data;
 
       // Check admin access first
       const guild = await this.client.guilds.fetch(guildId);
