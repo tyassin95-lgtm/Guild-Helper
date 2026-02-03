@@ -102,6 +102,47 @@ curl https://oathly.net/login
 
 ## Common Issues
 
+### Application returns "Page Not Found"
+**Issue**: Both `curl http://localhost:3001` and `curl https://oathly.net` return "Page not found".
+
+**Causes & Solutions**:
+1. **Application not running**: 
+   ```bash
+   # Check if app is running
+   sudo pm2 status
+   
+   # If not running, start it
+   cd /opt/Guild-Helper
+   sudo pm2 start src/index.js --name guild-helper
+   ```
+
+2. **Bot not logged in**: The web server only starts after the Discord bot successfully logs in. Check logs:
+   ```bash
+   sudo pm2 logs guild-helper
+   ```
+   You should see: "Logged in as YourBot#1234!" and "🌐 Web server running on..."
+   
+   If you see authentication errors, verify your `DISCORD_TOKEN` in `.env`.
+
+3. **MongoDB not connected**: The app requires MongoDB to be running.
+   ```bash
+   # If using local MongoDB
+   sudo systemctl status mongod
+   sudo systemctl start mongod
+   
+   # If using MongoDB Atlas, check MONGODB_URI in .env
+   ```
+
+4. **Testing wrong endpoint**: The root URL (`/`) redirects to `/login`. Test with:
+   ```bash
+   # Follow redirects with -L flag
+   curl -L http://localhost:3001
+   
+   # Or test health endpoint directly
+   curl http://localhost:3001/health
+   # Should return: {"status":"ok","timestamp":"..."}
+   ```
+
 ### DNS TTL is set to 3001
 **Issue**: TTL should be in seconds, not a port number.
 

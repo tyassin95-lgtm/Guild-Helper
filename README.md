@@ -58,8 +58,17 @@ If your bot is running but visiting your website shows **"Page Not Found"**, you
    ```
 
 6. **Access the web dashboard**:
-   - Open `http://localhost:3001` in your browser
+   - Open `http://localhost:3001` in your browser (redirects to `/login`)
    - Sign in with Discord to manage settings
+   - After login, you'll be at `/profile` dashboard
+
+### Available Routes
+
+- `/` - Home (redirects to login or profile)
+- `/login` - Login page
+- `/profile` - User profile dashboard (requires authentication)
+- `/admin-panel` - Admin control panel (requires admin role)
+- `/health` - Health check endpoint (returns JSON status)
 
 ## Production Deployment
 

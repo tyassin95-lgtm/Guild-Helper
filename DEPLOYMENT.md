@@ -368,9 +368,53 @@ sudo ufw status
 
 **Possible Causes:**
 1. Application not running on port 3001
-2. Nginx not configured correctly
-3. Firewall blocking ports
-4. DNS not pointing to correct IP
+2. Discord bot not logged in (web server starts after bot login)
+3. MongoDB not connected
+4. Nginx not configured correctly
+5. Firewall blocking ports
+6. DNS not pointing to correct IP
+
+**Diagnosis Steps:**
+
+```bash
+# 1. Check if application is running
+sudo pm2 status
+
+# 2. Check application logs for errors
+sudo pm2 logs guild-helper --lines 50
+
+# Look for these key messages:
+# - "Logged in as YourBot#1234!" (Discord bot connected)
+# - "🌐 Web server running on..." (Web server started)
+# - "✅ All systems initialized and running"
+
+# 3. Check if port 3001 is listening
+sudo netstat -tlnp | grep 3001
+
+# 4. Test the application directly
+curl http://localhost:3001/health
+# Should return: {"status":"ok","timestamp":"..."}
+
+# 5. Test with redirect following
+curl -L http://localhost:3001
+# Should return login page HTML
+
+# 6. Check nginx status and logs
+sudo systemctl status nginx
+sudo tail -f /var/log/nginx/guild-helper.error.log
+
+# 7. Check nginx can reach the app
+curl -H "Host: yourdomain.com" http://localhost:80
+```
+
+**Common Issues:**
+
+1. **Discord bot authentication failed**: Check `DISCORD_TOKEN` in `.env` is correct
+2. **MongoDB connection failed**: Check `MONGODB_URI` in `.env` and verify MongoDB is running
+3. **Environment variables not loaded**: Restart PM2 after changing `.env`:
+   ```bash
+   sudo pm2 restart guild-helper
+   ```
 
 **Solutions:**
 
