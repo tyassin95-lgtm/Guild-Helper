@@ -3,6 +3,10 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const crypto = require('crypto');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const jwt = require('jsonwebtoken');
+const axios = require('axios');
 const { ObjectId } = require('mongodb');
 const { EmbedBuilder } = require('discord.js');
 
@@ -13,30 +17,69 @@ const { uploadToDiscordStorage } = require('../utils/discordStorage');
 const { postGearCheckEmbed } = require('../features/parties/handlers/gearUploadHandler');
 const { updateWishlistPanels } = require('../features/wishlist/commands/wishlists');
 
+// Discord OAuth2 Configuration
+const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
+const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
+const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || 'http://localhost:3001/auth/discord/callback';
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(64).toString('hex');
+
 class WebServer {
   constructor() {
     this.app = express();
-    this.port = process.env.WEB_PORT || 3001; // Changed to 3001 to avoid conflict with StreamServer (port 3000)
-    this.activeTokens = new Map(); // In-memory token storage
+    this.port = process.env.WEB_PORT || 3001;
+    this.activeTokens = new Map(); // In-memory token storage for party editors
     this.staticPartyTokens = new Map(); // Tokens for static party editor
-    this.profileTokens = new Map(); // Tokens for profile dashboard
+    this.profileTokens = new Map(); // Legacy profile tokens (kept for party editors)
     this.adminPanelTokens = new Map(); // Tokens for admin panel
     this.collections = null;
     this.client = null;
     this.server = null;
+    this.mongoClient = null;
   }
 
   /**
    * Initialize the web server with database collections and Discord client
    */
-  initialize(collections, client) {
+  initialize(collections, client, mongoClient = null) {
     this.collections = collections;
     this.client = client;
+    this.mongoClient = mongoClient;
+
+    // Trust proxy for secure cookies behind reverse proxy
+    this.app.set('trust proxy', 1);
 
     // Middleware
-    this.app.use(cors());
+    this.app.use(cors({
+      origin: process.env.WEB_BASE_URL || 'http://localhost:3001',
+      credentials: true
+    }));
     this.app.use(bodyParser.json({ limit: '10mb' }));
     this.app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+
+    // Session middleware with MongoDB store
+    const sessionConfig = {
+      secret: SESSION_SECRET,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      }
+    };
+
+    // Use MongoDB store if mongoClient is available
+    if (mongoClient) {
+      sessionConfig.store = MongoStore.create({
+        client: mongoClient,
+        dbName: process.env.MONGODB_DB || 'guild-helper',
+        collectionName: 'sessions',
+        ttl: 7 * 24 * 60 * 60 // 7 days
+      });
+    }
+
+    this.app.use(session(sessionConfig));
 
     // Disable caching for API routes to ensure fresh data
     this.app.use('/api', (req, res, next) => {
@@ -220,12 +263,121 @@ class WebServer {
    * Register all routes
    */
   registerRoutes() {
+    // ==========================================
+    // Landing Page & OAuth Routes
+    // ==========================================
+
+    // Landing/Login page
+    this.app.get('/', (req, res) => {
+      // If user is already logged in, redirect to guild selection
+      if (req.session && req.session.user) {
+        return res.redirect('/guilds');
+      }
+      res.render('login');
+    });
+
+    // Discord OAuth2 - Initiate login
+    this.app.get('/auth/discord', (req, res) => {
+      const state = crypto.randomBytes(16).toString('hex');
+      req.session.oauthState = state;
+
+      const params = new URLSearchParams({
+        client_id: DISCORD_CLIENT_ID,
+        redirect_uri: DISCORD_REDIRECT_URI,
+        response_type: 'code',
+        scope: 'identify guilds',
+        state: state
+      });
+
+      res.redirect(`https://discord.com/api/oauth2/authorize?${params}`);
+    });
+
+    // Discord OAuth2 - Callback
+    this.app.get('/auth/discord/callback', async (req, res) => {
+      await this.handleOAuthCallback(req, res);
+    });
+
+    // Logout
+    this.app.get('/auth/logout', (req, res) => {
+      req.session.destroy((err) => {
+        if (err) console.error('Session destruction error:', err);
+        res.redirect('/');
+      });
+    });
+
+    // Guild selection page (requires OAuth)
+    this.app.get('/guilds', async (req, res) => {
+      await this.handleGuildSelection(req, res);
+    });
+
+    // Dashboard - Profile view for specific guild (requires OAuth)
+    this.app.get('/dashboard/:guildId', async (req, res) => {
+      await this.handleDashboard(req, res);
+    });
+
+    // Dashboard API routes (OAuth-based)
+    this.app.get('/api/dashboard/:guildId/data', async (req, res) => {
+      await this.handleDashboardGetData(req, res);
+    });
+
+    this.app.post('/api/dashboard/:guildId/update-info', async (req, res) => {
+      await this.handleDashboardUpdateInfo(req, res);
+    });
+
+    this.app.get('/api/dashboard/:guildId/events', async (req, res) => {
+      await this.handleDashboardGetEvents(req, res);
+    });
+
+    this.app.post('/api/dashboard/:guildId/event-rsvp', async (req, res) => {
+      await this.handleDashboardEventRsvp(req, res);
+    });
+
+    this.app.post('/api/dashboard/:guildId/event-attendance', async (req, res) => {
+      await this.handleDashboardEventAttendance(req, res);
+    });
+
+    this.app.get('/api/dashboard/:guildId/wishlist', async (req, res) => {
+      await this.handleDashboardGetWishlist(req, res);
+    });
+
+    this.app.post('/api/dashboard/:guildId/update-wishlist', async (req, res) => {
+      await this.handleDashboardUpdateWishlist(req, res);
+    });
+
+    this.app.post('/api/dashboard/:guildId/upload-gear', async (req, res) => {
+      await this.handleDashboardUploadGear(req, res);
+    });
+
+    this.app.get('/api/dashboard/:guildId/roster', async (req, res) => {
+      await this.handleDashboardGetRoster(req, res);
+    });
+
+    this.app.get('/api/dashboard/:guildId/party-members', async (req, res) => {
+      await this.handleDashboardGetPartyMembers(req, res);
+    });
+
+    this.app.get('/api/dashboard/:guildId/item-rolls', async (req, res) => {
+      await this.handleDashboardGetItemRolls(req, res);
+    });
+
+    this.app.get('/api/dashboard/:guildId/admin-access', async (req, res) => {
+      await this.handleDashboardCheckAdminAccess(req, res);
+    });
+
+    this.app.get('/api/dashboard/:guildId/admin-panel-link', async (req, res) => {
+      await this.handleDashboardGetAdminPanelLink(req, res);
+    });
+
+    // ==========================================
+    // Health Check & Token-Based Routes (Party Editors)
+    // ==========================================
+
     // Health check
     this.app.get('/health', (req, res) => {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
     });
 
-    // Party editor page
+    // Party editor page (token-based - for PvP events)
     this.app.get('/party-editor/:token', async (req, res) => {
       await this.handlePartyEditorPage(req, res);
     });
@@ -3694,6 +3846,951 @@ class WebServer {
     } catch (error) {
       console.error('Error deleting description template:', error);
       res.status(500).json({ error: 'Failed to delete template' });
+    }
+  }
+
+  // ==========================================
+  // OAuth2 & Dashboard Handler Methods
+  // ==========================================
+
+  /**
+   * Handle Discord OAuth2 callback
+   */
+  async handleOAuthCallback(req, res) {
+    try {
+      const { code, state } = req.query;
+
+      // Verify state to prevent CSRF
+      if (!state || state !== req.session.oauthState) {
+        return res.status(403).render('error', {
+          message: 'Invalid OAuth state. Please try logging in again.'
+        });
+      }
+
+      // Exchange code for access token
+      const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
+        client_id: DISCORD_CLIENT_ID,
+        client_secret: DISCORD_CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: DISCORD_REDIRECT_URI
+      }), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
+
+      const { access_token, refresh_token, expires_in } = tokenResponse.data;
+
+      // Get user info
+      const userResponse = await axios.get('https://discord.com/api/users/@me', {
+        headers: { Authorization: `Bearer ${access_token}` }
+      });
+
+      const user = userResponse.data;
+
+      // Get user's guilds
+      const guildsResponse = await axios.get('https://discord.com/api/users/@me/guilds', {
+        headers: { Authorization: `Bearer ${access_token}` }
+      });
+
+      const userGuilds = guildsResponse.data;
+
+      // Store user info in session
+      req.session.user = {
+        id: user.id,
+        username: user.username,
+        global_name: user.global_name,
+        discriminator: user.discriminator,
+        avatar: user.avatar,
+        access_token,
+        refresh_token,
+        token_expires_at: Date.now() + (expires_in * 1000)
+      };
+
+      req.session.userGuilds = userGuilds;
+
+      // Clear OAuth state
+      delete req.session.oauthState;
+
+      // Redirect to guild selection
+      res.redirect('/guilds');
+
+    } catch (error) {
+      console.error('OAuth callback error:', error.response?.data || error.message);
+      res.status(500).render('error', {
+        message: 'Failed to authenticate with Discord. Please try again.'
+      });
+    }
+  }
+
+  /**
+   * Handle guild selection page
+   */
+  async handleGuildSelection(req, res) {
+    try {
+      // Check if user is authenticated
+      if (!req.session || !req.session.user) {
+        return res.redirect('/');
+      }
+
+      const user = req.session.user;
+      const userGuilds = req.session.userGuilds || [];
+
+      // Get guilds that the bot is in
+      const botGuildIds = new Set(this.client.guilds.cache.map(g => g.id));
+
+      // Filter to only guilds where both the user and bot are members
+      const availableGuilds = [];
+
+      for (const guild of userGuilds) {
+        if (botGuildIds.has(guild.id)) {
+          try {
+            const botGuild = await this.client.guilds.fetch(guild.id);
+            // Check if user is actually in this guild (via bot's member cache)
+            const member = await botGuild.members.fetch(user.id).catch(() => null);
+            if (member) {
+              availableGuilds.push({
+                id: guild.id,
+                name: guild.name,
+                icon: guild.icon,
+                memberCount: botGuild.memberCount
+              });
+            }
+          } catch (e) {
+            // Skip if we can't fetch the guild
+          }
+        }
+      }
+
+      res.render('guild-select', {
+        user,
+        guilds: availableGuilds
+      });
+
+    } catch (error) {
+      console.error('Error loading guild selection:', error);
+      res.status(500).render('error', {
+        message: 'Failed to load guild selection. Please try again.'
+      });
+    }
+  }
+
+  /**
+   * Handle dashboard page (OAuth-based profile)
+   */
+  async handleDashboard(req, res) {
+    try {
+      // Check if user is authenticated
+      if (!req.session || !req.session.user) {
+        return res.redirect('/');
+      }
+
+      const { guildId } = req.params;
+      const user = req.session.user;
+
+      // Verify user is in this guild
+      const guild = await this.client.guilds.fetch(guildId).catch(() => null);
+      if (!guild) {
+        return res.status(404).render('error', {
+          message: 'Guild not found or bot is not a member.'
+        });
+      }
+
+      const member = await guild.members.fetch(user.id).catch(() => null);
+      if (!member) {
+        return res.status(403).render('error', {
+          message: 'You are not a member of this guild.'
+        });
+      }
+
+      // Render the dashboard (profile page)
+      res.render('profile-dashboard', {
+        token: null, // No token needed for OAuth
+        guildId,
+        userId: user.id,
+        guildName: guild.name,
+        userName: member.displayName || user.global_name || user.username,
+        userAvatar: member.user.displayAvatarURL({ size: 128, format: 'png' }),
+        isOAuth: true
+      });
+
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+      res.status(500).render('error', {
+        message: 'Failed to load dashboard. Please try again.'
+      });
+    }
+  }
+
+  /**
+   * Middleware to verify OAuth session for dashboard API routes
+   */
+  verifyOAuthSession(req) {
+    if (!req.session || !req.session.user) {
+      return { valid: false, error: 'Not authenticated' };
+    }
+    return { valid: true, user: req.session.user };
+  }
+
+  /**
+   * Handle dashboard get data (OAuth-based)
+   */
+  async handleDashboardGetData(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+
+      // Verify user is in guild
+      const guild = await this.client.guilds.fetch(guildId).catch(() => null);
+      if (!guild) {
+        return res.status(404).json({ error: 'Guild not found' });
+      }
+
+      const member = await guild.members.fetch(userId).catch(() => null);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a member of this guild' });
+      }
+
+      // Get player info
+      const playerInfo = await this.collections.partyPlayers.findOne({ userId, guildId });
+
+      // Get party assignment
+      const party = await this.collections.parties.findOne({
+        guildId,
+        'members.userId': userId,
+        isReserve: { $ne: true }
+      });
+
+      // Get PvP bonuses
+      const bonuses = await this.collections.pvpBonuses.findOne({ userId, guildId });
+
+      // Get activity ranking
+      const activity = await this.collections.pvpActivityRanking.findOne({ userId, guildId });
+
+      // Get guild settings for weekly total
+      const guildSettings = await this.collections.guildSettings.findOne({ guildId });
+
+      res.json({
+        playerInfo: playerInfo || {},
+        partyNumber: party?.partyNumber || null,
+        bonuses: bonuses || { bonusCount: 0, eventsAttended: 0 },
+        totalEvents: activity?.totalEvents || 0,
+        weeklyTotalEvents: guildSettings?.weeklyTotalEvents || 0,
+        userName: member.displayName || 'Unknown',
+        userAvatar: member.user.displayAvatarURL({ size: 128, format: 'png' })
+      });
+
+    } catch (error) {
+      console.error('Error getting dashboard data:', error);
+      res.status(500).json({ error: 'Failed to get data' });
+    }
+  }
+
+  /**
+   * Handle dashboard update info (OAuth-based)
+   */
+  async handleDashboardUpdateInfo(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+      const { weapon1, weapon2, cp, buildLink } = req.body;
+
+      // Verify user is in guild
+      const guild = await this.client.guilds.fetch(guildId).catch(() => null);
+      const member = await guild?.members.fetch(userId).catch(() => null);
+      if (!member) {
+        return res.status(403).json({ error: 'Not a member of this guild' });
+      }
+
+      // Validate CP
+      if (cp !== undefined && (isNaN(cp) || cp < 0 || cp > 10000000)) {
+        return res.status(400).json({ error: 'Invalid CP value (0-10,000,000)' });
+      }
+
+      // Validate build link
+      if (buildLink !== undefined && buildLink.length > 500) {
+        return res.status(400).json({ error: 'Build link too long (max 500 characters)' });
+      }
+
+      // Determine role based on weapons
+      const determineRole = (w1, w2) => {
+        const weapons = [w1, w2].filter(Boolean);
+        if (weapons.includes('SnS')) return 'tank';
+        if ((weapons.includes('Orb') && weapons.includes('Wand')) ||
+            (weapons.includes('Wand') && weapons.includes('Bow'))) {
+          return 'healer';
+        }
+        return 'dps';
+      };
+
+      const updateData = { updatedAt: new Date() };
+      if (weapon1 !== undefined) updateData.weapon1 = weapon1;
+      if (weapon2 !== undefined) updateData.weapon2 = weapon2;
+      if (cp !== undefined) updateData.cp = parseInt(cp, 10);
+      if (buildLink !== undefined) {
+        updateData.buildLink = buildLink;
+        updateData.buildLinkUpdatedAt = new Date();
+      }
+
+      // Calculate role if weapons changed
+      if (weapon1 !== undefined || weapon2 !== undefined) {
+        const currentPlayer = await this.collections.partyPlayers.findOne({ userId, guildId });
+        const newW1 = weapon1 !== undefined ? weapon1 : currentPlayer?.weapon1;
+        const newW2 = weapon2 !== undefined ? weapon2 : currentPlayer?.weapon2;
+        updateData.role = determineRole(newW1, newW2);
+      }
+
+      await this.collections.partyPlayers.updateOne(
+        { userId, guildId },
+        { $set: updateData },
+        { upsert: true }
+      );
+
+      // Update party member data if in a party
+      if (updateData.cp !== undefined || updateData.role !== undefined) {
+        await this.collections.parties.updateMany(
+          { guildId, 'members.userId': userId },
+          {
+            $set: {
+              'members.$[elem].cp': updateData.cp,
+              'members.$[elem].role': updateData.role,
+              'members.$[elem].weapon1': updateData.weapon1,
+              'members.$[elem].weapon2': updateData.weapon2
+            }
+          },
+          { arrayFilters: [{ 'elem.userId': userId }] }
+        );
+      }
+
+      // Trigger roster update
+      try {
+        const rosterRecord = await this.collections.guildRosters.findOne({ guildId });
+        if (rosterRecord && rosterRecord.channelId) {
+          await updateGuildRoster(guild, rosterRecord.channelId, this.collections);
+        }
+      } catch (err) {
+        console.error('Failed to update roster:', err);
+      }
+
+      // Post gear check embed if build link was updated
+      if (buildLink !== undefined) {
+        try {
+          const playerInfo = await this.collections.partyPlayers.findOne({ userId, guildId });
+          if (playerInfo && playerInfo.gearScreenshotUrl) {
+            await postGearCheckEmbed(guild, member, playerInfo, this.collections);
+          }
+        } catch (err) {
+          console.error('Failed to post gear check embed:', err);
+        }
+      }
+
+      res.json({ success: true, message: 'Profile updated successfully' });
+
+    } catch (error) {
+      console.error('Error updating dashboard info:', error);
+      res.status(500).json({ error: 'Failed to update profile' });
+    }
+  }
+
+  /**
+   * Handle dashboard get events (OAuth-based)
+   */
+  async handleDashboardGetEvents(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+
+      // Get upcoming PvP events
+      const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const pvpEvents = await this.collections.pvpEvents.find({
+        guildId,
+        eventTime: { $gte: cutoffTime },
+        closed: { $ne: true }
+      }).sort({ eventTime: 1 }).toArray();
+
+      // Get static events
+      const staticEvents = await this.collections.staticEvents.find({
+        guildId,
+        cancelled: { $ne: true }
+      }).toArray();
+
+      // Enrich events with user's signup status
+      const enrichedEvents = pvpEvents.map(event => {
+        let signupStatus = 'none';
+        if (event.rsvpAttending?.includes(userId)) signupStatus = 'attending';
+        else if (event.rsvpNotAttending?.includes(userId)) signupStatus = 'not_attending';
+        else if (event.rsvpMaybe?.includes(userId)) signupStatus = 'maybe';
+
+        const hasRecordedAttendance = event.attendees?.includes(userId);
+        const signupDeadline = new Date(event.eventTime.getTime() - 20 * 60 * 1000);
+        const signupsClosed = Date.now() > signupDeadline.getTime();
+
+        const eventTime = event.eventTime.getTime();
+        const fiveMinsBefore = eventTime - (5 * 60 * 1000);
+        const oneHourAfter = eventTime + (60 * 60 * 1000);
+        const now = Date.now();
+        const canRecordAttendance = signupStatus !== 'none' &&
+                                    now >= fiveMinsBefore &&
+                                    now <= oneHourAfter &&
+                                    !hasRecordedAttendance &&
+                                    !event.closed;
+
+        return {
+          _id: event._id.toString(),
+          eventType: event.eventType,
+          location: event.location,
+          eventTime: event.eventTime,
+          bonusPoints: event.bonusPoints,
+          message: event.message,
+          imageUrl: event.imageUrl,
+          signupStatus,
+          hasRecordedAttendance,
+          signupsClosed,
+          attendeesCount: event.attendees?.length || 0,
+          rsvpAttendingCount: event.rsvpAttending?.length || 0,
+          rsvpMaybeCount: event.rsvpMaybe?.length || 0,
+          canRecordAttendance
+        };
+      });
+
+      res.json({ events: enrichedEvents, staticEvents });
+
+    } catch (error) {
+      console.error('Error getting dashboard events:', error);
+      res.status(500).json({ error: 'Failed to get events' });
+    }
+  }
+
+  /**
+   * Handle dashboard event RSVP (OAuth-based)
+   */
+  async handleDashboardEventRsvp(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+      const { eventId, status } = req.body;
+
+      if (!eventId || !['attending', 'not_attending', 'maybe'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid event ID or status' });
+      }
+
+      // Get the event
+      const event = await this.collections.pvpEvents.findOne({
+        _id: new ObjectId(eventId),
+        guildId
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Check signup deadline
+      const signupDeadline = new Date(event.eventTime.getTime() - 20 * 60 * 1000);
+      if (Date.now() > signupDeadline.getTime()) {
+        return res.status(400).json({ error: 'Signups are closed for this event' });
+      }
+
+      // Remove from all RSVP lists
+      await this.collections.pvpEvents.updateOne(
+        { _id: new ObjectId(eventId) },
+        {
+          $pull: {
+            rsvpAttending: userId,
+            rsvpNotAttending: userId,
+            rsvpMaybe: userId
+          }
+        }
+      );
+
+      // Add to appropriate list
+      const fieldMap = {
+        'attending': 'rsvpAttending',
+        'not_attending': 'rsvpNotAttending',
+        'maybe': 'rsvpMaybe'
+      };
+
+      await this.collections.pvpEvents.updateOne(
+        { _id: new ObjectId(eventId) },
+        { $addToSet: { [fieldMap[status]]: userId } }
+      );
+
+      // Update event embed
+      try {
+        const updatedEvent = await this.collections.pvpEvents.findOne({ _id: new ObjectId(eventId) });
+        await updateEventEmbed(this.client, updatedEvent, this.collections);
+      } catch (err) {
+        console.error('Failed to update event embed:', err);
+      }
+
+      res.json({ success: true, message: 'RSVP updated' });
+
+    } catch (error) {
+      console.error('Error updating dashboard RSVP:', error);
+      res.status(500).json({ error: 'Failed to update RSVP' });
+    }
+  }
+
+  /**
+   * Handle dashboard event attendance (OAuth-based)
+   */
+  async handleDashboardEventAttendance(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+      const { eventId, code } = req.body;
+
+      if (!eventId || !code) {
+        return res.status(400).json({ error: 'Event ID and code are required' });
+      }
+
+      const event = await this.collections.pvpEvents.findOne({
+        _id: new ObjectId(eventId),
+        guildId
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Verify code
+      if (event.password !== code) {
+        return res.status(400).json({ error: 'Invalid attendance code' });
+      }
+
+      // Check if already recorded
+      if (event.attendees?.includes(userId)) {
+        return res.status(400).json({ error: 'Attendance already recorded' });
+      }
+
+      // Record attendance
+      await this.collections.pvpEvents.updateOne(
+        { _id: new ObjectId(eventId) },
+        { $addToSet: { attendees: userId } }
+      );
+
+      // Update bonuses
+      await this.collections.pvpBonuses.updateOne(
+        { userId, guildId },
+        {
+          $inc: {
+            bonusCount: event.bonusPoints || 1,
+            eventsAttended: 1
+          }
+        },
+        { upsert: true }
+      );
+
+      // Update activity ranking
+      await this.collections.pvpActivityRanking.updateOne(
+        { userId, guildId },
+        { $inc: { totalEvents: 1 } },
+        { upsert: true }
+      );
+
+      res.json({ success: true, message: 'Attendance recorded' });
+
+    } catch (error) {
+      console.error('Error recording dashboard attendance:', error);
+      res.status(500).json({ error: 'Failed to record attendance' });
+    }
+  }
+
+  /**
+   * Handle dashboard get wishlist (OAuth-based)
+   */
+  async handleDashboardGetWishlist(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+
+      const submission = await this.collections.wishlistSubmissions.findOne({ userId, guildId });
+      const guildSettings = await this.collections.guildSettings.findOne({ guildId });
+      const wishlistConfig = guildSettings?.wishlistConfig || { maxArmor: 5, maxAccessory: 3, maxWeapon: 2 };
+
+      res.json({
+        submission: submission || { armor: [], accessory: [], weapon: [] },
+        config: wishlistConfig
+      });
+
+    } catch (error) {
+      console.error('Error getting dashboard wishlist:', error);
+      res.status(500).json({ error: 'Failed to get wishlist' });
+    }
+  }
+
+  /**
+   * Handle dashboard update wishlist (OAuth-based)
+   */
+  async handleDashboardUpdateWishlist(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+      const { armor, accessory, weapon } = req.body;
+
+      const guildSettings = await this.collections.guildSettings.findOne({ guildId });
+      const config = guildSettings?.wishlistConfig || { maxArmor: 5, maxAccessory: 3, maxWeapon: 2 };
+
+      // Validate counts
+      if (armor && armor.length > config.maxArmor) {
+        return res.status(400).json({ error: `Maximum ${config.maxArmor} armor items allowed` });
+      }
+      if (accessory && accessory.length > config.maxAccessory) {
+        return res.status(400).json({ error: `Maximum ${config.maxAccessory} accessory items allowed` });
+      }
+      if (weapon && weapon.length > config.maxWeapon) {
+        return res.status(400).json({ error: `Maximum ${config.maxWeapon} weapon items allowed` });
+      }
+
+      const updateData = { updatedAt: new Date() };
+      if (armor !== undefined) updateData.armor = armor;
+      if (accessory !== undefined) updateData.accessory = accessory;
+      if (weapon !== undefined) updateData.weapon = weapon;
+
+      await this.collections.wishlistSubmissions.updateOne(
+        { userId, guildId },
+        { $set: updateData },
+        { upsert: true }
+      );
+
+      // Update wishlist panels
+      try {
+        const guild = await this.client.guilds.fetch(guildId);
+        await updateWishlistPanels(guild, this.collections);
+      } catch (err) {
+        console.error('Failed to update wishlist panels:', err);
+      }
+
+      res.json({ success: true, message: 'Wishlist updated' });
+
+    } catch (error) {
+      console.error('Error updating dashboard wishlist:', error);
+      res.status(500).json({ error: 'Failed to update wishlist' });
+    }
+  }
+
+  /**
+   * Handle dashboard upload gear (OAuth-based)
+   */
+  async handleDashboardUploadGear(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+      const { imageData } = req.body;
+
+      if (!imageData) {
+        return res.status(400).json({ error: 'Image data is required' });
+      }
+
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId);
+
+      // Upload to Discord storage
+      const imageUrl = await uploadToDiscordStorage(this.client, imageData, `gear_${userId}.png`);
+
+      // Update player info
+      await this.collections.partyPlayers.updateOne(
+        { userId, guildId },
+        {
+          $set: {
+            gearScreenshotUrl: imageUrl,
+            gearScreenshotUpdatedAt: new Date()
+          }
+        },
+        { upsert: true }
+      );
+
+      // Post gear check embed
+      try {
+        const playerInfo = await this.collections.partyPlayers.findOne({ userId, guildId });
+        await postGearCheckEmbed(guild, member, playerInfo, this.collections);
+      } catch (err) {
+        console.error('Failed to post gear check embed:', err);
+      }
+
+      res.json({ success: true, imageUrl, message: 'Gear screenshot uploaded' });
+
+    } catch (error) {
+      console.error('Error uploading dashboard gear:', error);
+      res.status(500).json({ error: 'Failed to upload gear screenshot' });
+    }
+  }
+
+  /**
+   * Handle dashboard get roster (OAuth-based)
+   */
+  async handleDashboardGetRoster(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+
+      // Get all party players
+      const players = await this.collections.partyPlayers.find({ guildId }).toArray();
+
+      // Get activity rankings
+      const activities = await this.collections.pvpActivityRanking.find({ guildId }).toArray();
+      const activityMap = new Map(activities.map(a => [a.userId, a]));
+
+      // Get guild settings for weekly total
+      const guildSettings = await this.collections.guildSettings.findOne({ guildId });
+      const weeklyTotal = guildSettings?.weeklyTotalEvents || 0;
+
+      // Get party assignments
+      const parties = await this.collections.parties.find({ guildId, isReserve: { $ne: true } }).toArray();
+      const partyMap = new Map();
+      for (const party of parties) {
+        for (const member of party.members || []) {
+          partyMap.set(member.userId, party.partyNumber);
+        }
+      }
+
+      // Enrich players
+      const guild = await this.client.guilds.fetch(guildId);
+      const enrichedPlayers = await Promise.all(players.map(async (player) => {
+        const member = await guild.members.fetch(player.userId).catch(() => null);
+        const activity = activityMap.get(player.userId);
+        const totalEvents = activity?.totalEvents || 0;
+        const attendance = weeklyTotal > 0 ? Math.round((totalEvents / weeklyTotal) * 100) : 0;
+
+        return {
+          userId: player.userId,
+          displayName: member?.displayName || 'Unknown',
+          avatarUrl: member?.user?.displayAvatarURL({ size: 64, format: 'png' }) || null,
+          role: player.role || 'dps',
+          weapon1: player.weapon1,
+          weapon2: player.weapon2,
+          cp: player.cp || 0,
+          partyNumber: partyMap.get(player.userId) || null,
+          totalEvents,
+          attendance
+        };
+      }));
+
+      res.json({ roster: enrichedPlayers, weeklyTotal });
+
+    } catch (error) {
+      console.error('Error getting dashboard roster:', error);
+      res.status(500).json({ error: 'Failed to get roster' });
+    }
+  }
+
+  /**
+   * Handle dashboard get party members (OAuth-based)
+   */
+  async handleDashboardGetPartyMembers(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+      const { partyNumber } = req.query;
+
+      if (!partyNumber) {
+        return res.status(400).json({ error: 'Party number is required' });
+      }
+
+      const party = await this.collections.parties.findOne({
+        guildId,
+        partyNumber: parseInt(partyNumber),
+        isReserve: { $ne: true }
+      });
+
+      if (!party) {
+        return res.status(404).json({ error: 'Party not found' });
+      }
+
+      const guild = await this.client.guilds.fetch(guildId);
+
+      const enrichedMembers = await Promise.all((party.members || []).map(async (member) => {
+        const discordMember = await guild.members.fetch(member.userId).catch(() => null);
+        return {
+          userId: member.userId,
+          displayName: discordMember?.displayName || member.displayName || 'Unknown',
+          avatarUrl: discordMember?.user?.displayAvatarURL({ size: 64, format: 'png' }) || null,
+          role: member.role,
+          weapon1: member.weapon1,
+          weapon2: member.weapon2,
+          cp: member.cp || 0,
+          isCurrentUser: member.userId === userId
+        };
+      }));
+
+      res.json({ members: enrichedMembers, partyNumber: party.partyNumber });
+
+    } catch (error) {
+      console.error('Error getting dashboard party members:', error);
+      res.status(500).json({ error: 'Failed to get party members' });
+    }
+  }
+
+  /**
+   * Handle dashboard get item rolls (OAuth-based)
+   */
+  async handleDashboardGetItemRolls(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+
+      // Get active item rolls
+      const activeRolls = await this.collections.itemRolls.find({
+        guildId,
+        status: 'active'
+      }).sort({ createdAt: -1 }).toArray();
+
+      // Get user's roll history
+      const userRolls = await this.collections.itemRolls.find({
+        guildId,
+        'participants.userId': userId
+      }).sort({ createdAt: -1 }).limit(20).toArray();
+
+      const guild = await this.client.guilds.fetch(guildId);
+
+      // Enrich rolls with participant info
+      const enrichRoll = async (roll) => {
+        const enrichedParticipants = await Promise.all((roll.participants || []).map(async (p) => {
+          const member = await guild.members.fetch(p.userId).catch(() => null);
+          return {
+            userId: p.userId,
+            displayName: member?.displayName || 'Unknown',
+            avatarUrl: member?.user?.displayAvatarURL({ size: 32, format: 'png' }) || null,
+            roll: p.roll,
+            passed: p.passed
+          };
+        }));
+
+        return {
+          _id: roll._id.toString(),
+          itemName: roll.itemName,
+          itemImage: roll.itemImage,
+          trait: roll.trait,
+          status: roll.status,
+          winner: roll.winner,
+          createdAt: roll.createdAt,
+          participants: enrichedParticipants,
+          userParticipation: roll.participants?.find(p => p.userId === userId)
+        };
+      };
+
+      const enrichedActiveRolls = await Promise.all(activeRolls.map(enrichRoll));
+      const enrichedUserRolls = await Promise.all(userRolls.map(enrichRoll));
+
+      res.json({ activeRolls: enrichedActiveRolls, userRolls: enrichedUserRolls });
+
+    } catch (error) {
+      console.error('Error getting dashboard item rolls:', error);
+      res.status(500).json({ error: 'Failed to get item rolls' });
+    }
+  }
+
+  /**
+   * Handle dashboard check admin access (OAuth-based)
+   */
+  async handleDashboardCheckAdminAccess(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+
+      const guild = await this.client.guilds.fetch(guildId);
+      const member = await guild.members.fetch(userId).catch(() => null);
+
+      if (!member) {
+        return res.json({ hasAccess: false });
+      }
+
+      const isAdmin = member.permissions.has('Administrator');
+
+      const settings = await this.collections.guildSettings.findOne({ guildId });
+      const adminRoles = settings?.adminPanelRoles || [];
+      const codeManagerRoles = settings?.pvpCodeManagers || [];
+      const hasAdminRole = adminRoles.some(roleId => member.roles.cache.has(roleId));
+      const hasCodeManagerRole = codeManagerRoles.some(roleId => member.roles.cache.has(roleId));
+
+      res.json({ hasAccess: isAdmin || hasAdminRole || hasCodeManagerRole });
+
+    } catch (error) {
+      console.error('Error checking dashboard admin access:', error);
+      res.status(500).json({ error: 'Failed to check admin access' });
+    }
+  }
+
+  /**
+   * Handle dashboard get admin panel link (OAuth-based)
+   */
+  async handleDashboardGetAdminPanelLink(req, res) {
+    try {
+      const authCheck = this.verifyOAuthSession(req);
+      if (!authCheck.valid) {
+        return res.status(401).json({ error: authCheck.error });
+      }
+
+      const { guildId } = req.params;
+      const userId = authCheck.user.id;
+
+      // Generate admin panel token
+      const token = this.generateAdminPanelToken(guildId, userId, 3600000);
+      const baseUrl = process.env.WEB_BASE_URL || `http://localhost:${this.port}`;
+      const adminPanelUrl = `${baseUrl}/admin-panel/${token}`;
+
+      res.json({ url: adminPanelUrl });
+
+    } catch (error) {
+      console.error('Error getting dashboard admin panel link:', error);
+      res.status(500).json({ error: 'Failed to get admin panel link' });
     }
   }
 

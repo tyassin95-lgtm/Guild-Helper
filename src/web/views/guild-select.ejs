@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Select Your Guild - Oathly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/guild-select.css">
+</head>
+<body>
+  <!-- Animated Background -->
+  <div class="bg-animation">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="particles"></div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="page-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <a href="/" class="logo-link">
+          <div class="logo-small">
+            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#8b5cf6" />
+                  <stop offset="50%" stop-color="#6366f1" />
+                  <stop offset="100%" stop-color="#3b82f6" />
+                </linearGradient>
+              </defs>
+              <path d="M50 5 L90 20 L90 50 C90 75 70 90 50 95 C30 90 10 75 10 50 L10 20 Z"
+                    fill="url(#logoGradient)" opacity="0.9"/>
+              <path d="M50 20 L50 70 M35 35 L65 35 M40 55 L60 55"
+                    stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.95"/>
+              <path d="M35 25 L42 30 L50 22 L58 30 L65 25"
+                    stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.9"/>
+            </svg>
+          </div>
+          <span class="logo-text">Oathly</span>
+        </a>
+      </div>
+      <div class="header-right">
+        <div class="user-menu">
+          <% if (user.avatar) { %>
+            <img src="https://cdn.discordapp.com/avatars/<%= user.id %>/<%= user.avatar %>.png" alt="Avatar" class="user-avatar">
+          <% } else { %>
+            <div class="user-avatar-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </div>
+          <% } %>
+          <span class="user-name"><%= user.global_name || user.username %></span>
+          <a href="/auth/logout" class="logout-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="page-title">
+        <h1>Select Your Guild</h1>
+        <p>Choose a guild to view your profile and manage your membership</p>
+      </div>
+
+      <% if (guilds.length === 0) { %>
+        <div class="no-guilds">
+          <div class="no-guilds-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <line x1="19" y1="8" x2="19" y2="14"/>
+              <line x1="22" y1="11" x2="16" y2="11"/>
+            </svg>
+          </div>
+          <h3>No Guilds Found</h3>
+          <p>You're not a member of any guilds that use Oathly. Ask your guild leader to set up Oathly for your server!</p>
+        </div>
+      <% } else { %>
+        <div class="guilds-grid">
+          <% guilds.forEach((guild, index) => { %>
+            <a href="/dashboard/<%= guild.id %>" class="guild-card" style="animation-delay: <%= index * 0.1 %>s">
+              <div class="guild-card-glow"></div>
+              <div class="guild-card-content">
+                <% if (guild.icon) { %>
+                  <img src="https://cdn.discordapp.com/icons/<%= guild.id %>/<%= guild.icon %>.png?size=128" alt="<%= guild.name %>" class="guild-icon">
+                <% } else { %>
+                  <div class="guild-icon-placeholder">
+                    <%= guild.name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase() %>
+                  </div>
+                <% } %>
+                <div class="guild-info">
+                  <h3 class="guild-name"><%= guild.name %></h3>
+                  <% if (guild.memberCount) { %>
+                    <p class="guild-members">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                      </svg>
+                      <%= guild.memberCount %> members
+                    </p>
+                  <% } %>
+                </div>
+                <div class="guild-arrow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </div>
+              </div>
+            </a>
+          <% }) %>
+        </div>
+      <% } %>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>&copy; 2024 Oathly. Built with dedication for Oath Guild.</p>
+    </footer>
+  </div>
+</body>
+</html>
