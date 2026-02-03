@@ -2196,13 +2196,9 @@ class WebServer {
         return res.status(403).json({ error: 'You do not have admin access' });
       }
 
-      // Generate admin panel token
-      const adminToken = this.generateAdminPanelToken(guildId, userId);
-      const baseUrl = process.env.WEB_BASE_URL || `http://localhost:${this.port}`;
-
+      // Redirect to admin panel (no token needed with session auth)
       res.json({
-        url: `${baseUrl}/admin-panel/${adminToken}`,
-        token: adminToken
+        url: `/admin-panel`
       });
 
     } catch (error) {
@@ -3262,14 +3258,9 @@ class WebServer {
    */
   async handleAdminGetProfileLink(req, res) {
     try {
-      const { guildId, userId } = req.session;
-
-      // Generate a new profile token
-      const profileToken = this.generateProfileToken(guildId, userId);
-      const baseUrl = process.env.WEB_BASE_URL || `http://localhost:${this.port}`;
-
+      // Redirect to profile (no token needed with session auth)
       res.json({
-        url: `${baseUrl}/profile/${profileToken}`
+        url: `/profile`
       });
 
     } catch (error) {
