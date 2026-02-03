@@ -265,7 +265,7 @@ async function loadEvents() {
     eventsData = result.events;
 
     // Filter to only show active events (not closed and not past)
-    const activeEvents = eventsData.filter(e => !e.closed && !e.isPast);
+    const activeEvents = eventsData.filter(e => !e.closed);
 
     if (activeEvents.length === 0) {
       container.innerHTML = `
