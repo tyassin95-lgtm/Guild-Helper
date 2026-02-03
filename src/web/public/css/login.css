@@ -1,0 +1,393 @@
+/**
+ * Login Page Styles
+ * Oathly - Guild Management Helper
+ */
+
+/* ==========================================
+   CSS Variables (matching profile dashboard)
+   ========================================== */
+:root {
+  --bg-primary: #0a0e17;
+  --bg-secondary: #111827;
+  --bg-card: #1a1f2e;
+  --bg-card-hover: #232a3d;
+  --border-color: #2d3748;
+  --border-glow: rgba(139, 92, 246, 0.3);
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --accent-purple: #8b5cf6;
+  --accent-purple-glow: rgba(139, 92, 246, 0.4);
+  --accent-blue: #3b82f6;
+  --discord-color: #5865F2;
+  --discord-hover: #4752C4;
+}
+
+/* ==========================================
+   Base Styles
+   ========================================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-primary);
+  min-height: 100vh;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* ==========================================
+   Animated Background
+   ========================================== */
+.animated-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.animated-background::before,
+.animated-background::after {
+  content: '';
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.15;
+  animation: float 20s infinite ease-in-out;
+}
+
+.animated-background::before {
+  background: radial-gradient(circle, var(--accent-purple) 0%, transparent 70%);
+  top: -200px;
+  left: -200px;
+  animation-delay: 0s;
+}
+
+.animated-background::after {
+  background: radial-gradient(circle, var(--accent-blue) 0%, transparent 70%);
+  bottom: -200px;
+  right: -200px;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(50px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-30px, 30px) scale(0.9);
+  }
+}
+
+/* Subtle grid pattern */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(var(--border-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+  background-size: 50px 50px;
+  opacity: 0.03;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ==========================================
+   Login Container
+   ========================================== */
+.login-container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1200px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+}
+
+/* ==========================================
+   Login Card
+   ========================================== */
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  padding: 60px 50px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 0 1px var(--border-glow);
+  animation: slideUp 0.6s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==========================================
+   Brand Section
+   ========================================== */
+.brand {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.logo {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+  color: var(--accent-purple);
+  filter: drop-shadow(0 0 20px var(--accent-purple-glow));
+  animation: pulse 3s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+.logo svg {
+  width: 100%;
+  height: 100%;
+}
+
+.brand h1 {
+  font-size: 48px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.brand .subtitle {
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* ==========================================
+   Welcome Section
+   ========================================== */
+.welcome {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.welcome h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.welcome p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ==========================================
+   Discord Login Button
+   ========================================== */
+.discord-login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 24px;
+  background: var(--discord-color);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
+}
+
+.discord-login-btn:hover {
+  background: var(--discord-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(88, 101, 242, 0.4);
+}
+
+.discord-login-btn:active {
+  transform: translateY(0);
+}
+
+.discord-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* ==========================================
+   Additional Info
+   ========================================== */
+.info {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.info p {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.info a {
+  color: var(--accent-purple);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.info a:hover {
+  color: var(--accent-blue);
+  text-decoration: underline;
+}
+
+/* ==========================================
+   Features Section
+   ========================================== */
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  width: 100%;
+  max-width: 900px;
+  animation: fadeIn 0.8s ease-out 0.3s both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.feature {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.feature:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-glow);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.feature-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.feature h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.feature p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ==========================================
+   Responsive Design
+   ========================================== */
+@media (max-width: 768px) {
+  .login-card {
+    padding: 40px 30px;
+    border-radius: 16px;
+  }
+
+  .brand h1 {
+    font-size: 36px;
+  }
+
+  .brand .subtitle {
+    font-size: 14px;
+  }
+
+  .welcome h2 {
+    font-size: 20px;
+  }
+
+  .features {
+    grid-template-columns: 1fr;
+  }
+
+  .logo {
+    width: 64px;
+    height: 64px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-container {
+    padding: 16px;
+  }
+
+  .login-card {
+    padding: 32px 24px;
+  }
+
+  .brand h1 {
+    font-size: 32px;
+  }
+
+  .discord-login-btn {
+    padding: 14px 20px;
+    font-size: 15px;
+  }
+}

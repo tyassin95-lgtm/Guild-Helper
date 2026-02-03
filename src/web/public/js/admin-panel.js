@@ -23,7 +23,7 @@ let selectedEventType = null;
  * Make an API call with the token
  */
 async function apiCall(endpoint, method = 'GET', data = null) {
-  const url = `/api/admin-panel/${TOKEN}${endpoint}`;
+  const url = `/api/admin-panel${endpoint}`;
   const options = {
     method,
     headers: {
