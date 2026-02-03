@@ -1,7 +1,7 @@
 require('dotenv').config();
 
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
-const { connectMongo, getCollections, getClient } = require('./db/mongo');
+const { connectMongo, getCollections } = require('./db/mongo');
 const { ensureIndexes } = require('./db/indexes');
 const { registerSlashCommands } = require('./bot/commands');
 const { onInteractionCreate } = require('./bot/handlers/interaction');
@@ -44,9 +44,8 @@ const client = new Client({
     const collections = getCollections(db);
     await ensureIndexes(collections);
 
-    // Initialize web server with MongoDB client for session storage
-    const mongoClient = getClient();
-    webServer.initialize(collections, client, mongoClient);
+    // Initialize web server
+    webServer.initialize(collections, client);
 
     client.once('clientReady', async () => {
       console.log(`Logged in as ${client.user.tag}!`);

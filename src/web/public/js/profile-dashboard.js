@@ -178,9 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 async function checkAdminAccess() {
   try {
-    const response = await fetch(`${API_BASE}/admin-access?_=${Date.now()}`, {
-      credentials: 'include'
-    });
+    const response = await fetch(`/api/profile/${TOKEN}/admin-access?_=${Date.now()}`);
     if (response.ok) {
       const data = await response.json();
       if (data.hasAccess) {
@@ -200,9 +198,7 @@ async function openAdminPanel() {
   btn.textContent = 'Opening...';
 
   try {
-    const response = await fetch(`${API_BASE}/admin-panel-link?_=${Date.now()}`, {
-      credentials: 'include'
-    });
+    const response = await fetch(`/api/profile/${TOKEN}/admin-panel-link?_=${Date.now()}`);
     if (response.ok) {
       const data = await response.json();
       window.open(data.url, '_blank');
@@ -273,32 +269,15 @@ async function apiCall(endpoint, method = 'GET', data = null) {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache'
     },
-    cache: 'no-store',
-    credentials: 'include' // Include cookies for OAuth sessions
+    cache: 'no-store'
   };
   if (data) options.body = JSON.stringify(data);
 
   const separator = endpoint.includes('?') ? '&' : '?';
-  // Use API_BASE which is set based on auth method (OAuth or token)
-  const url = `${API_BASE}/${endpoint}${separator}_t=${Date.now()}`;
-
-  console.log('[API Debug] Calling:', method, url);
-  console.log('[API Debug] IS_OAUTH:', IS_OAUTH, 'API_BASE:', API_BASE);
+  const url = `/api/profile/${TOKEN}/${endpoint}${separator}_t=${Date.now()}`;
 
   const response = await fetch(url, options);
-
-  console.log('[API Debug] Response status:', response.status);
-
-  // Handle authentication errors
-  if (response.status === 401 && IS_OAUTH) {
-    console.log('[API Debug] 401 - Session expired, redirecting to login');
-    // Session expired, redirect to login
-    window.location.href = '/';
-    return;
-  }
-
   const result = await response.json();
-  console.log('[API Debug] Response data:', result);
 
   if (!response.ok) {
     throw new Error(result.error || 'Request failed');
