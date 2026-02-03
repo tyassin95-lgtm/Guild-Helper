@@ -396,6 +396,26 @@ class WebServer {
       await this.handlePreviewDM(req, res);
     });
 
+    // API: Get channels for screenshot feature
+    this.app.get('/api/party-editor/:token/channels', async (req, res) => {
+      await this.handleGetChannels(req, res);
+    });
+
+    // API: Get screenshot preferences
+    this.app.get('/api/party-editor/:token/screenshot-preferences', async (req, res) => {
+      await this.handleGetScreenshotPreferences(req, res);
+    });
+
+    // API: Save screenshot preferences
+    this.app.post('/api/party-editor/:token/screenshot-preferences', async (req, res) => {
+      await this.handleSaveScreenshotPreferences(req, res);
+    });
+
+    // API: Post screenshot to Discord
+    this.app.post('/api/party-editor/:token/post-screenshot', async (req, res) => {
+      await this.handlePostScreenshot(req, res);
+    });
+
     // Static Party Editor routes
     this.app.get('/static-party-editor/:token', async (req, res) => {
       await this.handleStaticPartyEditorPage(req, res);
@@ -994,6 +1014,218 @@ class WebServer {
     console.log(`\n=== DM Summary: ${results.successful.length} successful, ${results.failed.length} failed ===\n`);
 
     return results;
+  }
+
+  /**
+   * Handle get channels API request for screenshot feature
+   */
+  async handleGetChannels(req, res) {
+    try {
+      const validation = this.validateToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { eventId } = validation.data;
+
+      const event = await this.collections.pvpEvents.findOne({ 
+        _id: new ObjectId(eventId) 
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      const guild = await this.client.guilds.fetch(event.guildId);
+      
+      // Get text channels that the bot can send messages to
+      const channels = guild.channels.cache
+        .filter(channel => 
+          channel.type === 0 && // GuildText type
+          channel.permissionsFor(guild.members.me).has(['ViewChannel', 'SendMessages', 'AttachFiles'])
+        )
+        .map(channel => ({
+          id: channel.id,
+          name: channel.name
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      res.json({ channels });
+
+    } catch (error) {
+      console.error('Error getting channels:', error);
+      res.status(500).json({ error: 'Failed to get channels' });
+    }
+  }
+
+  /**
+   * Handle get screenshot preferences API request
+   */
+  async handleGetScreenshotPreferences(req, res) {
+    try {
+      const validation = this.validateToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { eventId } = validation.data;
+
+      const event = await this.collections.pvpEvents.findOne({ 
+        _id: new ObjectId(eventId) 
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Return saved preferences if they exist
+      const preferences = event.screenshotPreferences || {};
+      res.json({
+        channelId: preferences.channelId || null,
+        title: preferences.title || ''
+      });
+
+    } catch (error) {
+      console.error('Error getting screenshot preferences:', error);
+      res.status(500).json({ error: 'Failed to get screenshot preferences' });
+    }
+  }
+
+  /**
+   * Handle save screenshot preferences API request
+   */
+  async handleSaveScreenshotPreferences(req, res) {
+    try {
+      const validation = this.validateToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { eventId } = validation.data;
+      const { channelId, title } = req.body;
+
+      if (!channelId) {
+        return res.status(400).json({ error: 'Channel ID is required' });
+      }
+
+      // Save preferences to the event
+      await this.collections.pvpEvents.updateOne(
+        { _id: new ObjectId(eventId) },
+        {
+          $set: {
+            screenshotPreferences: {
+              channelId,
+              title: title || '',
+              lastUpdated: new Date()
+            }
+          }
+        }
+      );
+
+      res.json({ success: true });
+
+    } catch (error) {
+      console.error('Error saving screenshot preferences:', error);
+      res.status(500).json({ error: 'Failed to save screenshot preferences' });
+    }
+  }
+
+  /**
+   * Handle post screenshot to Discord API request
+   */
+  async handlePostScreenshot(req, res) {
+    try {
+      const validation = this.validateToken(req.params.token);
+
+      if (!validation.valid) {
+        return res.status(403).json({ error: validation.error });
+      }
+
+      const { eventId } = validation.data;
+      const { channelId, title, image } = req.body;
+
+      if (!channelId) {
+        return res.status(400).json({ error: 'Channel ID is required' });
+      }
+
+      if (!image) {
+        return res.status(400).json({ error: 'Image data is required' });
+      }
+
+      const event = await this.collections.pvpEvents.findOne({ 
+        _id: new ObjectId(eventId) 
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      const guild = await this.client.guilds.fetch(event.guildId);
+      const channel = await guild.channels.fetch(channelId);
+
+      if (!channel) {
+        return res.status(404).json({ error: 'Channel not found' });
+      }
+
+      // Convert base64 image to buffer
+      const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+
+      // Create embed with title
+      const embed = new EmbedBuilder()
+        .setTitle(title || 'Event Party Formation')
+        .setColor('#8b5cf6')
+        .setTimestamp()
+        .setFooter({ text: 'Guild Helper' });
+
+      // Add event info to embed
+      if (event.eventType) {
+        const eventTypeNames = {
+          siege: 'Siege',
+          riftstone: 'Riftstone',
+          boonstone: 'Boonstone',
+          wargames: 'Wargames',
+          warboss: 'War Boss',
+          guildevent: 'Guild Event'
+        };
+        const eventName = eventTypeNames[event.eventType] || event.eventType;
+        embed.addFields({
+          name: '📅 Event',
+          value: `${eventName}${event.location ? ` - ${event.location}` : ''}`,
+          inline: true
+        });
+      }
+
+      if (event.eventTime) {
+        const timestamp = Math.floor(event.eventTime.getTime() / 1000);
+        embed.addFields({
+          name: '⏰ Time',
+          value: `<t:${timestamp}:F>`,
+          inline: true
+        });
+      }
+
+      // Send message with image
+      await channel.send({
+        embeds: [embed],
+        files: [{
+          attachment: imageBuffer,
+          name: 'party-formation.png'
+        }]
+      });
+
+      res.json({ 
+        success: true, 
+        channelName: channel.name 
+      });
+
+    } catch (error) {
+      console.error('Error posting screenshot:', error);
+      res.status(500).json({ error: 'Failed to post screenshot' });
+    }
   }
 
   /**

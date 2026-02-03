@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Party Editor - <%= guildName %></title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -751,6 +752,60 @@
         grid-template-columns: repeat(2, 1fr);
       }
     }
+
+    /* Screenshot Section Styles */
+    .screenshot-section {
+      background: var(--bg-secondary);
+      padding: 20px;
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .screenshot-section label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .screenshot-section select,
+    .screenshot-section input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 14px;
+      background: var(--bg-card);
+      color: var(--text-primary);
+      margin-bottom: 12px;
+    }
+
+    .screenshot-section select:focus,
+    .screenshot-section input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent-purple);
+      box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+    }
+
+    .btn-screenshot {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+      box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+    }
+
+    .btn-screenshot:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(34, 197, 94, 0.6);
+    }
+
+    .screenshot-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: -8px;
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
@@ -827,6 +882,23 @@
             Send DMs to All Members
           </button>
         </div>
+
+        <!-- Screenshot -->
+        <div class="screenshot-section">
+          <div class="section-title">Screenshot</div>
+          <label for="screenshot-channel-select">Discord Channel</label>
+          <select id="screenshot-channel-select">
+            <option value="">Loading channels...</option>
+          </select>
+          <div class="screenshot-hint">Select a channel to post screenshots</div>
+          
+          <label for="screenshot-title">Title (Optional)</label>
+          <input type="text" id="screenshot-title" placeholder="Enter a title for the screenshot..." maxlength="100">
+          
+          <button class="btn btn-screenshot" onclick="takeAndPostScreenshot()">
+            📸 Post Screenshot to Discord
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -869,6 +941,8 @@
     document.addEventListener('DOMContentLoaded', () => {
       loadData();
       formatEventTime();
+      loadChannels();
+      loadSavedScreenshotPreferences();
     });
 
     // Format event time
@@ -1495,6 +1569,151 @@
         document.getElementById('loading').classList.remove('active');
         console.error('Submit error:', error);
         alert('Failed to submit parties. Please try again.');
+      }
+    }
+
+    // Load channels from the server
+    async function loadChannels() {
+      try {
+        const response = await fetch(`/api/party-editor/${TOKEN}/channels`);
+        const data = await response.json();
+
+        const select = document.getElementById('screenshot-channel-select');
+        if (response.ok && data.channels) {
+          select.innerHTML = '<option value="">-- Select a channel --</option>';
+          data.channels.forEach(channel => {
+            const option = document.createElement('option');
+            option.value = channel.id;
+            option.textContent = `#${channel.name}`;
+            select.appendChild(option);
+          });
+        } else {
+          select.innerHTML = '<option value="">Failed to load channels</option>';
+        }
+      } catch (error) {
+        console.error('Error loading channels:', error);
+        document.getElementById('screenshot-channel-select').innerHTML = '<option value="">Error loading channels</option>';
+      }
+    }
+
+    // Load saved screenshot preferences
+    async function loadSavedScreenshotPreferences() {
+      try {
+        const response = await fetch(`/api/party-editor/${TOKEN}/screenshot-preferences`);
+        const data = await response.json();
+
+        if (response.ok && data.channelId) {
+          document.getElementById('screenshot-channel-select').value = data.channelId;
+        }
+        if (response.ok && data.title) {
+          document.getElementById('screenshot-title').value = data.title;
+        }
+      } catch (error) {
+        console.error('Error loading screenshot preferences:', error);
+      }
+    }
+
+    // Save screenshot preferences (channel selection)
+    async function saveScreenshotPreferences() {
+      const channelId = document.getElementById('screenshot-channel-select').value;
+      const title = document.getElementById('screenshot-title').value;
+
+      if (!channelId) return;
+
+      try {
+        await fetch(`/api/party-editor/${TOKEN}/screenshot-preferences`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channelId, title })
+        });
+      } catch (error) {
+        console.error('Error saving screenshot preferences:', error);
+      }
+    }
+
+    // Auto-save when channel or title changes
+    document.addEventListener('DOMContentLoaded', () => {
+      const channelSelect = document.getElementById('screenshot-channel-select');
+      const titleInput = document.getElementById('screenshot-title');
+      
+      if (channelSelect) {
+        channelSelect.addEventListener('change', saveScreenshotPreferences);
+      }
+      if (titleInput) {
+        titleInput.addEventListener('change', saveScreenshotPreferences);
+      }
+    });
+
+    // Take screenshot and post to Discord
+    async function takeAndPostScreenshot() {
+      const channelId = document.getElementById('screenshot-channel-select').value;
+      const title = document.getElementById('screenshot-title').value || 'Event Party Formation';
+
+      if (!channelId) {
+        alert('Please select a Discord channel first.');
+        return;
+      }
+
+      // Save preferences before taking screenshot
+      await saveScreenshotPreferences();
+
+      document.getElementById('loading').classList.add('active');
+      const loadingText = document.querySelector('.loading-content div:last-child');
+      loadingText.textContent = 'Capturing screenshot...';
+
+      try {
+        // Find the parties section element
+        const partiesSection = document.querySelector('.parties-section');
+        
+        // Use html2canvas to capture the screenshot
+        const canvas = await html2canvas(partiesSection, {
+          backgroundColor: '#111827',
+          scale: 2,
+          logging: false,
+          useCORS: true,
+          allowTaint: true
+        });
+
+        // Convert canvas to blob
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
+        // Convert blob to base64
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        
+        await new Promise((resolve, reject) => {
+          reader.onloadend = resolve;
+          reader.onerror = reject;
+        });
+
+        const base64Image = reader.result;
+
+        loadingText.textContent = 'Posting to Discord...';
+
+        // Send screenshot to backend
+        const response = await fetch(`/api/party-editor/${TOKEN}/post-screenshot`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channelId,
+            title,
+            image: base64Image
+          })
+        });
+
+        const data = await response.json();
+
+        document.getElementById('loading').classList.remove('active');
+
+        if (response.ok) {
+          alert(`Screenshot posted successfully to #${data.channelName}!`);
+        } else {
+          alert('Failed to post screenshot: ' + data.error);
+        }
+      } catch (error) {
+        document.getElementById('loading').classList.remove('active');
+        console.error('Screenshot error:', error);
+        alert('Failed to take screenshot. Please try again.');
       }
     }
   </script>
