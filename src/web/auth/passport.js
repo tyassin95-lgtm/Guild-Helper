@@ -24,10 +24,15 @@ function configurePassport(collections, client) {
   });
 
   // Discord OAuth2 Strategy
+  const callbackURL = process.env.DISCORD_CALLBACK_URL;
+  if (!callbackURL) {
+    console.warn('⚠️  WARNING: DISCORD_CALLBACK_URL not set. Using localhost default.');
+  }
+
   passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: process.env.DISCORD_CALLBACK_URL || 'http://localhost:3001/auth/discord/callback',
+    callbackURL: callbackURL || 'http://localhost:3001/auth/discord/callback',
     scope: ['identify', 'guilds']
   },
   async (accessToken, refreshToken, profile, done) => {
@@ -78,9 +83,9 @@ async function enrichSessionData(req, collections, client) {
           req.session.guildIcon = guild.icon;
           
           // Check if user is admin in this guild (permission check)
-          // 0x8 = ADMINISTRATOR permission
+          // Discord permission bits: 0x8 = ADMINISTRATOR, 0x20 = MANAGE_GUILD
           const isAdmin = (guild.permissions & 0x8) === 0x8 || 
-                         (guild.permissions & 0x20) === 0x20; // MANAGE_GUILD
+                         (guild.permissions & 0x20) === 0x20;
           req.session.isAdmin = isAdmin;
           
           break;

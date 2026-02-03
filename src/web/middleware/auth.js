@@ -33,9 +33,7 @@ function requireAdmin(req, res, next) {
   }
   
   res.status(403).render('error', {
-    error: 'Access Denied',
-    message: 'You do not have administrator permissions.',
-    details: 'Contact your guild administrator for access.'
+    message: 'Access Denied. You do not have administrator permissions. Contact your guild administrator for access.'
   });
 }
 

@@ -44,6 +44,14 @@ class WebServer {
     this.app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
     // Session configuration
+    const sessionSecret = process.env.SESSION_SECRET;
+    if (!sessionSecret) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('SESSION_SECRET environment variable is required in production');
+      }
+      console.warn('⚠️  WARNING: Using default SESSION_SECRET. Set SESSION_SECRET in .env for production!');
+    }
+
     const sessionStore = MongoStore.create({
       mongoUrl: process.env.MONGODB_URI,
       dbName: 'guildhelper',
@@ -52,7 +60,7 @@ class WebServer {
     });
 
     this.app.use(session({
-      secret: process.env.SESSION_SECRET || 'oathly-guild-helper-secret-change-me',
+      secret: sessionSecret || 'oathly-guild-helper-secret-change-me',
       resave: false,
       saveUninitialized: false,
       store: sessionStore,
