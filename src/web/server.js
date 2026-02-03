@@ -2220,17 +2220,7 @@ class WebServer {
    */
   async handleAdminPanelPage(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).render('error', {
-          message: validation.error === 'Token expired'
-            ? 'This link has expired (links are valid for 1 hour)'
-            : 'Invalid or expired link'
-        });
-      }
-
-      const { guildId, userId } = validation.data;
+      const { guildId, userId } = req.session;
 
       // Fetch guild
       const guild = await this.client.guilds.fetch(guildId);
@@ -2257,13 +2247,7 @@ class WebServer {
    */
   async handleCheckAdminAccess(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId, userId } = validation.data;
+      const { guildId, userId } = req.session;
 
       // Get guild and member
       const guild = await this.client.guilds.fetch(guildId);
@@ -2294,13 +2278,7 @@ class WebServer {
    */
   async handleAdminGetMembers(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId } = validation.data;
+      const { guildId } = req.session;
 
       // Get guild - use cache to avoid rate limits
       const guild = await this.client.guilds.fetch(guildId);
@@ -2352,13 +2330,7 @@ class WebServer {
    */
   async handleAdminGetEvents(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId } = validation.data;
+      const { guildId } = req.session;
 
       // Get upcoming and recent events
       const now = new Date();
@@ -2410,13 +2382,7 @@ class WebServer {
    */
   async handleAdminGetChannels(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId } = validation.data;
+      const { guildId } = req.session;
 
       // Get guild and channels
       const guild = await this.client.guilds.fetch(guildId);
@@ -2444,13 +2410,7 @@ class WebServer {
    */
   async handleAdminGetStaticPartyToken(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId, userId } = validation.data;
+      const { guildId, userId } = req.session;
 
       // Generate a static party token
       const token = this.generateStaticPartyToken(guildId, userId);
@@ -2472,13 +2432,7 @@ class WebServer {
    */
   async handleAdminGetEventPartyToken(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId, userId } = validation.data;
+      const { guildId, userId } = req.session;
       const { eventId } = req.params;
 
       // Import party manager functions
@@ -2647,13 +2601,7 @@ class WebServer {
    */
   async handleAdminResetParty(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId } = validation.data;
+      const { guildId } = req.session;
       const { userId } = req.body;
 
       if (!userId) {
@@ -2712,13 +2660,7 @@ class WebServer {
    */
   async handleAdminResetWishlist(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId } = validation.data;
+      const { guildId } = req.session;
       const { userId } = req.body;
 
       if (!userId) {
@@ -2784,12 +2726,6 @@ class WebServer {
    */
   async handleAdminGetItemCategories(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
       const { getCategories } = require('../features/itemroll/data/items');
       res.json({ categories: getCategories() });
 
@@ -2804,12 +2740,6 @@ class WebServer {
    */
   async handleAdminGetItemSubcategories(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
       const { category } = req.params;
       const { getSubcategories } = require('../features/itemroll/data/items');
 
@@ -2826,12 +2756,6 @@ class WebServer {
    */
   async handleAdminGetItems(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
       const { category, subcategory } = req.params;
       const { getItems } = require('../features/itemroll/data/items');
 
@@ -2848,13 +2772,7 @@ class WebServer {
    */
   async handleAdminCreateItemRoll(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId, userId } = validation.data;
+      const { guildId, userId } = req.session;
       const { itemValue, trait, duration, channelId, eligibleUsers } = req.body;
 
       if (!itemValue || !trait || !duration || !channelId) {
@@ -2955,13 +2873,7 @@ class WebServer {
    */
   async handleAdminGetWishlistedItems(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId } = validation.data;
+      const { guildId } = req.session;
 
       // Get all wishlist submissions
       const submissions = await this.collections.wishlistSubmissions
@@ -3040,13 +2952,7 @@ class WebServer {
    */
   async handleAdminGiveItem(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId, userId: adminUserId } = validation.data;
+      const { guildId, userId: adminUserId } = req.session;
       const { distributions } = req.body;
 
       if (!distributions || !Array.isArray(distributions) || distributions.length === 0) {
@@ -3099,13 +3005,7 @@ class WebServer {
    */
   async handleAdminRemindParties(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId, userId: adminUserId } = validation.data;
+      const { guildId, userId: adminUserId } = req.session;
 
       // Get excluded roles
       const settings = await this.collections.guildSettings.findOne({ guildId });
@@ -3196,13 +3096,7 @@ class WebServer {
    */
   async handleAdminRemindWishlist(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId } = validation.data;
+      const { guildId } = req.session;
 
       // Get excluded roles
       const settings = await this.collections.guildSettings.findOne({ guildId });
@@ -3272,13 +3166,7 @@ class WebServer {
    */
   async handleAdminCancelEvent(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId } = validation.data;
+      const { guildId } = req.session;
       const { eventId } = req.body;
 
       if (!eventId) {
@@ -3333,13 +3221,7 @@ class WebServer {
    */
   async handleAdminViewEventCode(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId } = validation.data;
+      const { guildId } = req.session;
       const { eventId } = req.params;
 
       // Get the event
@@ -3381,13 +3263,7 @@ class WebServer {
    */
   async handleAdminGetProfileLink(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId, userId } = validation.data;
+      const { guildId, userId } = req.session;
 
       // Generate a new profile token
       const profileToken = this.generateProfileToken(guildId, userId);
@@ -3408,13 +3284,7 @@ class WebServer {
    */
   async handleAdminCreateEvent(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId, userId } = validation.data;
+      const { guildId, userId } = req.session;
       const { eventType, location, eventTime, bonusPoints, imageUrl, message, channelId } = req.body;
 
       // Validate required fields
@@ -3562,13 +3432,7 @@ class WebServer {
    */
   async handleAdminGetDescriptionTemplates(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId } = validation.data;
+      const { guildId } = req.session;
 
       // Get templates from database
       const templates = await this.collections.guildSettings.findOne(
@@ -3591,13 +3455,7 @@ class WebServer {
    */
   async handleAdminSaveDescriptionTemplate(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId, userId } = validation.data;
+      const { guildId, userId } = req.session;
       const { name, content } = req.body;
 
       // Validate inputs
@@ -3654,13 +3512,7 @@ class WebServer {
    */
   async handleAdminDeleteDescriptionTemplate(req, res) {
     try {
-      const validation = this.validateAdminPanelToken(req.params.token);
-
-      if (!validation.valid) {
-        return res.status(403).json({ error: validation.error });
-      }
-
-      const { guildId } = validation.data;
+      const { guildId } = req.session;
       const { templateId } = req.params;
 
       if (!templateId) {
