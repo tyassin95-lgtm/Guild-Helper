@@ -91,6 +91,8 @@ The web server will start on port 3001 (or your configured port).
 
 ### Production Deployment
 
+⚠️ **Important**: For production deployment with HTTPS, you need to set up a reverse proxy (nginx) and SSL certificates. See the **[DEPLOYMENT.md](DEPLOYMENT.md)** guide for complete instructions.
+
 For production deployment, ensure:
 
 1. **Use HTTPS**: Set `NODE_ENV=production` to enable secure cookies
@@ -98,6 +100,7 @@ For production deployment, ensure:
 3. **Update Redirect URI**: Set `DISCORD_CALLBACK_URL` to your production domain
 4. **Secure MongoDB**: Use authentication and secure connection string
 5. **Environment Variables**: Never commit `.env` file to version control
+6. **Reverse Proxy**: Set up nginx with SSL certificates (see [DEPLOYMENT.md](DEPLOYMENT.md))
 
 ### Session Configuration
 
