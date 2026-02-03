@@ -43,6 +43,12 @@ class WebServer {
     this.app.use(bodyParser.json({ limit: '10mb' }));
     this.app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
+    // Trust proxy - required when behind nginx reverse proxy
+    // This ensures secure cookies work properly and req.protocol is correct
+    if (process.env.NODE_ENV === 'production') {
+      this.app.set('trust proxy', 1);
+    }
+
     // Session configuration
     const sessionSecret = process.env.SESSION_SECRET;
     if (!sessionSecret) {
