@@ -4,7 +4,17 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
  * Handle /profile command - Direct users to Oathly website
  */
 async function handleProfile({ interaction, collections, webServer }) {
-  await interaction.deferReply({ flags: 64 }); // ephemeral
+  try {
+    // Defer reply early to acknowledge the interaction
+    await interaction.deferReply({ flags: 64 }); // ephemeral
+  } catch (error) {
+    // If deferReply fails, the interaction has likely expired
+    // Log the error but don't throw - the error handler will manage it
+    console.error('Failed to defer reply for profile command:', error.message);
+    // If we can't defer, we also can't send any response
+    // The interaction has expired and user won't see anything
+    return;
+  }
 
   try {
     // Create the embed
@@ -38,9 +48,14 @@ async function handleProfile({ interaction, collections, webServer }) {
 
   } catch (error) {
     console.error('Error handling profile command:', error);
-    await interaction.editReply({
-      content: 'Failed to generate profile info. Please try again later.',
-    });
+    try {
+      await interaction.editReply({
+        content: 'Failed to generate profile info. Please try again later.',
+      });
+    } catch (editError) {
+      // If we can't edit the reply, the interaction is no longer valid
+      console.error('Failed to edit reply (interaction may have expired):', editError.message);
+    }
   }
 }
 
