@@ -269,14 +269,24 @@ async function apiCall(endpoint, method = 'GET', data = null) {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache'
     },
-    cache: 'no-store'
+    cache: 'no-store',
+    credentials: 'include' // Include cookies for OAuth sessions
   };
   if (data) options.body = JSON.stringify(data);
 
   const separator = endpoint.includes('?') ? '&' : '?';
-  const url = `/api/profile/${TOKEN}/${endpoint}${separator}_t=${Date.now()}`;
+  // Use API_BASE which is set based on auth method (OAuth or token)
+  const url = `${API_BASE}/${endpoint}${separator}_t=${Date.now()}`;
 
   const response = await fetch(url, options);
+
+  // Handle authentication errors
+  if (response.status === 401 && IS_OAUTH) {
+    // Session expired, redirect to login
+    window.location.href = '/';
+    return;
+  }
+
   const result = await response.json();
 
   if (!response.ok) {
