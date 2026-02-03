@@ -4338,7 +4338,7 @@ class WebServer {
       // Update event embed
       try {
         const updatedEvent = await this.collections.pvpEvents.findOne({ _id: new ObjectId(eventId) });
-        await updateEventEmbed(this.client, updatedEvent, this.collections);
+        await updateEventEmbed({ client: this.client }, updatedEvent, this.collections);
       } catch (err) {
         console.error('Failed to update event embed:', err);
       }
