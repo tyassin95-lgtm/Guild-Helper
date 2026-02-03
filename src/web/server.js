@@ -58,13 +58,15 @@ class WebServer {
     this.app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
     // Session middleware with MongoDB store
+    const isProduction = process.env.NODE_ENV === 'production';
     const sessionConfig = {
       secret: SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProduction, // Only use secure cookies in production (HTTPS)
         httpOnly: true,
+        sameSite: 'lax', // 'lax' works for same-site requests
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       }
     };
