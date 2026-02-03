@@ -86,6 +86,10 @@ class WebServer {
     // Sync deserialized user data from req.user to req.session
     // This ensures req.session.userId is available after passport deserializes the user
     // Passport stores minimal data during serialize/deserialize, but we need it in req.session for auth checks
+    // Note: This middleware performs a database query but rate limiting is not needed because:
+    // 1. It only runs once per session (when req.session.userId is missing)
+    // 2. It requires authentication (req.user must exist)
+    // 3. After first run, req.session.userId is set and prevents further queries
     this.app.use(async (req, res, next) => {
       if (req.user && req.user.userId) {
         // User was deserialized by passport, ensure session has the userId
