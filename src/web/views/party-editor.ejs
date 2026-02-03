@@ -1665,6 +1665,10 @@
         // Find the parties section element
         const partiesSection = document.querySelector('.parties-section');
         
+        if (!partiesSection) {
+          throw new Error('Parties section not found');
+        }
+        
         // Use html2canvas to capture the screenshot
         const canvas = await html2canvas(partiesSection, {
           backgroundColor: '#111827',
