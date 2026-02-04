@@ -131,3 +131,6 @@ dist
 
 # Replit debugger
 .breakpoints
+
+# Demo files
+demo-*.html
