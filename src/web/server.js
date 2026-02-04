@@ -813,11 +813,11 @@ class WebServer {
         dmResults = await this.sendPartyDMs(processedParties, eventInfo);
       } catch (error) {
         console.error('Error sending party DMs:', error);
-        dmResults = { successful: [], failed: [] };
+        dmResults = { successful: [], failed: [], error: error.message };
       }
 
       if (!dmResults || typeof dmResults !== 'object') {
-        dmResults = { successful: [], failed: [] };
+        dmResults = { successful: [], failed: [], error: 'Invalid DM results' };
       }
 
       dmResults.sentSuccessfully = !dmResults.error && dmResults.failed.length === 0;
@@ -2567,8 +2567,8 @@ class WebServer {
         .map(formation => {
           const event = eventById.get(formation.eventId?.toString());
           const eventTime = event?.eventTime ? new Date(event.eventTime) : null;
-          const isPastEvent = eventTime ? eventTime < now : false;
-          if (!event || !isPastEvent) {
+          const isValidPastEvent = eventTime ? eventTime < now : false;
+          if (!event || !isValidPastEvent) {
             if (!event) {
               missingEvents.add(formation.eventId?.toString());
             }
