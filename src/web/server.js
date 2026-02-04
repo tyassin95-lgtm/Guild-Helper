@@ -2498,7 +2498,8 @@ class WebServer {
       const formations = await this.collections.eventParties
         .find({
           guildId,
-          approved: true
+          approved: true,
+          dmResults: { $exists: true }
         })
         .sort({ approvedAt: -1 })
         .toArray();
@@ -2523,10 +2524,12 @@ class WebServer {
         guildevent: 'Guild Event'
       };
 
+      const now = new Date();
+
       const parties = formations
         .map(formation => {
           const event = eventById.get(formation.eventId?.toString());
-          if (!event) {
+          if (!event || event.eventTime >= now) {
             return null;
           }
 
