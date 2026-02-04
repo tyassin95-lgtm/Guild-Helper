@@ -1049,9 +1049,9 @@ async function giveItemToUser(itemId, userId, userName, itemName) {
 
     showToast(result.message, 'success');
 
-    // Reload data
-    await loadWishlistSubmissions();
-    await loadGivenItems();
+    // Reload data, preserving current pages
+    await loadWishlistSubmissions(wishlistPagination.currentPage);
+    await loadGivenItems(givenItemsPagination.currentPage);
 
   } catch (error) {
     showToast(error.message, 'error');

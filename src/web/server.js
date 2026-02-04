@@ -3132,8 +3132,8 @@ class WebServer {
   async handleAdminGetWishlistSubmissions(req, res) {
     try {
       const { guildId } = req.session;
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 10;
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 10));
 
       // Get all wishlist submissions
       const submissions = await this.collections.wishlistSubmissions
@@ -3205,15 +3205,16 @@ class WebServer {
       formattedSubmissions.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
       // Apply pagination
-      const startIndex = (page - 1) * limit;
+      const totalPages = Math.ceil(totalCount / limit);
+      const safePage = Math.min(page, Math.max(1, totalPages));
+      const startIndex = (safePage - 1) * limit;
       const endIndex = startIndex + limit;
       const paginatedSubmissions = formattedSubmissions.slice(startIndex, endIndex);
-      const totalPages = Math.ceil(totalCount / limit);
 
       res.json({ 
         submissions: paginatedSubmissions, 
         totalCount,
-        page,
+        page: safePage,
         totalPages
       });
 
@@ -3229,8 +3230,8 @@ class WebServer {
   async handleAdminGetGivenItems(req, res) {
     try {
       const { guildId } = req.session;
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 5;
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const limit = Math.max(1, Math.min(100, parseInt(req.query.limit) || 5));
 
       // Get all given items
       const givenItems = await this.collections.wishlistGivenItems
@@ -3272,15 +3273,16 @@ class WebServer {
       formattedGivenItems.sort((a, b) => new Date(b.givenAt) - new Date(a.givenAt));
 
       // Apply pagination
-      const startIndex = (page - 1) * limit;
+      const totalPages = Math.ceil(totalCount / limit);
+      const safePage = Math.min(page, Math.max(1, totalPages));
+      const startIndex = (safePage - 1) * limit;
       const endIndex = startIndex + limit;
       const paginatedGivenItems = formattedGivenItems.slice(startIndex, endIndex);
-      const totalPages = Math.ceil(totalCount / limit);
 
       res.json({ 
         givenItems: paginatedGivenItems,
         totalCount,
-        page,
+        page: safePage,
         totalPages
       });
 
