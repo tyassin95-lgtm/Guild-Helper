@@ -828,6 +828,16 @@ class WebServer {
       }
 
       if (dmResults.error) {
+        await this.collections.eventParties.updateOne(
+          { eventId: new ObjectId(eventId), guildId: event.guildId },
+          {
+            $set: {
+              approved: false,
+              approvedBy: null,
+              approvedAt: null
+            }
+          }
+        );
         return res.status(500).json({ error: dmResults.error });
       }
 
@@ -2557,12 +2567,13 @@ class WebServer {
         .map(formation => {
           const event = eventById.get(formation.eventId?.toString());
           const eventTime = event?.eventTime ? new Date(event.eventTime) : null;
-          if (!eventTime) {
-            missingEventTimes.add(formation.eventId?.toString());
-          }
           const isPastEvent = eventTime ? eventTime < now : false;
           if (!event || !isPastEvent) {
             return null;
+          }
+
+          if (!eventTime) {
+            missingEventTimes.add(formation.eventId?.toString());
           }
 
           const dmResults = formation.dmResults || {};
