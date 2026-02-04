@@ -605,6 +605,16 @@ class WebServer {
       await this.handleAdminDeleteDescriptionTemplate(req, res);
     });
 
+    // API: Get party history
+    this.app.get('/api/admin-panel/party-history', requireAdmin, async (req, res) => {
+      await this.handleAdminGetPartyHistory(req, res);
+    });
+
+    // API: Get party details
+    this.app.get('/api/admin-panel/party-details/:eventPartyId', requireAdmin, async (req, res) => {
+      await this.handleAdminGetPartyDetails(req, res);
+    });
+
     // 404 handler
     this.app.use((req, res) => {
       res.status(404).send('Page not found');
@@ -3638,6 +3648,160 @@ class WebServer {
     } catch (error) {
       console.error('Error deleting description template:', error);
       res.status(500).json({ error: 'Failed to delete template' });
+    }
+  }
+
+  /**
+   * Get party history - list of past events with party formations
+   */
+  async handleAdminGetPartyHistory(req, res) {
+    try {
+      const { guildId } = req.session;
+
+      // Get all eventParties for this guild, sorted by creation date descending (newest first)
+      const eventParties = await this.collections.eventParties
+        .find({ guildId })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      if (eventParties.length === 0) {
+        return res.json({ history: [] });
+      }
+
+      // Get all event IDs
+      const eventIds = eventParties.map(ep => ep.eventId);
+
+      // Fetch corresponding events
+      const events = await this.collections.pvpEvents
+        .find({ _id: { $in: eventIds } })
+        .toArray();
+
+      // Create a map of eventId to event data
+      const eventMap = new Map();
+      events.forEach(event => {
+        const eventTypeNames = {
+          siege: 'Siege',
+          riftstone: 'Riftstone Fight',
+          boonstone: 'Boonstone Fight',
+          wargames: 'Wargames',
+          warboss: 'War Boss',
+          guildevent: 'Guild Event'
+        };
+
+        eventMap.set(event._id.toString(), {
+          eventType: event.eventType,
+          eventTypeName: eventTypeNames[event.eventType] || event.eventType,
+          location: event.location,
+          eventTime: event.eventTime
+        });
+      });
+
+      // Combine eventParties with event data
+      const history = eventParties
+        .filter(ep => eventMap.has(ep.eventId.toString()))
+        .map(ep => ({
+          _id: ep._id.toString(),
+          event: eventMap.get(ep.eventId.toString()),
+          summary: ep.summary || {
+            totalAttending: 0,
+            partiesIntact: 0,
+            partiesModified: 0,
+            partiesDisbanded: 0,
+            membersRemoved: 0,
+            membersAvailable: 0
+          },
+          createdAt: ep.createdAt,
+          partiesFormedAt: ep.partiesFormedAt
+        }));
+
+      res.json({ history });
+
+    } catch (error) {
+      console.error('Error getting party history:', error);
+      res.status(500).json({ error: 'Failed to get party history' });
+    }
+  }
+
+  /**
+   * Get detailed party information for a specific event
+   */
+  async handleAdminGetPartyDetails(req, res) {
+    try {
+      const { guildId } = req.session;
+      const { eventPartyId } = req.params;
+
+      if (!eventPartyId) {
+        return res.status(400).json({ error: 'Event party ID is required' });
+      }
+
+      // Get the eventParty document
+      const eventParty = await this.collections.eventParties.findOne({
+        _id: new ObjectId(eventPartyId),
+        guildId
+      });
+
+      if (!eventParty) {
+        return res.status(404).json({ error: 'Party data not found' });
+      }
+
+      // Get the event data
+      const event = await this.collections.pvpEvents.findOne({
+        _id: eventParty.eventId
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      const eventTypeNames = {
+        siege: 'Siege',
+        riftstone: 'Riftstone Fight',
+        boonstone: 'Boonstone Fight',
+        wargames: 'Wargames',
+        warboss: 'War Boss',
+        guildevent: 'Guild Event'
+      };
+
+      // Get creator name if available
+      let createdByName = 'Admin';
+      if (eventParty.createdBy) {
+        try {
+          const guild = await this.client.guilds.fetch(guildId);
+          const member = await guild.members.fetch(eventParty.createdBy);
+          createdByName = member.displayName || member.user.username;
+        } catch (error) {
+          // If we can't fetch the member, use default
+          console.log('Could not fetch member for creator:', error.message);
+        }
+      }
+
+      const partyData = {
+        event: {
+          eventType: event.eventType,
+          eventTypeName: eventTypeNames[event.eventType] || event.eventType,
+          location: event.location,
+          eventTime: event.eventTime
+        },
+        processedParties: eventParty.processedParties || [],
+        availableMembers: eventParty.availableMembers || [],
+        summary: eventParty.summary || {
+          totalAttending: 0,
+          partiesIntact: 0,
+          partiesModified: 0,
+          partiesDisbanded: 0,
+          membersRemoved: 0,
+          membersAvailable: 0
+        },
+        createdAt: eventParty.createdAt,
+        createdByName,
+        partiesFormedAt: eventParty.partiesFormedAt
+      };
+
+      res.json({ partyData });
+
+    } catch (error) {
+      console.error('Error getting party details:', error);
+      res.status(500).json({ error: 'Failed to get party details' });
     }
   }
 

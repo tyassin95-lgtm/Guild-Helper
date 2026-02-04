@@ -129,6 +129,9 @@ async function loadTabData(tabId) {
     case 'parties':
       await loadEventsForParties();
       break;
+    case 'history':
+      await loadPartyHistory();
+      break;
     case 'events':
       await Promise.all([
         loadEvents(),
@@ -1225,6 +1228,193 @@ document.getElementById('resetWishlistBtn').addEventListener('click', () => {
 
   openModal('confirmModal');
 });
+
+// ==========================================
+// Party History Tab
+// ==========================================
+
+async function loadPartyHistory() {
+  const container = document.getElementById('partyHistoryList');
+  container.innerHTML = '<div class="loading">Loading party history...</div>';
+
+  try {
+    const result = await apiCall('/party-history');
+    const historyData = result.history;
+
+    if (historyData.length === 0) {
+      container.innerHTML = `
+        <div class="no-data">
+          <div class="no-data-icon">📜</div>
+          <p>No party history available yet.</p>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px;">
+            Party history will appear here after events have parties formed.
+          </p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = historyData.map(item => {
+      const statusBadge = item.summary.partiesIntact > item.summary.partiesModified && item.summary.partiesIntact > item.summary.partiesDisbanded
+        ? 'intact'
+        : item.summary.partiesModified > item.summary.partiesDisbanded
+        ? 'modified'
+        : 'disbanded';
+
+      return `
+        <div class="history-item" onclick="showPartyDetails('${item._id}')">
+          <div class="history-event-icon">${getEventIcon(item.event.eventType)}</div>
+          <div class="history-event-info">
+            <h4>${item.event.eventTypeName}${item.event.location ? ` - ${item.event.location}` : ''}</h4>
+            <div class="history-event-time">${formatDate(item.event.eventTime)}</div>
+            <div class="history-stats">
+              <span class="history-stat">
+                <span class="history-stat-value">${item.summary.totalAttending}</span> attending
+              </span>
+              <span class="history-stat">
+                <span class="history-stat-value">${item.summary.partiesIntact}</span> intact
+              </span>
+              <span class="history-stat">
+                <span class="history-stat-value">${item.summary.partiesModified}</span> modified
+              </span>
+              <span class="history-stat">
+                <span class="history-stat-value">${item.summary.partiesDisbanded}</span> disbanded
+              </span>
+            </div>
+          </div>
+          <span class="history-badge ${statusBadge}">
+            ${statusBadge === 'intact' ? 'Mostly Intact' : statusBadge === 'modified' ? 'Modified' : 'Disbanded'}
+          </span>
+        </div>
+      `;
+    }).join('');
+
+  } catch (error) {
+    container.innerHTML = `<div class="no-data">Failed to load party history: ${error.message}</div>`;
+  }
+}
+
+async function showPartyDetails(eventPartyId) {
+  try {
+    const result = await apiCall(`/party-details/${eventPartyId}`);
+    const data = result.partyData;
+
+    const modalTitle = document.getElementById('partyDetailsTitle');
+    const modalContent = document.getElementById('partyDetailsContent');
+
+    modalTitle.textContent = `${data.event.eventTypeName}${data.event.location ? ` - ${data.event.location}` : ''}`;
+
+    // Build the summary section
+    const summaryHTML = `
+      <div class="party-details-header">
+        <h3>Party Formation Summary</h3>
+        <div class="history-event-time">${formatDate(data.event.eventTime)}</div>
+        ${data.createdAt ? `<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+          Formed on ${formatDate(data.createdAt)} by ${data.createdByName || 'Admin'}
+        </div>` : ''}
+      </div>
+
+      <div class="party-summary">
+        <div class="summary-stat">
+          <div class="summary-stat-value">${data.summary.totalAttending}</div>
+          <div class="summary-stat-label">Total Attending</div>
+        </div>
+        <div class="summary-stat">
+          <div class="summary-stat-value">${data.summary.partiesIntact}</div>
+          <div class="summary-stat-label">Parties Intact</div>
+        </div>
+        <div class="summary-stat">
+          <div class="summary-stat-value">${data.summary.partiesModified}</div>
+          <div class="summary-stat-label">Parties Modified</div>
+        </div>
+        <div class="summary-stat">
+          <div class="summary-stat-value">${data.summary.partiesDisbanded}</div>
+          <div class="summary-stat-label">Parties Disbanded</div>
+        </div>
+        <div class="summary-stat">
+          <div class="summary-stat-value">${data.summary.membersRemoved}</div>
+          <div class="summary-stat-label">Members Removed</div>
+        </div>
+        <div class="summary-stat">
+          <div class="summary-stat-value">${data.summary.membersAvailable}</div>
+          <div class="summary-stat-label">Members Available</div>
+        </div>
+      </div>
+    `;
+
+    // Build the parties list
+    const partiesHTML = data.processedParties.map(party => {
+      const statusClass = party.status === 'intact' ? 'intact' : party.status === 'modified' ? 'modified' : 'disbanded';
+      const statusText = party.status.charAt(0).toUpperCase() + party.status.slice(1);
+      
+      return `
+        <div class="party-item">
+          <div class="party-header">
+            <div class="party-title">
+              Party ${party.partyNumber}
+              <span class="history-badge ${statusClass}">${statusText}</span>
+            </div>
+            <div class="party-composition">
+              ${party.composition.tank > 0 ? `<span class="comp-badge tank">${party.composition.tank}T</span>` : ''}
+              ${party.composition.healer > 0 ? `<span class="comp-badge healer">${party.composition.healer}H</span>` : ''}
+              ${party.composition.dps > 0 ? `<span class="comp-badge dps">${party.composition.dps}D</span>` : ''}
+            </div>
+          </div>
+          <div class="party-members">
+            ${party.members.map(member => {
+              const roleIcon = member.role === 'tank' ? 'T' : member.role === 'healer' ? 'H' : 'D';
+              return `
+                <div class="member-item">
+                  <div class="member-role-icon ${member.role}">${roleIcon}</div>
+                  <div class="member-info">
+                    <div class="member-name ${member.isLeader ? 'leader' : ''}">${member.displayName}</div>
+                    <div class="member-details">
+                      ${member.weapon1}${member.weapon2 ? ` / ${member.weapon2}` : ''} • ${member.cp} CP
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Show available members if any
+    let availableHTML = '';
+    if (data.availableMembers && data.availableMembers.length > 0) {
+      availableHTML = `
+        <div class="party-item">
+          <div class="party-header">
+            <div class="party-title">Available Members (Not Assigned)</div>
+          </div>
+          <div class="party-members">
+            ${data.availableMembers.map(member => {
+              const roleIcon = member.role === 'tank' ? 'T' : member.role === 'healer' ? 'H' : 'D';
+              return `
+                <div class="member-item">
+                  <div class="member-role-icon ${member.role}">${roleIcon}</div>
+                  <div class="member-info">
+                    <div class="member-name">${member.displayName}</div>
+                    <div class="member-details">
+                      ${member.weapon1}${member.weapon2 ? ` / ${member.weapon2}` : ''} • ${member.cp} CP
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    modalContent.innerHTML = summaryHTML + '<div class="party-list">' + partiesHTML + availableHTML + '</div>';
+    openModal('partyDetailsModal');
+
+  } catch (error) {
+    showToast(`Failed to load party details: ${error.message}`, 'error');
+  }
+}
 
 // ==========================================
 // Navigation

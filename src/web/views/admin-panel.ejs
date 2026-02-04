@@ -39,6 +39,7 @@
     <!-- Tab Navigation -->
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="parties">Parties</button>
+      <button class="tab-btn" data-tab="history">Party History</button>
       <button class="tab-btn" data-tab="events">Events</button>
       <button class="tab-btn" data-tab="items">Items</button>
       <button class="tab-btn" data-tab="reminders">Reminders</button>
@@ -66,6 +67,34 @@
         <p class="card-description">Form parties for a specific event based on RSVP data. Select an event to form parties.</p>
         <div id="eventPartiesList" class="event-list">
           <div class="loading">Loading events...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Content: Party History -->
+    <div id="tab-history" class="tab-content">
+      <div class="card">
+        <h2 class="card-title">Party History</h2>
+        <p class="card-description">View historical party formations from past events. See how parties were structured and which members attended.</p>
+        
+        <div id="partyHistoryList" class="history-list">
+          <div class="loading">Loading party history...</div>
+        </div>
+      </div>
+
+      <!-- Party Details Modal -->
+      <div id="partyDetailsModal" class="modal-overlay">
+        <div class="modal modal-lg">
+          <div class="modal-header">
+            <h2 id="partyDetailsTitle">Party Details</h2>
+            <button class="modal-close" onclick="closeModal('partyDetailsModal')">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div id="partyDetailsContent"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('partyDetailsModal')">Close</button>
+          </div>
         </div>
       </div>
     </div>
