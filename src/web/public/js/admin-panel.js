@@ -11,7 +11,6 @@ let eventsData = [];
 let channelsData = [];
 let wishlistedItemsData = [];
 let wishlistSubmissionsData = [];
-let givenItemsData = [];
 let pendingDistributions = new Map(); // itemId -> Set of userIds
 let selectedRollUsers = new Set();
 let templatesData = [];
@@ -156,7 +155,6 @@ async function loadTabData(tabId) {
       await loadChannels();
       await loadMembers();
       await loadWishlistSubmissions();
-      await loadGivenItems();
       await loadWishlistedItems();
       break;
     case 'reminders':
@@ -1043,20 +1041,6 @@ async function loadWishlistSubmissions() {
   }
 }
 
-async function loadGivenItems() {
-  const container = document.getElementById('givenItemsSection');
-  container.innerHTML = '<div class="loading">Loading given items...</div>';
-
-  try {
-    const result = await apiCall('/given-items');
-    givenItemsData = result.givenItems;
-    renderGivenItems();
-  } catch (error) {
-    console.error('Failed to load given items:', error);
-    container.innerHTML = '<div class="no-data">Failed to load given items</div>';
-  }
-}
-
 function renderWishlistSubmissions() {
   const container = document.getElementById('wishlistSubmissions');
   const userFilter = document.getElementById('wishlistSearchUser')?.value.toLowerCase() || '';
@@ -1183,53 +1167,10 @@ async function giveItemToUser(itemId, userId, userName, itemName) {
 
     // Reload data
     await loadWishlistSubmissions();
-    await loadGivenItems();
 
   } catch (error) {
     showToast(error.message, 'error');
   }
-}
-
-function renderGivenItems() {
-  const container = document.getElementById('givenItemsSection');
-
-  if (givenItemsData.length === 0) {
-    container.innerHTML = '<div class="no-data">No items have been given out yet</div>';
-    return;
-  }
-
-  container.innerHTML = `
-    <div class="given-items-table">
-      <div class="table-header">
-        <div class="table-col">User</div>
-        <div class="table-col">Item</div>
-        <div class="table-col">Given By</div>
-        <div class="table-col">Date</div>
-      </div>
-      ${givenItemsData.map(item => `
-        <div class="table-row">
-          <div class="table-col">
-            <div class="user-cell">
-              <img src="${escapeHtml(item.avatarUrl || '/static/images/default-avatar.png')}" alt="${escapeHtml(item.displayName)}" class="user-avatar-small">
-              <span>${escapeHtml(item.displayName)}</span>
-            </div>
-          </div>
-          <div class="table-col">
-            <div class="item-cell">
-              <img src="${escapeHtml(item.itemImageUrl)}" alt="${escapeHtml(item.itemName)}" class="item-icon-small">
-              <span>${escapeHtml(item.itemName)}</span>
-            </div>
-          </div>
-          <div class="table-col">
-            <span>${escapeHtml(item.givenByName)}</span>
-          </div>
-          <div class="table-col">
-            <span>${formatDate(item.givenAt)}</span>
-          </div>
-        </div>
-      `).join('')}
-    </div>
-  `;
 }
 
 // Event listeners for filters
