@@ -1384,20 +1384,20 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .wishlist-submissions {
   display: flex;
   flex-direction: column;
-  max-height: 500px;
+  max-height: 500px; /* total height of the section */
   gap: 16px;
 }
 
-.wishlist-user-header {
-  flex-shrink: 0;
-}
-
-.wishlist-user-items {
-  flex: 1 1 auto;
-  overflow-y: auto;
+.wishlist-users-scroll {
+  flex: 1 1 auto;        /* takes remaining space */
+  overflow-y: auto;      /* enables vertical scroll */
   padding-right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
+/* Keep user card headers always visible */
 .wishlist-user-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -1406,18 +1406,20 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   transition: all 0.2s ease;
 }
 
-.wishlist-user-card:hover {
-  border-color: var(--accent-purple);
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
-}
-
 .wishlist-user-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
   cursor: pointer;
   transition: background 0.2s ease;
+}
+
+.wishlist-user-items {
+  padding: 0 20px 20px 20px;
+  display: grid;
+  gap: 12px;
 }
 
 .wishlist-user-header:hover {
