@@ -4040,6 +4040,17 @@ class WebServer {
         return res.status(400).json({ error: 'Support request form is not configured' });
       }
 
+      // Check if user already has an active support request
+      const existingActiveRequest = await this.collections.guildSupportRequests.findOne({
+        guildId,
+        userId,
+        status: { $ne: 'fulfilled' } // Active = not fulfilled
+      });
+
+      if (existingActiveRequest) {
+        return res.status(400).json({ error: 'You already have an active support request. Please wait for it to be processed before submitting another.' });
+      }
+
       // Validate required fields
       const schema = config.requestSchema;
       for (const field of schema) {
