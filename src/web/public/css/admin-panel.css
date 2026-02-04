@@ -1480,6 +1480,12 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   border: 2px solid var(--border-color);
 }
 
+.wishlist-user-info .user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
 .wishlist-stats {
   display: flex;
   align-items: center;
