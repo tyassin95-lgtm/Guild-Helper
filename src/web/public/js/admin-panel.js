@@ -162,6 +162,9 @@ async function loadTabData(tabId) {
     case 'reset':
       await loadMembersForReset();
       break;
+    case 'guildsupport':
+      await loadGuildSupportTab();
+      break;
   }
 }
 
@@ -1531,6 +1534,501 @@ document.getElementById('backToProfile').addEventListener('click', async (e) => 
     btn.style.pointerEvents = 'auto';
   }
 });
+
+// ==========================================
+// Guild Support Tab
+// ==========================================
+
+let currentFormSchema = [];
+let currentRequestId = null;
+
+/**
+ * Load all Guild Support tab data
+ */
+async function loadGuildSupportTab() {
+  await Promise.all([
+    loadGuildSupportConfig(),
+    loadSupportRequests(),
+    loadPriorityQueue()
+  ]);
+  setupGuildSupportHandlers();
+}
+
+/**
+ * Load guild support configuration
+ */
+async function loadGuildSupportConfig() {
+  try {
+    const response = await fetch('/api/admin/guild-support/config');
+    const { config } = await response.json();
+    
+    // Load info content
+    document.getElementById('supportInfoEditor').value = config.infoContent || '';
+    
+    // Load form schema
+    currentFormSchema = config.requestSchema || [];
+    renderFormFields();
+  } catch (error) {
+    console.error('Error loading guild support config:', error);
+    showToast('Failed to load configuration', 'error');
+  }
+}
+
+/**
+ * Render form fields in the form builder
+ */
+function renderFormFields() {
+  const container = document.getElementById('formFieldsList');
+  
+  if (currentFormSchema.length === 0) {
+    container.innerHTML = '<p class="text-muted">No fields configured yet. Click "Add Field" to create your first field.</p>';
+    return;
+  }
+  
+  const fieldsHtml = currentFormSchema.map((field, index) => `
+    <div class="form-field-item" data-index="${index}">
+      <div class="form-field-content">
+        <div class="form-field-header">
+          <strong>${field.label}</strong>
+          <span class="field-type-badge">${field.type}</span>
+          ${field.required ? '<span class="required-badge">Required</span>' : ''}
+        </div>
+        <div class="form-field-name">Internal name: ${field.name}</div>
+        ${field.options ? `<div class="form-field-options">Options: ${field.options.join(', ')}</div>` : ''}
+      </div>
+      <div class="form-field-actions">
+        <button class="btn-icon" onclick="moveFieldUp(${index})" ${index === 0 ? 'disabled' : ''}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
+        </button>
+        <button class="btn-icon" onclick="moveFieldDown(${index})" ${index === currentFormSchema.length - 1 ? 'disabled' : ''}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <button class="btn-icon btn-danger" onclick="removeField(${index})">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  `).join('');
+  
+  container.innerHTML = fieldsHtml;
+}
+
+/**
+ * Move field up in order
+ */
+function moveFieldUp(index) {
+  if (index === 0) return;
+  const temp = currentFormSchema[index];
+  currentFormSchema[index] = currentFormSchema[index - 1];
+  currentFormSchema[index - 1] = temp;
+  renderFormFields();
+}
+
+/**
+ * Move field down in order
+ */
+function moveFieldDown(index) {
+  if (index === currentFormSchema.length - 1) return;
+  const temp = currentFormSchema[index];
+  currentFormSchema[index] = currentFormSchema[index + 1];
+  currentFormSchema[index + 1] = temp;
+  renderFormFields();
+}
+
+/**
+ * Remove field from schema
+ */
+function removeField(index) {
+  currentFormSchema.splice(index, 1);
+  renderFormFields();
+}
+
+/**
+ * Load support requests
+ */
+async function loadSupportRequests(status = '') {
+  try {
+    const url = status ? `/api/admin/guild-support/requests?status=${status}` : '/api/admin/guild-support/requests';
+    const response = await fetch(url);
+    const { requests } = await response.json();
+    
+    const container = document.getElementById('requestsList');
+    
+    if (!requests || requests.length === 0) {
+      container.innerHTML = '<p class="text-muted">No support requests found.</p>';
+      return;
+    }
+    
+    const requestsHtml = requests.map(request => `
+      <div class="support-request-item" data-id="${request._id}">
+        <div class="request-item-header">
+          <div>
+            <strong>${request.username}</strong>
+            <span class="request-status status-${request.status}">${request.status}</span>
+          </div>
+          <div class="request-date">${formatDate(request.createdAt)}</div>
+        </div>
+        <div class="request-item-preview">
+          ${Object.entries(request.formData).slice(0, 2).map(([key, value]) => 
+            `<span><strong>${key}:</strong> ${Array.isArray(value) ? value.join(', ') : value}</span>`
+          ).join(' • ')}
+        </div>
+        <button class="btn btn-sm btn-secondary" onclick="viewRequestDetails('${request._id}')">View Details</button>
+      </div>
+    `).join('');
+    
+    container.innerHTML = requestsHtml;
+  } catch (error) {
+    console.error('Error loading support requests:', error);
+    showToast('Failed to load requests', 'error');
+  }
+}
+
+/**
+ * View request details in modal
+ */
+async function viewRequestDetails(requestId) {
+  try {
+    currentRequestId = requestId;
+    const response = await fetch(`/api/admin/guild-support/request/${requestId}`);
+    const { request } = await response.json();
+    
+    const modalContent = document.getElementById('requestDetailsContent');
+    
+    const formDataHtml = Object.entries(request.formData).map(([key, value]) => `
+      <div class="detail-field">
+        <strong>${key}:</strong> ${Array.isArray(value) ? value.join(', ') : value}
+      </div>
+    `).join('');
+    
+    const adminNotesHtml = request.adminNotes && request.adminNotes.length > 0 
+      ? request.adminNotes.map(note => `
+          <div class="admin-note">
+            <div class="note-meta">By Admin • ${formatDate(note.addedAt)}</div>
+            <div class="note-content">${note.note}</div>
+          </div>
+        `).join('')
+      : '<p class="text-muted">No admin notes yet.</p>';
+    
+    modalContent.innerHTML = `
+      <div class="request-details">
+        <div class="detail-section">
+          <h3>Request Information</h3>
+          <div class="detail-field"><strong>User:</strong> ${request.username}</div>
+          <div class="detail-field"><strong>Status:</strong> <span class="request-status status-${request.status}">${request.status}</span></div>
+          <div class="detail-field"><strong>Submitted:</strong> ${formatDate(request.createdAt)}</div>
+          ${request.approvedAmount ? `<div class="detail-field"><strong>Approved Amount:</strong> ${request.approvedAmount}</div>` : ''}
+        </div>
+        
+        <div class="detail-section">
+          <h3>Form Responses</h3>
+          ${formDataHtml}
+        </div>
+        
+        <div class="detail-section">
+          <h3>Admin Notes</h3>
+          ${adminNotesHtml}
+        </div>
+        
+        <div class="detail-section">
+          <h3>Actions</h3>
+          <div class="request-actions">
+            ${request.status === 'pending' ? `
+              <div class="form-group">
+                <label for="approvedAmount">Approved Amount</label>
+                <input type="text" id="approvedAmount" class="form-control" placeholder="Enter amount">
+              </div>
+              <button class="btn btn-success" onclick="approveRequest('${request._id}')">Approve</button>
+              <button class="btn btn-danger" onclick="denyRequest('${request._id}')">Deny</button>
+            ` : ''}
+            ${request.status === 'approved' ? `
+              <button class="btn btn-primary" onclick="fulfillRequest('${request._id}')">Mark as Fulfilled</button>
+            ` : ''}
+            <div class="form-group" style="margin-top: 16px;">
+              <label for="adminNote">Add Admin Note</label>
+              <textarea id="adminNote" class="form-control" rows="3"></textarea>
+            </div>
+            <button class="btn btn-secondary" onclick="addAdminNote('${request._id}')">Add Note</button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    openModal('requestDetailsModal');
+  } catch (error) {
+    console.error('Error loading request details:', error);
+    showToast('Failed to load request details', 'error');
+  }
+}
+
+/**
+ * Approve request
+ */
+async function approveRequest(requestId) {
+  const approvedAmount = document.getElementById('approvedAmount')?.value;
+  
+  if (!approvedAmount) {
+    showToast('Please enter an approved amount', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/admin/guild-support/request/${requestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'approved', approvedAmount })
+    });
+    
+    if (!response.ok) throw new Error('Failed to approve request');
+    
+    showToast('Request approved successfully', 'success');
+    closeModal('requestDetailsModal');
+    await loadSupportRequests();
+    await loadPriorityQueue();
+  } catch (error) {
+    console.error('Error approving request:', error);
+    showToast('Failed to approve request', 'error');
+  }
+}
+
+/**
+ * Deny request
+ */
+async function denyRequest(requestId) {
+  try {
+    const response = await fetch(`/api/admin/guild-support/request/${requestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'denied' })
+    });
+    
+    if (!response.ok) throw new Error('Failed to deny request');
+    
+    showToast('Request denied', 'success');
+    closeModal('requestDetailsModal');
+    await loadSupportRequests();
+  } catch (error) {
+    console.error('Error denying request:', error);
+    showToast('Failed to deny request', 'error');
+  }
+}
+
+/**
+ * Fulfill request
+ */
+async function fulfillRequest(requestId) {
+  try {
+    const response = await fetch(`/api/admin/guild-support/queue/fulfill/${requestId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (!response.ok) throw new Error('Failed to fulfill request');
+    
+    showToast('Request marked as fulfilled', 'success');
+    closeModal('requestDetailsModal');
+    await loadSupportRequests();
+    await loadPriorityQueue();
+  } catch (error) {
+    console.error('Error fulfilling request:', error);
+    showToast('Failed to fulfill request', 'error');
+  }
+}
+
+/**
+ * Add admin note
+ */
+async function addAdminNote(requestId) {
+  const note = document.getElementById('adminNote')?.value;
+  
+  if (!note || note.trim() === '') {
+    showToast('Please enter a note', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/admin/guild-support/request/${requestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminNote: note })
+    });
+    
+    if (!response.ok) throw new Error('Failed to add note');
+    
+    showToast('Note added successfully', 'success');
+    // Reload the request details
+    await viewRequestDetails(requestId);
+  } catch (error) {
+    console.error('Error adding admin note:', error);
+    showToast('Failed to add note', 'error');
+  }
+}
+
+/**
+ * Load priority queue
+ */
+async function loadPriorityQueue() {
+  try {
+    const response = await fetch('/api/guild-support/queue');
+    const { queue } = await response.json();
+    
+    const container = document.getElementById('priorityQueueList');
+    
+    if (!queue || queue.length === 0) {
+      container.innerHTML = '<p class="text-muted">No requests in queue yet.</p>';
+      return;
+    }
+    
+    const queueHtml = queue.map(item => `
+      <div class="queue-item" data-request-id="${item.requestId}">
+        <div class="queue-handle">⋮⋮</div>
+        <div class="queue-position">#${item.position}</div>
+        <div class="queue-info">
+          <strong>${item.username}</strong>
+          <span class="queue-amount">${item.approvedAmount}</span>
+        </div>
+        <button class="btn btn-sm btn-success" onclick="fulfillRequest('${item.requestId}')">Fulfill</button>
+      </div>
+    `).join('');
+    
+    container.innerHTML = queueHtml;
+    
+    // TODO: Add drag-and-drop reordering functionality
+  } catch (error) {
+    console.error('Error loading priority queue:', error);
+    showToast('Failed to load queue', 'error');
+  }
+}
+
+/**
+ * Setup Guild Support event handlers
+ */
+function setupGuildSupportHandlers() {
+  // Save support info
+  document.getElementById('saveSupportInfoBtn')?.addEventListener('click', async () => {
+    const infoContent = document.getElementById('supportInfoEditor').value;
+    
+    try {
+      const response = await fetch('/api/admin/guild-support/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ infoContent, requestSchema: currentFormSchema })
+      });
+      
+      if (!response.ok) throw new Error('Failed to save');
+      
+      showToast('Support information saved', 'success');
+    } catch (error) {
+      console.error('Error saving support info:', error);
+      showToast('Failed to save information', 'error');
+    }
+  });
+  
+  // Save form schema
+  document.getElementById('saveFormSchemaBtn')?.addEventListener('click', async () => {
+    const infoContent = document.getElementById('supportInfoEditor').value;
+    
+    try {
+      const response = await fetch('/api/admin/guild-support/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ infoContent, requestSchema: currentFormSchema })
+      });
+      
+      if (!response.ok) throw new Error('Failed to save');
+      
+      showToast('Form schema saved', 'success');
+    } catch (error) {
+      console.error('Error saving form schema:', error);
+      showToast('Failed to save form schema', 'error');
+    }
+  });
+  
+  // Add form field
+  document.getElementById('addFormFieldBtn')?.addEventListener('click', () => {
+    openModal('addFieldModal');
+  });
+  
+  // Field type change handler
+  document.getElementById('fieldType')?.addEventListener('change', (e) => {
+    const optionsGroup = document.getElementById('fieldOptionsGroup');
+    const needsOptions = ['radio', 'checkbox', 'select'].includes(e.target.value);
+    optionsGroup.style.display = needsOptions ? 'block' : 'none';
+  });
+  
+  // Confirm add field
+  document.getElementById('confirmAddField')?.addEventListener('click', () => {
+    const name = document.getElementById('fieldName').value;
+    const label = document.getElementById('fieldLabel').value;
+    const type = document.getElementById('fieldType').value;
+    const required = document.getElementById('fieldRequired').checked;
+    const optionsText = document.getElementById('fieldOptions').value;
+    
+    if (!name || !label) {
+      showToast('Please fill in all required fields', 'error');
+      return;
+    }
+    
+    const field = {
+      name,
+      label,
+      type,
+      required
+    };
+    
+    if (['radio', 'checkbox', 'select'].includes(type) && optionsText) {
+      field.options = optionsText.split('\n').filter(opt => opt.trim() !== '');
+    }
+    
+    currentFormSchema.push(field);
+    renderFormFields();
+    closeModal('addFieldModal');
+    
+    // Clear form
+    document.getElementById('fieldName').value = '';
+    document.getElementById('fieldLabel').value = '';
+    document.getElementById('fieldType').value = 'text';
+    document.getElementById('fieldRequired').checked = false;
+    document.getElementById('fieldOptions').value = '';
+    document.getElementById('fieldOptionsGroup').style.display = 'none';
+  });
+  
+  // Request status filter
+  document.getElementById('requestStatusFilter')?.addEventListener('change', (e) => {
+    loadSupportRequests(e.target.value);
+  });
+}
+
+/**
+ * Format date helper
+ */
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+// Make functions globally available
+window.moveFieldUp = moveFieldUp;
+window.moveFieldDown = moveFieldDown;
+window.removeField = removeField;
+window.viewRequestDetails = viewRequestDetails;
+window.approveRequest = approveRequest;
+window.denyRequest = denyRequest;
+window.fulfillRequest = fulfillRequest;
+window.addAdminNote = addAdminNote;
 
 // ==========================================
 // Initialization

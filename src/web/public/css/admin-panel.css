@@ -1642,3 +1642,310 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     color: var(--text-secondary);
   }
 }
+
+/* ==========================================
+   Guild Support Styles (Admin)
+   ========================================== */
+
+/* Form Builder */
+.form-field-item {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: var(--card-bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  border-left: 3px solid var(--accent-primary);
+}
+
+.form-field-content {
+  flex: 1;
+}
+
+.form-field-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.field-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--hover-bg);
+  border-radius: 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.required-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(244, 67, 54, 0.2);
+  border-radius: 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: #f44336;
+}
+
+.form-field-name {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.form-field-options {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.form-field-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover:not(:disabled) {
+  background: var(--hover-bg);
+  border-color: var(--accent-primary);
+}
+
+.btn-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-icon.btn-danger:hover:not(:disabled) {
+  background: rgba(244, 67, 54, 0.1);
+  border-color: #f44336;
+  color: #f44336;
+}
+
+/* Support Filters */
+.support-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+/* Support Request Items */
+.support-request-item {
+  background: var(--card-bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border-left: 4px solid var(--border-color);
+  transition: all 0.2s;
+}
+
+.support-request-item:hover {
+  border-left-color: var(--accent-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.request-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.request-item-header > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.request-status {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.request-status.status-pending {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.request-status.status-approved {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.request-status.status-denied {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.request-status.status-fulfilled {
+  background: rgba(33, 150, 243, 0.2);
+  color: #2196f3;
+}
+
+.request-date {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.request-item-preview {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.request-item-preview strong {
+  color: var(--text-primary);
+}
+
+/* Request Details Modal */
+.request-details {
+  padding: 8px;
+}
+
+.detail-section {
+  margin-bottom: 24px;
+}
+
+.detail-section h3 {
+  margin-bottom: 12px;
+  font-size: 16px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+}
+
+.detail-field {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.detail-field strong {
+  color: var(--text-primary);
+  margin-right: 8px;
+}
+
+.admin-note {
+  background: var(--card-bg-secondary);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.note-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.note-content {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.request-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Priority Queue */
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--card-bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
+}
+
+.queue-item:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.queue-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+.queue-handle:active {
+  cursor: grabbing;
+}
+
+.queue-position {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--accent-primary);
+  min-width: 40px;
+}
+
+.queue-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.queue-info strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.queue-amount {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .form-field-item {
+    flex-direction: column;
+  }
+
+  .form-field-actions {
+    justify-content: flex-end;
+  }
+
+  .support-filters {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .request-item-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .queue-item {
+    flex-wrap: wrap;
+  }
+}
+
