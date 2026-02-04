@@ -520,6 +520,11 @@ class WebServer {
       await this.handleAdminGetEventPartyToken(req, res);
     });
 
+    // API: Get party history
+    this.app.get('/api/admin-panel/party-history', requireAdmin, async (req, res) => {
+      await this.handleAdminGetPartyHistory(req, res);
+    });
+
     // API: Reset user party info
     this.app.post('/api/admin-panel/reset-party', requireAdmin, async (req, res) => {
       await this.handleAdminResetParty(req, res);
@@ -762,6 +767,19 @@ class WebServer {
         return res.status(400).json({ error: 'Invalid party data' });
       }
 
+      // Send DMs to all party members
+      const event = await this.collections.pvpEvents.findOne({ 
+        _id: new ObjectId(eventId) 
+      });
+
+      const eventInfo = {
+        eventType: event.eventType,
+        location: event.location,
+        eventTime: event.eventTime
+      };
+
+      const dmResults = await this.sendPartyDMs(processedParties, eventInfo);
+
       // Update formation in database
       await this.collections.eventParties.updateOne(
         { eventId: new ObjectId(eventId) },
@@ -772,7 +790,8 @@ class WebServer {
             lastModified: new Date(),
             approved: true,
             approvedBy: userId,
-            approvedAt: new Date()
+            approvedAt: new Date(),
+            dmResults
           }
         }
       );
@@ -787,19 +806,6 @@ class WebServer {
           }
         }
       );
-
-      // Send DMs to all party members
-      const event = await this.collections.pvpEvents.findOne({ 
-        _id: new ObjectId(eventId) 
-      });
-
-      const eventInfo = {
-        eventType: event.eventType,
-        location: event.location,
-        eventTime: event.eventTime
-      };
-
-      const dmResults = await this.sendPartyDMs(processedParties, eventInfo);
 
       // Invalidate token (one-time use)
       this.activeTokens.delete(req.params.token);
@@ -2479,6 +2485,74 @@ class WebServer {
     } catch (error) {
       console.error('Error getting events:', error);
       res.status(500).json({ error: 'Failed to get events' });
+    }
+  }
+
+  /**
+   * Get party history for past event parties that were sent via DM
+   */
+  async handleAdminGetPartyHistory(req, res) {
+    try {
+      const { guildId } = req.session;
+
+      const formations = await this.collections.eventParties
+        .find({
+          guildId,
+          approved: true
+        })
+        .sort({ approvedAt: -1 })
+        .toArray();
+
+      if (formations.length === 0) {
+        return res.json({ parties: [] });
+      }
+
+      const eventIds = formations.map(f => f.eventId).filter(Boolean);
+      const events = await this.collections.pvpEvents
+        .find({ _id: { $in: eventIds } })
+        .toArray();
+
+      const eventById = new Map(events.map(event => [event._id.toString(), event]));
+
+      const eventTypeNames = {
+        siege: 'Siege',
+        riftstone: 'Riftstone Fight',
+        boonstone: 'Boonstone Fight',
+        wargames: 'Wargames',
+        warboss: 'War Boss',
+        guildevent: 'Guild Event'
+      };
+
+      const parties = formations
+        .map(formation => {
+          const event = eventById.get(formation.eventId?.toString());
+          if (!event) {
+            return null;
+          }
+
+          const dmResults = formation.dmResults || {};
+          const dmSuccessCount = (dmResults.successful || []).length;
+          const dmFailedCount = (dmResults.failed || []).length;
+          const dmTotalCount = dmSuccessCount + dmFailedCount;
+
+          return {
+            _id: event._id.toString(),
+            eventType: event.eventType,
+            eventTypeName: eventTypeNames[event.eventType] || event.eventType,
+            location: event.location,
+            eventTime: event.eventTime,
+            approvedAt: formation.approvedAt,
+            dmSuccessCount,
+            dmFailedCount,
+            dmTotalCount
+          };
+        })
+        .filter(Boolean);
+
+      res.json({ parties });
+    } catch (error) {
+      console.error('Error getting party history:', error);
+      res.status(500).json({ error: 'Failed to get party history' });
     }
   }
 
