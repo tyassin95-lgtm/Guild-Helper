@@ -1903,7 +1903,7 @@ async function loadPriorityQueue() {
     container.innerHTML = queueHtml;
     
     // Add drag-and-drop reordering functionality
-    setupQueueDragAndDrop(container)
+    setupQueueDragAndDrop(container);
   } catch (error) {
     console.error('Error loading priority queue:', error);
     showToast('Failed to load queue', 'error');
@@ -1974,6 +1974,7 @@ async function saveQueueOrder() {
     const response = await fetch('/api/admin/guild-support/queue/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ order })
     });
     
