@@ -242,6 +242,30 @@
     <!-- Tab Content: Items -->
     <div id="tab-items" class="tab-content">
       <div class="card">
+        <h2 class="card-title">Wishlists</h2>
+        <p class="card-description">View and manage guild member wishlists. Distribute items directly from this interface.</p>
+        
+        <!-- Filter Controls -->
+        <div class="wishlist-controls">
+          <input type="text" id="wishlistSearchUser" class="form-control" placeholder="Search by user name..." style="flex: 1;">
+          <input type="text" id="wishlistSearchItem" class="form-control" placeholder="Search by item name..." style="flex: 1;">
+        </div>
+
+        <!-- Wishlist Submissions -->
+        <div id="wishlistSubmissions" class="wishlist-submissions">
+          <div class="loading">Loading wishlists...</div>
+        </div>
+
+        <!-- Items Already Given Out -->
+        <div class="wishlist-section-header" style="margin-top: 30px;">
+          <h3>Items Already Given Out</h3>
+        </div>
+        <div id="givenItemsSection" class="given-items-section">
+          <div class="loading">Loading given items...</div>
+        </div>
+      </div>
+
+      <div class="card">
         <h2 class="card-title">Create Item Roll</h2>
         <p class="card-description">Create a new item roll and send it to a channel. Same as using /itemroll on Discord.</p>
 
