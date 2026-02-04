@@ -128,7 +128,6 @@ async function loadTabData(tabId) {
   switch (tabId) {
     case 'parties':
       await loadEventsForParties();
-      await loadPartyHistory();
       break;
     case 'events':
       await Promise.all([
@@ -226,42 +225,6 @@ async function loadEventsForParties() {
 
   } catch (error) {
     container.innerHTML = `<div class="no-data">Failed to load events: ${error.message}</div>`;
-  }
-}
-
-async function loadPartyHistory() {
-  const container = document.getElementById('partyHistoryList');
-  container.innerHTML = '<div class="loading">Loading party history...</div>';
-
-  try {
-    const result = await apiCall('/party-history');
-    const history = result.parties || [];
-
-    if (history.length === 0) {
-      container.innerHTML = `
-        <div class="no-data">
-          <div class="no-data-icon">🕘</div>
-          <p>No party history yet.</p>
-        </div>
-      `;
-      return;
-    }
-
-    container.innerHTML = history.map(entry => `
-      <div class="event-card closed">
-        <div class="event-icon">${getEventIcon(entry.eventType)}</div>
-        <div class="event-info">
-          <h4>${entry.eventTypeName}${entry.location ? ` - ${entry.location}` : ''}</h4>
-          <div class="event-time">${formatDate(entry.eventTime)}</div>
-          <div class="event-stats">
-            DMs sent: ${entry.dmSuccessCount}/${entry.dmTotalCount}
-          </div>
-        </div>
-        <span class="event-status past">Sent</span>
-      </div>
-    `).join('');
-  } catch (error) {
-    container.innerHTML = `<div class="no-data">Failed to load party history: ${error.message}</div>`;
   }
 }
 
@@ -1290,5 +1253,4 @@ document.getElementById('backToProfile').addEventListener('click', async (e) => 
 // Load initial data for the parties tab
 document.addEventListener('DOMContentLoaded', () => {
   loadEventsForParties();
-  loadPartyHistory();
 });
