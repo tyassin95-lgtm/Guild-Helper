@@ -4016,6 +4016,7 @@ class WebServer {
 
       res.json({
         infoContent: config?.infoContent || '',
+        requestSchema: config?.requestSchema || [],
         hasConfig: !!config
       });
 
@@ -4051,7 +4052,7 @@ class WebServer {
       const request = {
         guildId,
         userId,
-        discordId: req.session.discordId || userId,
+        discordId: userId, // userId is the Discord ID from OAuth
         formData,
         files: files || [],
         status: 'pending',

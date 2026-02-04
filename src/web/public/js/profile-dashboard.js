@@ -1706,8 +1706,16 @@ async function loadSupportInfo() {
 async function loadSupportForm() {
   const container = document.getElementById('support-form-container');
   try {
-    const configResponse = await fetch('/api/admin/guild-support/config');
-    const { config } = await configResponse.json();
+    const configResponse = await fetch('/api/guild-support/info');
+    const data = await configResponse.json();
+    
+    // Check if we have schema from server
+    if (!data.requestSchema || data.requestSchema.length === 0) {
+      container.innerHTML = '<p class="text-muted">Support request form is not configured yet.</p>';
+      return;
+    }
+    
+    const config = { requestSchema: data.requestSchema };
     
     if (!config || !config.requestSchema || config.requestSchema.length === 0) {
       container.innerHTML = '<p class="text-muted">Support request form is not configured yet.</p>';

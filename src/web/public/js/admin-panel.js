@@ -1873,6 +1873,8 @@ async function addAdminNote(requestId) {
 
 /**
  * Load priority queue
+ * Note: Uses public queue endpoint since display format is the same for admin
+ * Admin-specific actions (reorder, fulfill) use separate admin endpoints
  */
 async function loadPriorityQueue() {
   try {
