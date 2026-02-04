@@ -163,36 +163,32 @@ body::before {
   margin-bottom: 40px;
 }
 
+/* Plain Crown Logo */
 .logo {
-  font-size: 80px; /* Crown size */
+  font-size: 80px; /* crown size */
   text-align: center;
   margin: 0 auto 20px;
   display: inline-block;
 
-  /* Neon gradient crown */
-  background: linear-gradient(135deg, #a855f7, #ec4899, #22d3ee);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  /* Single color */
+  color: var(--accent-purple);
 
-  /* Glow effect */
-  filter: drop-shadow(0 0 10px #a855f7)
-          drop-shadow(0 0 25px #ec4899)
-          drop-shadow(0 0 40px #22d3ee);
+  /* Optional soft glow */
+  filter: drop-shadow(0 0 8px var(--accent-purple-glow));
 
+  /* Pulse animation */
   animation: pulse 3s infinite ease-in-out;
 }
 
 /* Pulse animation */
 @keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.12);
-    opacity: 0.85;
-  }
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.12); opacity: 0.85; }
 }
+
+/* Responsive sizes */
+@media (max-width: 768px) { .logo { font-size: 64px; } }
+@media (max-width: 480px) { .logo { font-size: 56px; } }
 
 .brand h1 {
   font-size: 48px;
