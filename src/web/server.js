@@ -760,20 +760,20 @@ class WebServer {
       }
 
       const { eventId, userId } = validation.data;
-      const { processedParties, availableMembers } = req.body;
 
-      // Validate data
-      if (!processedParties || !Array.isArray(processedParties)) {
-        return res.status(400).json({ error: 'Invalid party data' });
-      }
-
-      // Send DMs to all party members
       const event = await this.collections.pvpEvents.findOne({ 
         _id: new ObjectId(eventId) 
       });
 
       if (!event) {
         return res.status(404).json({ error: 'Event not found' });
+      }
+
+      const { processedParties, availableMembers } = req.body;
+
+      // Validate data
+      if (!processedParties || !Array.isArray(processedParties)) {
+        return res.status(400).json({ error: 'Invalid party data' });
       }
 
       const eventInfo = {
@@ -786,7 +786,7 @@ class WebServer {
 
       // Update formation in database
       await this.collections.eventParties.updateOne(
-        { eventId: new ObjectId(eventId) },
+        { eventId: new ObjectId(eventId), guildId: event.guildId },
         {
           $set: {
             processedParties,
@@ -811,7 +811,7 @@ class WebServer {
       );
 
       const dmResultsUpdate = await this.collections.eventParties.updateOne(
-        { eventId: new ObjectId(eventId) },
+        { eventId: new ObjectId(eventId), guildId: event.guildId },
         {
           $set: { dmResults }
         }
