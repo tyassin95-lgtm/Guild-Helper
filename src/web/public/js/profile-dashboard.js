@@ -254,6 +254,9 @@ function setupTabs() {
         case 'itemrolls':
           loadItemRollsData();
           break;
+        case 'guildsupport':
+          loadGuildSupportData();
+          break;
       }
     });
   });
@@ -1655,3 +1658,286 @@ async function submitAttendance() {
     }
   }
 }
+
+// ==========================================
+// Guild Support Functions
+// ==========================================
+
+/**
+ * Load all Guild Support data
+ */
+async function loadGuildSupportData() {
+  await Promise.all([
+    loadSupportInfo(),
+    loadSupportForm(),
+    loadMyRequests(),
+    loadSupportQueue()
+  ]);
+}
+
+/**
+ * Load support information content
+ */
+async function loadSupportInfo() {
+  const container = document.getElementById('support-info-content');
+  try {
+    const response = await fetch('/api/guild-support/info');
+    const data = await response.json();
+    
+    if (!data.infoContent || data.infoContent.trim() === '') {
+      container.innerHTML = '<p class="text-muted">No support information available yet.</p>';
+      return;
+    }
+    
+    // Render content - support both HTML and markdown (basic)
+    // For now, just render as HTML with sanitization
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = data.infoContent;
+    container.innerHTML = `<div class="support-info">${tempDiv.innerHTML}</div>`;
+  } catch (error) {
+    console.error('Error loading support info:', error);
+    container.innerHTML = '<p class="error-message">Failed to load support information</p>';
+  }
+}
+
+/**
+ * Load support request form
+ */
+async function loadSupportForm() {
+  const container = document.getElementById('support-form-container');
+  try {
+    const configResponse = await fetch('/api/admin/guild-support/config');
+    const { config } = await configResponse.json();
+    
+    if (!config || !config.requestSchema || config.requestSchema.length === 0) {
+      container.innerHTML = '<p class="text-muted">Support request form is not configured yet.</p>';
+      return;
+    }
+    
+    // Generate form from schema
+    let formHtml = '<form id="support-request-form" class="support-form">';
+    
+    config.requestSchema.forEach(field => {
+      formHtml += generateFormField(field);
+    });
+    
+    formHtml += `
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Submit Request</button>
+      </div>
+    </form>`;
+    
+    container.innerHTML = formHtml;
+    
+    // Attach form submit handler
+    document.getElementById('support-request-form').addEventListener('submit', handleSupportRequestSubmit);
+  } catch (error) {
+    console.error('Error loading support form:', error);
+    container.innerHTML = '<p class="error-message">Failed to load support form</p>';
+  }
+}
+
+/**
+ * Generate form field HTML from schema
+ */
+function generateFormField(field) {
+  const required = field.required ? 'required' : '';
+  const requiredLabel = field.required ? '<span class="required-marker">*</span>' : '';
+  
+  let fieldHtml = `<div class="form-group">
+    <label for="${field.name}">${field.label}${requiredLabel}</label>`;
+  
+  switch (field.type) {
+    case 'text':
+      fieldHtml += `<input type="text" id="${field.name}" name="${field.name}" class="form-control" ${required}>`;
+      break;
+    case 'textarea':
+      fieldHtml += `<textarea id="${field.name}" name="${field.name}" class="form-control" rows="4" ${required}></textarea>`;
+      break;
+    case 'radio':
+      fieldHtml += '<div class="radio-group">';
+      field.options?.forEach(option => {
+        fieldHtml += `
+          <label class="radio-label">
+            <input type="radio" name="${field.name}" value="${option}" ${required}>
+            <span>${option}</span>
+          </label>`;
+      });
+      fieldHtml += '</div>';
+      break;
+    case 'checkbox':
+      fieldHtml += '<div class="checkbox-group">';
+      field.options?.forEach(option => {
+        fieldHtml += `
+          <label class="checkbox-label">
+            <input type="checkbox" name="${field.name}[]" value="${option}">
+            <span>${option}</span>
+          </label>`;
+      });
+      fieldHtml += '</div>';
+      break;
+    case 'select':
+      fieldHtml += `<select id="${field.name}" name="${field.name}" class="form-control" ${required}>
+        <option value="">Select...</option>`;
+      field.options?.forEach(option => {
+        fieldHtml += `<option value="${option}">${option}</option>`;
+      });
+      fieldHtml += '</select>';
+      break;
+    case 'file':
+      fieldHtml += `<input type="file" id="${field.name}" name="${field.name}" class="form-control" ${required}>
+        <small class="form-text">Maximum file size: 10MB</small>`;
+      break;
+  }
+  
+  fieldHtml += '</div>';
+  return fieldHtml;
+}
+
+/**
+ * Handle support request form submission
+ */
+async function handleSupportRequestSubmit(e) {
+  e.preventDefault();
+  
+  const form = e.target;
+  const formData = {};
+  
+  // Collect form data
+  const formElements = form.elements;
+  for (let i = 0; i < formElements.length; i++) {
+    const element = formElements[i];
+    if (element.name && element.type !== 'submit') {
+      if (element.type === 'checkbox') {
+        if (!formData[element.name]) formData[element.name] = [];
+        if (element.checked) {
+          formData[element.name].push(element.value);
+        }
+      } else if (element.type === 'radio') {
+        if (element.checked) {
+          formData[element.name] = element.value;
+        }
+      } else if (element.type === 'file') {
+        // For now, skip file uploads - would need separate upload handling
+        formData[element.name] = element.files.length > 0 ? element.files[0].name : '';
+      } else {
+        formData[element.name] = element.value;
+      }
+    }
+  }
+  
+  try {
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+    
+    const response = await fetch('/api/guild-support/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ formData, files: [] })
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to submit request');
+    }
+    
+    showToast('Support request submitted successfully!', 'success');
+    form.reset();
+    
+    // Reload requests
+    await loadMyRequests();
+  } catch (error) {
+    console.error('Error submitting support request:', error);
+    showToast(error.message, 'error');
+  } finally {
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit Request';
+  }
+}
+
+/**
+ * Load user's support requests
+ */
+async function loadMyRequests() {
+  const container = document.getElementById('my-requests-content');
+  try {
+    const response = await fetch('/api/guild-support/my-requests');
+    const data = await response.json();
+    
+    if (!data.requests || data.requests.length === 0) {
+      container.innerHTML = '<p class="text-muted">You have no support requests yet.</p>';
+      return;
+    }
+    
+    const requestsHtml = data.requests.map(request => `
+      <div class="support-request-card">
+        <div class="support-request-header">
+          <div class="support-request-status status-${request.status}">${request.status.toUpperCase()}</div>
+          <div class="support-request-date">${formatRelativeTime(request.createdAt)}</div>
+        </div>
+        <div class="support-request-body">
+          ${Object.entries(request.formData).map(([key, value]) => `
+            <div class="request-field">
+              <strong>${key}:</strong> ${Array.isArray(value) ? value.join(', ') : value}
+            </div>
+          `).join('')}
+        </div>
+        ${request.status === 'approved' && request.approvedAmount ? `
+          <div class="support-request-approved">
+            <strong>Approved Amount:</strong> ${request.approvedAmount}
+            ${request.queuePosition ? `<span class="queue-position">Queue Position: #${request.queuePosition}</span>` : ''}
+          </div>
+        ` : ''}
+      </div>
+    `).join('');
+    
+    container.innerHTML = requestsHtml;
+  } catch (error) {
+    console.error('Error loading my requests:', error);
+    container.innerHTML = '<p class="error-message">Failed to load requests</p>';
+  }
+}
+
+/**
+ * Load support priority queue
+ */
+async function loadSupportQueue() {
+  const container = document.getElementById('support-queue-content');
+  try {
+    const response = await fetch('/api/guild-support/queue');
+    const data = await response.json();
+    
+    if (!data.queue || data.queue.length === 0) {
+      container.innerHTML = '<p class="text-muted">No requests in queue yet.</p>';
+      return;
+    }
+    
+    const queueHtml = `
+      <div class="support-queue-table">
+        <div class="queue-header">
+          <div class="queue-col">Position</div>
+          <div class="queue-col">Username</div>
+          <div class="queue-col">Amount</div>
+          <div class="queue-col">Submitted</div>
+        </div>
+        ${data.queue.map(item => `
+          <div class="queue-row">
+            <div class="queue-col queue-position">#${item.position}</div>
+            <div class="queue-col">${item.username}</div>
+            <div class="queue-col">${item.approvedAmount || 'N/A'}</div>
+            <div class="queue-col">${formatRelativeTime(item.createdAt)}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    
+    container.innerHTML = queueHtml;
+  } catch (error) {
+    console.error('Error loading support queue:', error);
+    container.innerHTML = '<p class="error-message">Failed to load queue</p>';
+  }
+}
+

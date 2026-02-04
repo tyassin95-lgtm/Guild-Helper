@@ -1424,3 +1424,271 @@ select.form-control {
     font-size: 18px;
   }
 }
+
+/* ==========================================
+   Guild Support Styles
+   ========================================== */
+
+/* Support Information */
+.support-info {
+  padding: 16px;
+  background: var(--card-bg-secondary);
+  border-radius: 8px;
+  line-height: 1.6;
+}
+
+.support-info h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.support-info p {
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+}
+
+.support-info ul, .support-info ol {
+  margin-left: 20px;
+  margin-bottom: 12px;
+}
+
+/* Support Form */
+.support-form {
+  max-width: 600px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.required-marker {
+  color: var(--accent-error);
+  margin-left: 4px;
+}
+
+.form-control {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.form-control::placeholder {
+  color: var(--text-muted);
+}
+
+textarea.form-control {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-text {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Radio and Checkbox Groups */
+.radio-group, .checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radio-label, .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--card-bg-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.radio-label:hover, .checkbox-label:hover {
+  background: var(--hover-bg);
+}
+
+.radio-label input[type="radio"],
+.checkbox-label input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Form Actions */
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* Support Request Cards */
+.support-request-card {
+  background: var(--card-bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border-left: 4px solid var(--border-color);
+}
+
+.support-request-card:last-child {
+  margin-bottom: 0;
+}
+
+.support-request-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.support-request-status {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.support-request-status.status-pending {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.support-request-status.status-approved {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.support-request-status.status-denied {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.support-request-status.status-fulfilled {
+  background: rgba(33, 150, 243, 0.2);
+  color: #2196f3;
+}
+
+.support-request-date {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.support-request-body {
+  margin-bottom: 12px;
+}
+
+.request-field {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.request-field strong {
+  color: var(--text-primary);
+  margin-right: 4px;
+}
+
+.support-request-approved {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--accent-success);
+}
+
+.queue-position {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Support Queue Table */
+.support-queue-table {
+  background: var(--card-bg-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.queue-header {
+  display: grid;
+  grid-template-columns: 80px 1fr 120px 150px;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--hover-bg);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.queue-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 120px 150px;
+  gap: 16px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border-color);
+  transition: background 0.2s;
+}
+
+.queue-row:hover {
+  background: var(--hover-bg);
+}
+
+.queue-col {
+  color: var(--text-secondary);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.queue-col.queue-position {
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .support-form {
+    max-width: 100%;
+  }
+
+  .queue-header, .queue-row {
+    grid-template-columns: 60px 1fr 100px;
+    gap: 8px;
+  }
+
+  .queue-col:nth-child(4) {
+    display: none;
+  }
+
+  .support-request-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
