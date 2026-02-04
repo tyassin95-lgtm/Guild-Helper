@@ -813,28 +813,32 @@ class WebServer {
         dmResults = await this.sendPartyDMs(processedParties, eventInfo);
       } catch (error) {
         console.error('Error sending party DMs:', error);
-        dmResults = { successful: [], failed: [], error: error.message };
+        dmResults = { successful: [], failed: [] };
+      }
+
+      if (!dmResults || typeof dmResults !== 'object') {
+        dmResults = { successful: [], failed: [] };
+      }
+
+      dmResults.sentSuccessfully = !dmResults.error && dmResults.failed.length === 0;
+
+      const dmResultsUpdate = {
+        dmResults
+      };
+
+      if (!dmResults.sentSuccessfully) {
+        dmResultsUpdate.approved = false;
+        dmResultsUpdate.approvedBy = null;
+        dmResultsUpdate.approvedAt = null;
       }
 
       await this.collections.eventParties.updateOne(
         { eventId: new ObjectId(eventId), guildId: event.guildId },
-        {
-          $set: { dmResults }
-        }
+        { $set: dmResultsUpdate }
       );
 
-      if (dmResults.error) {
-        await this.collections.eventParties.updateOne(
-          { eventId: new ObjectId(eventId), guildId: event.guildId },
-          {
-            $set: {
-              approved: false,
-              approvedBy: null,
-              approvedAt: null
-            }
-          }
-        );
-        return res.status(500).json({ error: dmResults.error });
+      if (!dmResults.sentSuccessfully) {
+        return res.status(500).json({ error: 'Failed to send party DMs' });
       }
 
       // Invalidate token (one-time use)
@@ -2530,7 +2534,7 @@ class WebServer {
           guildId,
           approved: true,
           dmResults: { $exists: true },
-          'dmResults.error': { $exists: false },
+          'dmResults.sentSuccessfully': true,
           approvedAt: { $exists: true }
         })
         .sort({ approvedAt: -1 })
