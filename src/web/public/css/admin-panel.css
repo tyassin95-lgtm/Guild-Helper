@@ -1384,8 +1384,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .wishlist-submissions {
   display: flex;
   flex-direction: column;
-  gap: 16px;
   max-height: 500px;
+  gap: 16px;
+}
+
+.wishlist-user-header {
+  flex-shrink: 0;
+}
+
+.wishlist-user-items {
+  flex: 1 1 auto;
   overflow-y: auto;
   padding-right: 8px;
 }
