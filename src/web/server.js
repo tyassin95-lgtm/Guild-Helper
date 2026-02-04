@@ -767,6 +767,21 @@ class WebServer {
         return res.status(400).json({ error: 'Invalid party data' });
       }
 
+      // Update formation in database
+      await this.collections.eventParties.updateOne(
+        { eventId: new ObjectId(eventId) },
+        {
+          $set: {
+            processedParties,
+            availableMembers: availableMembers || [],
+            lastModified: new Date(),
+            approved: true,
+            approvedBy: userId,
+            approvedAt: new Date()
+          }
+        }
+      );
+
       // Send DMs to all party members
       const event = await this.collections.pvpEvents.findOne({ 
         _id: new ObjectId(eventId) 
@@ -780,19 +795,10 @@ class WebServer {
 
       const dmResults = await this.sendPartyDMs(processedParties, eventInfo);
 
-      // Update formation in database
       await this.collections.eventParties.updateOne(
         { eventId: new ObjectId(eventId) },
         {
-          $set: {
-            processedParties,
-            availableMembers: availableMembers || [],
-            lastModified: new Date(),
-            approved: true,
-            approvedBy: userId,
-            approvedAt: new Date(),
-            dmResults
-          }
+          $set: { dmResults }
         }
       );
 
@@ -2529,7 +2535,8 @@ class WebServer {
       const parties = formations
         .map(formation => {
           const event = eventById.get(formation.eventId?.toString());
-          if (!event || event.eventTime >= now) {
+          const isPastEvent = event?.eventTime < now;
+          if (!event || !isPastEvent) {
             return null;
           }
 
