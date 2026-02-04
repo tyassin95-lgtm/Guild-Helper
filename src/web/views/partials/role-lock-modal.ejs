@@ -1,4 +1,5 @@
 <!-- Role Lock Modal - Include this in all protected pages -->
+<!-- Note: All resources (HTML, CSS, JS) are only loaded when hasExcludedRole is true -->
 <% if (typeof hasExcludedRole !== 'undefined' && hasExcludedRole) { %>
 <!-- Modal Overlay -->
 <div id="roleLockModal" class="role-lock-modal">
@@ -44,7 +45,7 @@
 <script>
   // Initialize the role lock modal on page load
   document.addEventListener('DOMContentLoaded', function() {
-    window.initRoleLock(<%= hasExcludedRole ? 'true' : 'false' %>);
+    window.initRoleLock(<%= hasExcludedRole %>);
   });
 </script>
 <% } %>

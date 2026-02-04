@@ -21,6 +21,7 @@ function requireAuth(req, res, next) {
 /**
  * Middleware to check for excluded roles
  * Passes flag to views to show role lock modal if user has excluded role
+ * Note: guildSettings is populated during OAuth callback via enrichSessionData
  */
 function checkRoleLock(req, res, next) {
   // Only check for authenticated users
@@ -29,6 +30,7 @@ function checkRoleLock(req, res, next) {
   }
   
   const userRoles = req.session.userRoles || [];
+  // Guild settings are populated during login; if not present, no roles are excluded
   const guildSettings = req.session.guildSettings;
   const excludedRoles = guildSettings?.excludedRoles || [];
   

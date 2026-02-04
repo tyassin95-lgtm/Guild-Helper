@@ -70,9 +70,17 @@
   function preventInteraction(event) {
     const modal = document.getElementById('roleLockModal');
     
-    // Allow interactions within the modal
+    // Allow interactions within the modal (including keyboard navigation)
     if (modal && modal.contains(event.target)) {
       return;
+    }
+    
+    // For keyboard events, also check if the focused element is within the modal
+    if (event.type === 'keydown' && modal) {
+      const activeElement = document.activeElement;
+      if (activeElement && modal.contains(activeElement)) {
+        return;
+      }
     }
     
     // Block all other interactions
