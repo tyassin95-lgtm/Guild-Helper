@@ -163,16 +163,21 @@ body::before {
   margin-bottom: 40px;
 }
 
-/* Plain Crown Logo */
+/* Logo Container */
 .logo {
-  font-size: 80px; /* crown size */
   text-align: center;
   margin: 0 auto 20px;
-  display: inline-block;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
 
-  /* Single color */
-  color: var(--accent-purple);
-
+/* Logo Image */
+.logo-image {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  
   /* Optional soft glow */
   filter: drop-shadow(0 0 8px var(--accent-purple-glow));
 
@@ -187,8 +192,19 @@ body::before {
 }
 
 /* Responsive sizes */
-@media (max-width: 768px) { .logo { font-size: 64px; } }
-@media (max-width: 480px) { .logo { font-size: 56px; } }
+@media (max-width: 768px) { 
+  .logo-image { 
+    width: 96px; 
+    height: 96px; 
+  } 
+}
+
+@media (max-width: 480px) { 
+  .logo-image { 
+    width: 80px; 
+    height: 80px; 
+  } 
+}
 
 .brand h1 {
   font-size: 48px;
