@@ -1290,4 +1290,5 @@ document.getElementById('backToProfile').addEventListener('click', async (e) => 
 // Load initial data for the parties tab
 document.addEventListener('DOMContentLoaded', () => {
   loadEventsForParties();
+  loadPartyHistory();
 });
