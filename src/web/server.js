@@ -816,7 +816,7 @@ class WebServer {
         dmResults = { successful: [], failed: [], error: error.message };
       }
 
-      const dmResultsUpdate = await this.collections.eventParties.updateOne(
+      await this.collections.eventParties.updateOne(
         { eventId: new ObjectId(eventId), guildId: event.guildId },
         {
           $set: { dmResults }
@@ -835,10 +835,6 @@ class WebServer {
           }
         );
         return res.status(500).json({ error: dmResults.error });
-      }
-
-      if (dmResultsUpdate.matchedCount === 0) {
-        return res.status(404).json({ error: 'Party formation not found' });
       }
 
       // Invalidate token (one-time use)
@@ -2562,7 +2558,6 @@ class WebServer {
 
       const now = new Date();
 
-      const missingEventTimes = new Set();
       const missingEvents = new Set();
       const parties = formations
         .map(formation => {
@@ -2574,10 +2569,6 @@ class WebServer {
               missingEvents.add(formation.eventId?.toString());
             }
             return null;
-          }
-
-          if (!eventTime) {
-            missingEventTimes.add(formation.eventId?.toString());
           }
 
           const dmResults = formation.dmResults || {};
@@ -2599,9 +2590,6 @@ class WebServer {
         })
         .filter(Boolean);
 
-      if (missingEventTimes.size > 0) {
-        console.warn('Party history events missing eventTime:', [...missingEventTimes]);
-      }
       if (missingEvents.size > 0) {
         console.warn('Party history missing event records:', [...missingEvents]);
       }
