@@ -1232,8 +1232,6 @@ document.getElementById('resetWishlistBtn').addEventListener('click', () => {
 // ==========================================
 // Party History Tab
 // ==========================================
-// Party History Tab
-// ==========================================
 
 /**
  * Determine the dominant party status based on summary statistics
