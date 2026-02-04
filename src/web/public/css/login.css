@@ -164,28 +164,34 @@ body::before {
 }
 
 .logo {
-  width: 80px;
-  height: 80px;
+  font-size: 80px; /* Crown size */
+  text-align: center;
   margin: 0 auto 20px;
-  color: var(--accent-purple);
-  filter: drop-shadow(0 0 20px var(--accent-purple-glow));
+  display: inline-block;
+
+  /* Neon gradient crown */
+  background: linear-gradient(135deg, #a855f7, #ec4899, #22d3ee);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+
+  /* Glow effect */
+  filter: drop-shadow(0 0 10px #a855f7)
+          drop-shadow(0 0 25px #ec4899)
+          drop-shadow(0 0 40px #22d3ee);
+
   animation: pulse 3s infinite ease-in-out;
 }
 
+/* Pulse animation */
 @keyframes pulse {
   0%, 100% {
     transform: scale(1);
     opacity: 1;
   }
   50% {
-    transform: scale(1.05);
-    opacity: 0.9;
+    transform: scale(1.12);
+    opacity: 0.85;
   }
-}
-
-.logo svg {
-  width: 100%;
-  height: 100%;
 }
 
 .brand h1 {
