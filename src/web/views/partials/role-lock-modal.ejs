@@ -1,0 +1,50 @@
+<!-- Role Lock Modal - Include this in all protected pages -->
+<% if (typeof hasExcludedRole !== 'undefined' && hasExcludedRole) { %>
+<!-- Modal Overlay -->
+<div id="roleLockModal" class="role-lock-modal">
+  <div class="role-lock-content">
+    <!-- Icon -->
+    <div class="role-lock-icon">🔒</div>
+    
+    <!-- Title -->
+    <h1 class="role-lock-title">Access Restricted</h1>
+    
+    <!-- Message -->
+    <p class="role-lock-message">
+      Your Discord role does not allow you to interact with this website.
+    </p>
+    
+    <!-- Info Box -->
+    <div class="role-lock-info">
+      <p>
+        Please become a member of the guild to access this content.
+        Contact your guild administrator if you believe this is an error.
+      </p>
+    </div>
+    
+    <!-- Logout Button -->
+    <a href="/logout" class="role-lock-logout-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+        <polyline points="16 17 21 12 16 7"></polyline>
+        <line x1="21" y1="12" x2="9" y2="12"></line>
+      </svg>
+      <span>Logout</span>
+    </a>
+  </div>
+</div>
+
+<!-- Include Role Lock CSS -->
+<link rel="stylesheet" href="/static/css/role-lock.css">
+
+<!-- Include Role Lock JavaScript -->
+<script src="/static/js/role-lock.js"></script>
+
+<!-- Initialize Role Lock -->
+<script>
+  // Initialize the role lock modal on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    window.initRoleLock(<%= hasExcludedRole ? 'true' : 'false' %>);
+  });
+</script>
+<% } %>

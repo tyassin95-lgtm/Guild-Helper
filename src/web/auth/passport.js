@@ -88,6 +88,20 @@ async function enrichSessionData(req, collections, client) {
                          (guild.permissions & 0x20) === 0x20;
           req.session.isAdmin = isAdmin;
           
+          // Fetch user's roles in this guild
+          try {
+            const member = await botGuild.members.fetch(req.user.id).catch(() => null);
+            if (member) {
+              // Store user's role IDs in session
+              req.session.userRoles = member.roles.cache.map(role => role.id);
+            } else {
+              req.session.userRoles = [];
+            }
+          } catch (roleError) {
+            console.error(`Error fetching user roles for guild ${guild.id}:`, roleError);
+            req.session.userRoles = [];
+          }
+          
           break;
         }
       } catch (error) {
