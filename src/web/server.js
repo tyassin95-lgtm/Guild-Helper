@@ -9,7 +9,7 @@ const session = require('express-session');
 const { default: MongoStore } = require('connect-mongo');
 const passport = require('passport');
 const { configurePassport, enrichSessionData } = require('./auth/passport');
-const { requireAuth, requireAdmin } = require('./middleware/auth');
+const { requireAuth, requireAdmin, checkRoleLock } = require('./middleware/auth');
 
 // Import roster and embed update functions
 const { updateGuildRoster } = require('../features/parties/commands/guildroster');
@@ -145,6 +145,9 @@ class WebServer {
     // Set view engine
     this.app.set('view engine', 'ejs');
     this.app.set('views', path.join(__dirname, 'views'));
+
+    // Apply role lock check middleware globally (after authentication)
+    this.app.use(checkRoleLock);
 
     // Register routes
     this.registerRoutes();
@@ -1354,7 +1357,8 @@ class WebServer {
         userId,
         guildName: guild.name,
         userName: member?.displayName || 'Unknown User',
-        userAvatar: member?.user?.displayAvatarURL({ size: 128, format: 'png' }) || null
+        userAvatar: member?.user?.displayAvatarURL({ size: 128, format: 'png' }) || null,
+        hasExcludedRole: req.hasExcludedRole || false
       });
 
     } catch (error) {
@@ -2365,7 +2369,8 @@ class WebServer {
       res.render('admin-panel', {
         guildId,
         userId,
-        guildName: guild.name
+        guildName: guild.name,
+        hasExcludedRole: req.hasExcludedRole || false
       });
 
     } catch (error) {

@@ -1,0 +1,153 @@
+/**
+ * Role Lock Modal - Full page overlay that blocks access for users with excluded roles
+ */
+
+/* Modal overlay - covers entire screen */
+.role-lock-modal {
+  display: none; /* Hidden by default, shown via JavaScript */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Show modal when active */
+.role-lock-modal.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Blur the page content behind modal */
+.role-lock-blur {
+  filter: blur(8px);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Modal content card */
+.role-lock-content {
+  background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
+  border-radius: 20px;
+  padding: 48px;
+  max-width: 560px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(255, 82, 82, 0.3);
+  text-align: center;
+  animation: modalSlideIn 0.4s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Icon */
+.role-lock-icon {
+  font-size: 72px;
+  margin-bottom: 24px;
+  animation: iconPulse 2s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* Title */
+.role-lock-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ff5252;
+  margin: 0 0 16px 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* Message */
+.role-lock-message {
+  font-size: 18px;
+  color: #b8b8d1;
+  line-height: 1.6;
+  margin: 0 0 32px 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* Info box */
+.role-lock-info {
+  background: rgba(255, 82, 82, 0.1);
+  border: 1px solid rgba(255, 82, 82, 0.3);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 32px;
+}
+
+.role-lock-info p {
+  margin: 0;
+  color: #e0e0e8;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Logout button */
+.role-lock-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #ff5252 0%, #d32f2f 100%);
+  color: white;
+  padding: 14px 32px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(255, 82, 82, 0.3);
+}
+
+.role-lock-logout-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 82, 82, 0.4);
+  background: linear-gradient(135deg, #ff6b6b 0%, #e53935 100%);
+}
+
+.role-lock-logout-btn:active {
+  transform: translateY(0);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .role-lock-content {
+    padding: 32px 24px;
+    max-width: 95%;
+  }
+  
+  .role-lock-icon {
+    font-size: 56px;
+  }
+  
+  .role-lock-title {
+    font-size: 24px;
+  }
+  
+  .role-lock-message {
+    font-size: 16px;
+  }
+}

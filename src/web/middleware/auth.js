@@ -2,6 +2,7 @@
  * Authentication Middleware
  * Protects routes and checks user permissions
  */
+const { checkExcludedRole } = require('../utils/roleCheck');
 
 /**
  * Middleware to require authentication
@@ -15,6 +16,28 @@ function requireAuth(req, res, next) {
   // Store the original URL to redirect after login
   req.session.returnTo = req.originalUrl;
   res.redirect('/login');
+}
+
+/**
+ * Middleware to check for excluded roles
+ * Passes flag to views to show role lock modal if user has excluded role
+ * Note: guildSettings is populated during OAuth callback via enrichSessionData
+ */
+function checkRoleLock(req, res, next) {
+  // Only check for authenticated users
+  if (!req.session || !req.session.userId) {
+    return next();
+  }
+  
+  const userRoles = req.session.userRoles || [];
+  // Guild settings are populated during login; if not present, no roles are excluded
+  const guildSettings = req.session.guildSettings;
+  const excludedRoles = guildSettings?.excludedRoles || [];
+  
+  // Check if user has any excluded roles
+  req.hasExcludedRole = checkExcludedRole(userRoles, excludedRoles);
+  
+  next();
 }
 
 /**
@@ -48,5 +71,6 @@ function optionalAuth(req, res, next) {
 module.exports = {
   requireAuth,
   requireAdmin,
-  optionalAuth
+  optionalAuth,
+  checkRoleLock
 };
