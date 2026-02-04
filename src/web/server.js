@@ -787,6 +787,10 @@ class WebServer {
         _id: new ObjectId(eventId) 
       });
 
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
       const eventInfo = {
         eventType: event.eventType,
         location: event.location,
@@ -2505,7 +2509,8 @@ class WebServer {
         .find({
           guildId,
           approved: true,
-          dmResults: { $exists: true }
+          dmResults: { $exists: true },
+          approvedAt: { $exists: true }
         })
         .sort({ approvedAt: -1 })
         .toArray();
