@@ -3132,14 +3132,18 @@ class WebServer {
   async handleAdminGetWishlistSubmissions(req, res) {
     try {
       const { guildId } = req.session;
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
 
       // Get all wishlist submissions
       const submissions = await this.collections.wishlistSubmissions
         .find({ guildId })
         .toArray();
 
+      const totalCount = submissions.length;
+
       if (submissions.length === 0) {
-        return res.json({ submissions: [] });
+        return res.json({ submissions: [], totalCount: 0, page: 1, totalPages: 0 });
       }
 
       const { getItemById } = require('../features/wishlist/utils/items');
@@ -3200,7 +3204,18 @@ class WebServer {
       // Sort by display name
       formattedSubmissions.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-      res.json({ submissions: formattedSubmissions });
+      // Apply pagination
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedSubmissions = formattedSubmissions.slice(startIndex, endIndex);
+      const totalPages = Math.ceil(totalCount / limit);
+
+      res.json({ 
+        submissions: paginatedSubmissions, 
+        totalCount,
+        page,
+        totalPages
+      });
 
     } catch (error) {
       console.error('Error getting wishlist submissions:', error);
@@ -3214,14 +3229,18 @@ class WebServer {
   async handleAdminGetGivenItems(req, res) {
     try {
       const { guildId } = req.session;
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 5;
 
       // Get all given items
       const givenItems = await this.collections.wishlistGivenItems
         .find({ guildId })
         .toArray();
 
+      const totalCount = givenItems.length;
+
       if (givenItems.length === 0) {
-        return res.json({ givenItems: [] });
+        return res.json({ givenItems: [], totalCount: 0, page: 1, totalPages: 0 });
       }
 
       const { getItemById } = require('../features/wishlist/utils/items');
@@ -3252,7 +3271,18 @@ class WebServer {
       // Sort by date (most recent first)
       formattedGivenItems.sort((a, b) => new Date(b.givenAt) - new Date(a.givenAt));
 
-      res.json({ givenItems: formattedGivenItems });
+      // Apply pagination
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedGivenItems = formattedGivenItems.slice(startIndex, endIndex);
+      const totalPages = Math.ceil(totalCount / limit);
+
+      res.json({ 
+        givenItems: paginatedGivenItems,
+        totalCount,
+        page,
+        totalPages
+      });
 
     } catch (error) {
       console.error('Error getting given items:', error);

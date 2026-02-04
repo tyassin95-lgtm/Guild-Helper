@@ -9,13 +9,26 @@
 let membersData = [];
 let eventsData = [];
 let channelsData = [];
-let wishlistedItemsData = [];
 let wishlistSubmissionsData = [];
 let givenItemsData = [];
-let pendingDistributions = new Map(); // itemId -> Set of userIds
 let selectedRollUsers = new Set();
 let templatesData = [];
 let selectedEventType = null;
+
+// Pagination state
+let wishlistPagination = {
+  currentPage: 1,
+  totalPages: 0,
+  totalCount: 0,
+  limit: 10
+};
+
+let givenItemsPagination = {
+  currentPage: 1,
+  totalPages: 0,
+  totalCount: 0,
+  limit: 5
+};
 
 // ==========================================
 // Utility Functions
@@ -157,7 +170,6 @@ async function loadTabData(tabId) {
       await loadMembers();
       await loadWishlistSubmissions();
       await loadGivenItems();
-      await loadWishlistedItems();
       break;
     case 'reminders':
       await loadReminderStats();
@@ -872,185 +884,41 @@ document.getElementById('createItemRoll').addEventListener('click', async () => 
 });
 
 // ==========================================
-// Items Tab - Give Item
-// ==========================================
-
-async function loadWishlistedItems() {
-  try {
-    const result = await apiCall('/wishlisted-items');
-    wishlistedItemsData = result.items;
-
-    const select = document.getElementById('giveItemSelect');
-    select.innerHTML = '<option value="">Select an item...</option>' +
-      wishlistedItemsData.map(item =>
-        `<option value="${item.id}">${item.name} (${item.users.length} wishlisted)</option>`
-      ).join('');
-  } catch (error) {
-    console.error('Failed to load wishlisted items:', error);
-  }
-}
-
-document.getElementById('giveItemSelect').addEventListener('change', (e) => {
-  const itemId = e.target.value;
-  const container = document.getElementById('giveItemUsers');
-
-  if (!itemId) {
-    container.style.display = 'none';
-    return;
-  }
-
-  const item = wishlistedItemsData.find(i => i.id === itemId);
-  if (!item) return;
-
-  container.style.display = 'block';
-  container.innerHTML = item.users.map(user => `
-    <label class="user-checkbox-item">
-      <input type="checkbox" value="${user.userId}" data-item="${itemId}"
-        onchange="toggleGiveItemUser('${itemId}', '${user.userId}', this.checked)">
-      <span class="user-name">${user.displayName}</span>
-    </label>
-  `).join('');
-
-  updateGiveItemButton();
-});
-
-function toggleGiveItemUser(itemId, userId, checked) {
-  if (!pendingDistributions.has(itemId)) {
-    pendingDistributions.set(itemId, new Set());
-  }
-
-  if (checked) {
-    pendingDistributions.get(itemId).add(userId);
-  } else {
-    pendingDistributions.get(itemId).delete(userId);
-    if (pendingDistributions.get(itemId).size === 0) {
-      pendingDistributions.delete(itemId);
-    }
-  }
-
-  renderPendingDistributions();
-  updateGiveItemButton();
-}
-
-function renderPendingDistributions() {
-  const container = document.getElementById('giveItemPending');
-  const list = document.getElementById('pendingList');
-
-  if (pendingDistributions.size === 0) {
-    container.style.display = 'none';
-    return;
-  }
-
-  container.style.display = 'block';
-
-  let html = '';
-  for (const [itemId, userIds] of pendingDistributions) {
-    const item = wishlistedItemsData.find(i => i.id === itemId);
-    if (!item) continue;
-
-    const userNames = Array.from(userIds)
-      .map(uid => item.users.find(u => u.userId === uid)?.displayName || 'Unknown')
-      .join(', ');
-
-    html += `
-      <div class="pending-item">
-        <span class="item-name">${item.name}</span>
-        <span class="user-count">${userIds.size} user(s): ${userNames}</span>
-        <button class="remove-btn" onclick="removePendingItem('${itemId}')">&times;</button>
-      </div>
-    `;
-  }
-
-  list.innerHTML = html;
-}
-
-function removePendingItem(itemId) {
-  pendingDistributions.delete(itemId);
-
-  // Uncheck the checkboxes
-  document.querySelectorAll(`input[data-item="${itemId}"]`).forEach(cb => {
-    cb.checked = false;
-  });
-
-  renderPendingDistributions();
-  updateGiveItemButton();
-}
-
-function updateGiveItemButton() {
-  const btn = document.getElementById('giveItemBtn');
-  let totalUsers = 0;
-  for (const userIds of pendingDistributions.values()) {
-    totalUsers += userIds.size;
-  }
-  btn.disabled = totalUsers === 0;
-}
-
-document.getElementById('giveItemBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('giveItemBtn');
-  btn.disabled = true;
-  btn.textContent = 'Distributing...';
-
-  try {
-    const distributions = [];
-    for (const [itemId, userIds] of pendingDistributions) {
-      distributions.push({
-        itemId,
-        userIds: Array.from(userIds)
-      });
-    }
-
-    const result = await apiCall('/give-item', 'POST', { distributions });
-    showToast(result.message, 'success');
-
-    // Reset
-    pendingDistributions.clear();
-    document.getElementById('giveItemSelect').value = '';
-    document.getElementById('giveItemUsers').style.display = 'none';
-    document.getElementById('giveItemPending').style.display = 'none';
-
-    // Reload wishlisted items
-    await loadWishlistedItems();
-
-  } catch (error) {
-    showToast(error.message, 'error');
-  }
-
-  btn.disabled = false;
-  btn.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20 6L9 17l-5-5"/>
-    </svg>
-    Give Item(s)
-  `;
-  updateGiveItemButton();
-});
-
-// ==========================================
 // Items Tab - Wishlist Submissions
 // ==========================================
 
-async function loadWishlistSubmissions() {
+async function loadWishlistSubmissions(page = 1) {
   const container = document.getElementById('wishlistSubmissions');
   container.innerHTML = '<div class="loading">Loading wishlists...</div>';
 
   try {
-    const result = await apiCall('/wishlist-submissions');
+    const result = await apiCall(`/wishlist-submissions?page=${page}&limit=${wishlistPagination.limit}`);
     wishlistSubmissionsData = result.submissions;
+    wishlistPagination.currentPage = result.page;
+    wishlistPagination.totalPages = result.totalPages;
+    wishlistPagination.totalCount = result.totalCount;
+    
     renderWishlistSubmissions();
+    renderWishlistPagination();
   } catch (error) {
     console.error('Failed to load wishlist submissions:', error);
     container.innerHTML = '<div class="no-data">Failed to load wishlists</div>';
   }
 }
 
-async function loadGivenItems() {
+async function loadGivenItems(page = 1) {
   const container = document.getElementById('givenItemsSection');
   container.innerHTML = '<div class="loading">Loading given items...</div>';
 
   try {
-    const result = await apiCall('/given-items');
+    const result = await apiCall(`/given-items?page=${page}&limit=${givenItemsPagination.limit}`);
     givenItemsData = result.givenItems;
+    givenItemsPagination.currentPage = result.page;
+    givenItemsPagination.totalPages = result.totalPages;
+    givenItemsPagination.totalCount = result.totalCount;
+    
     renderGivenItems();
+    renderGivenItemsPagination();
   } catch (error) {
     console.error('Failed to load given items:', error);
     container.innerHTML = '<div class="no-data">Failed to load given items</div>';
@@ -1230,6 +1098,86 @@ function renderGivenItems() {
       `).join('')}
     </div>
   `;
+}
+
+function renderWishlistPagination() {
+  const container = document.getElementById('wishlistPagination');
+  if (!container) return;
+
+  if (wishlistPagination.totalPages <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const { currentPage, totalPages, totalCount } = wishlistPagination;
+  const startItem = (currentPage - 1) * wishlistPagination.limit + 1;
+  const endItem = Math.min(currentPage * wishlistPagination.limit, totalCount);
+
+  container.innerHTML = `
+    <div class="pagination-info">
+      Showing ${startItem}-${endItem} of ${totalCount} users
+    </div>
+    <div class="pagination-controls">
+      <button class="btn btn-sm" onclick="changeWishlistPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Previous
+      </button>
+      <span class="pagination-current">Page ${currentPage} of ${totalPages}</span>
+      <button class="btn btn-sm" onclick="changeWishlistPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+        Next
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+    </div>
+  `;
+}
+
+function renderGivenItemsPagination() {
+  const container = document.getElementById('givenItemsPagination');
+  if (!container) return;
+
+  if (givenItemsPagination.totalPages <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const { currentPage, totalPages, totalCount } = givenItemsPagination;
+  const startItem = (currentPage - 1) * givenItemsPagination.limit + 1;
+  const endItem = Math.min(currentPage * givenItemsPagination.limit, totalCount);
+
+  container.innerHTML = `
+    <div class="pagination-info">
+      Showing ${startItem}-${endItem} of ${totalCount} items
+    </div>
+    <div class="pagination-controls">
+      <button class="btn btn-sm" onclick="changeGivenItemsPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Previous
+      </button>
+      <span class="pagination-current">Page ${currentPage} of ${totalPages}</span>
+      <button class="btn btn-sm" onclick="changeGivenItemsPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+        Next
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+    </div>
+  `;
+}
+
+function changeWishlistPage(page) {
+  if (page < 1 || page > wishlistPagination.totalPages) return;
+  loadWishlistSubmissions(page);
+}
+
+function changeGivenItemsPage(page) {
+  if (page < 1 || page > givenItemsPagination.totalPages) return;
+  loadGivenItems(page);
 }
 
 // Event listeners for filters

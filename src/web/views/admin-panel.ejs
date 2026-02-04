@@ -256,6 +256,9 @@
           <div class="loading">Loading wishlists...</div>
         </div>
 
+        <!-- Wishlist Pagination -->
+        <div id="wishlistPagination" class="pagination-container"></div>
+
         <!-- Items Already Given Out -->
         <div class="wishlist-section-header" style="margin-top: 30px;">
           <h3>Items Already Given Out</h3>
@@ -263,6 +266,9 @@
         <div id="givenItemsSection" class="given-items-section">
           <div class="loading">Loading given items...</div>
         </div>
+
+        <!-- Given Items Pagination -->
+        <div id="givenItemsPagination" class="pagination-container"></div>
       </div>
 
       <div class="card">
@@ -319,34 +325,6 @@
           </svg>
           Create Item Roll
         </button>
-      </div>
-
-      <div class="card">
-        <h2 class="card-title">Give Items</h2>
-        <p class="card-description">Distribute items to users who have wishlisted them. Same as using /giveitem on Discord.</p>
-
-        <div class="form-group">
-          <label>Select Item</label>
-          <select id="giveItemSelect" class="form-control">
-            <option value="">Select an item...</option>
-          </select>
-        </div>
-
-        <div id="giveItemUsers" class="user-checkbox-list" style="display: none;"></div>
-
-        <div id="giveItemPending" class="pending-distributions" style="display: none;">
-          <h4>Pending Distributions</h4>
-          <div id="pendingList"></div>
-        </div>
-
-        <div class="btn-group">
-          <button class="btn btn-success" id="giveItemBtn" disabled>
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 6L9 17l-5-5"/>
-            </svg>
-            Give Item(s)
-          </button>
-        </div>
       </div>
     </div>
 
