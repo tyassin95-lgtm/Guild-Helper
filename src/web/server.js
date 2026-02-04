@@ -776,14 +776,6 @@ class WebServer {
         return res.status(400).json({ error: 'Invalid party data' });
       }
 
-      const eventInfo = {
-        eventType: event.eventType,
-        location: event.location,
-        eventTime: event.eventTime
-      };
-
-      const dmResults = await this.sendPartyDMs(processedParties, eventInfo);
-
       // Update formation in database
       await this.collections.eventParties.updateOne(
         { eventId: new ObjectId(eventId), guildId: event.guildId },
@@ -810,6 +802,20 @@ class WebServer {
         }
       );
 
+      const eventInfo = {
+        eventType: event.eventType,
+        location: event.location,
+        eventTime: event.eventTime
+      };
+
+      let dmResults;
+      try {
+        dmResults = await this.sendPartyDMs(processedParties, eventInfo);
+      } catch (error) {
+        console.error('Error sending party DMs:', error);
+        dmResults = { successful: [], failed: [], error: error.message };
+      }
+
       const dmResultsUpdate = await this.collections.eventParties.updateOne(
         { eventId: new ObjectId(eventId), guildId: event.guildId },
         {
@@ -819,6 +825,10 @@ class WebServer {
 
       if (dmResultsUpdate.matchedCount === 0) {
         return res.status(404).json({ error: 'Party formation not found' });
+      }
+
+      if (dmResults.error) {
+        return res.status(500).json({ error: dmResults.error });
       }
 
       // Invalidate token (one-time use)
@@ -2514,6 +2524,7 @@ class WebServer {
           guildId,
           approved: true,
           dmResults: { $exists: true },
+          'dmResults.error': { $exists: false },
           approvedAt: { $exists: true }
         })
         .sort({ approvedAt: -1 })
@@ -2541,12 +2552,13 @@ class WebServer {
 
       const now = new Date();
 
+      const missingEventTimes = new Set();
       const parties = formations
         .map(formation => {
           const event = eventById.get(formation.eventId?.toString());
           const eventTime = event?.eventTime ? new Date(event.eventTime) : null;
           if (!eventTime) {
-            console.warn('Party history event missing eventTime:', formation.eventId?.toString());
+            missingEventTimes.add(formation.eventId?.toString());
           }
           const isPastEvent = eventTime ? eventTime < now : false;
           if (!event || !isPastEvent) {
@@ -2571,6 +2583,10 @@ class WebServer {
           };
         })
         .filter(Boolean);
+
+      if (missingEventTimes.size > 0) {
+        console.warn('Party history events missing eventTime:', [...missingEventTimes]);
+      }
 
       res.json({ parties });
     } catch (error) {
