@@ -2726,7 +2726,7 @@ class WebServer {
       const partyHistory = await Promise.all(
         eventParties.map(async (partyData) => {
           const event = await this.collections.pvpEvents.findOne({
-            _id: partyData.eventId
+            _id: new ObjectId(partyData.eventId)
           });
 
           if (!event) {
