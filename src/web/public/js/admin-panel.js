@@ -1232,6 +1232,23 @@ document.getElementById('resetWishlistBtn').addEventListener('click', () => {
 // ==========================================
 // Party History Tab
 // ==========================================
+// Party History Tab
+// ==========================================
+
+/**
+ * Determine the dominant party status based on summary statistics
+ */
+function getDominantPartyStatus(summary) {
+  const { partiesIntact, partiesModified, partiesDisbanded } = summary;
+  
+  // Find the maximum value
+  const maxValue = Math.max(partiesIntact, partiesModified, partiesDisbanded);
+  
+  // Return the status with the highest count
+  if (partiesIntact === maxValue) return 'intact';
+  if (partiesModified === maxValue) return 'modified';
+  return 'disbanded';
+}
 
 async function loadPartyHistory() {
   const container = document.getElementById('partyHistoryList');
@@ -1255,11 +1272,7 @@ async function loadPartyHistory() {
     }
 
     container.innerHTML = historyData.map(item => {
-      const statusBadge = item.summary.partiesIntact > item.summary.partiesModified && item.summary.partiesIntact > item.summary.partiesDisbanded
-        ? 'intact'
-        : item.summary.partiesModified > item.summary.partiesDisbanded
-        ? 'modified'
-        : 'disbanded';
+      const statusBadge = getDominantPartyStatus(item.summary);
 
       return `
         <div class="history-item" onclick="showPartyDetails('${item._id}')">

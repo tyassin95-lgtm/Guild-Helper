@@ -18,6 +18,16 @@ const { uploadToDiscordStorage } = require('../utils/discordStorage');
 const { postGearCheckEmbed } = require('../features/parties/handlers/gearUploadHandler');
 const { updateWishlistPanels } = require('../features/wishlist/commands/wishlists');
 
+// Event type name mapping
+const EVENT_TYPE_NAMES = {
+  siege: 'Siege',
+  riftstone: 'Riftstone Fight',
+  boonstone: 'Boonstone Fight',
+  wargames: 'Wargames',
+  warboss: 'War Boss',
+  guildevent: 'Guild Event'
+};
+
 class WebServer {
   constructor() {
     this.app = express();
@@ -2459,19 +2469,10 @@ class WebServer {
         .sort({ eventTime: 1 })
         .toArray();
 
-      const eventTypeNames = {
-        siege: 'Siege',
-        riftstone: 'Riftstone Fight',
-        boonstone: 'Boonstone Fight',
-        wargames: 'Wargames',
-        warboss: 'War Boss',
-        guildevent: 'Guild Event'
-      };
-
       const formattedEvents = events.map(event => ({
         _id: event._id.toString(),
         eventType: event.eventType,
-        eventTypeName: eventTypeNames[event.eventType] || event.eventType,
+        eventTypeName: EVENT_TYPE_NAMES[event.eventType] || event.eventType,
         location: event.location,
         eventTime: event.eventTime,
         closed: event.closed || false,
@@ -3679,18 +3680,9 @@ class WebServer {
       // Create a map of eventId to event data
       const eventMap = new Map();
       events.forEach(event => {
-        const eventTypeNames = {
-          siege: 'Siege',
-          riftstone: 'Riftstone Fight',
-          boonstone: 'Boonstone Fight',
-          wargames: 'Wargames',
-          warboss: 'War Boss',
-          guildevent: 'Guild Event'
-        };
-
         eventMap.set(event._id.toString(), {
           eventType: event.eventType,
-          eventTypeName: eventTypeNames[event.eventType] || event.eventType,
+          eventTypeName: EVENT_TYPE_NAMES[event.eventType] || event.eventType,
           location: event.location,
           eventTime: event.eventTime
         });
@@ -3753,15 +3745,6 @@ class WebServer {
         return res.status(404).json({ error: 'Event not found' });
       }
 
-      const eventTypeNames = {
-        siege: 'Siege',
-        riftstone: 'Riftstone Fight',
-        boonstone: 'Boonstone Fight',
-        wargames: 'Wargames',
-        warboss: 'War Boss',
-        guildevent: 'Guild Event'
-      };
-
       // Get creator name if available
       let createdByName = 'Admin';
       if (eventParty.createdBy) {
@@ -3778,7 +3761,7 @@ class WebServer {
       const partyData = {
         event: {
           eventType: event.eventType,
-          eventTypeName: eventTypeNames[event.eventType] || event.eventType,
+          eventTypeName: EVENT_TYPE_NAMES[event.eventType] || event.eventType,
           location: event.location,
           eventTime: event.eventTime
         },
