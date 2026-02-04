@@ -795,13 +795,6 @@ class WebServer {
 
       const dmResults = await this.sendPartyDMs(processedParties, eventInfo);
 
-      await this.collections.eventParties.updateOne(
-        { eventId: new ObjectId(eventId) },
-        {
-          $set: { dmResults }
-        }
-      );
-
       // Update event status
       await this.collections.pvpEvents.updateOne(
         { _id: new ObjectId(eventId) },
@@ -810,6 +803,13 @@ class WebServer {
             partiesFormed: true,
             partiesFormedAt: new Date()
           }
+        }
+      );
+
+      await this.collections.eventParties.updateOne(
+        { eventId: new ObjectId(eventId) },
+        {
+          $set: { dmResults }
         }
       );
 
@@ -2535,7 +2535,8 @@ class WebServer {
       const parties = formations
         .map(formation => {
           const event = eventById.get(formation.eventId?.toString());
-          const isPastEvent = event?.eventTime < now;
+          const eventTime = event?.eventTime ? new Date(event.eventTime) : null;
+          const isPastEvent = eventTime ? eventTime < now : false;
           if (!event || !isPastEvent) {
             return null;
           }
