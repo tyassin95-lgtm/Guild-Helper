@@ -1436,6 +1436,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-height: 600px;
+  overflow-y: auto;
+  padding-right: 8px;
 }
 
 .wishlist-user-card {
@@ -1600,6 +1603,31 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   border: 1px solid var(--border-color);
   border-radius: 12px;
   overflow: hidden;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+/* Scrollbar Styling for Wishlist and Given Items */
+.wishlist-submissions::-webkit-scrollbar,
+.given-items-section::-webkit-scrollbar {
+  width: 8px;
+}
+
+.wishlist-submissions::-webkit-scrollbar-track,
+.given-items-section::-webkit-scrollbar-track {
+  background: var(--bg-input);
+  border-radius: 4px;
+}
+
+.wishlist-submissions::-webkit-scrollbar-thumb,
+.given-items-section::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.wishlist-submissions::-webkit-scrollbar-thumb:hover,
+.given-items-section::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-purple);
 }
 
 .given-items-table {
