@@ -40,7 +40,10 @@ async function ensureIndexes({
   automodWarnings,
   messageTranslations,
   eventParties,
-  staticEvents
+  staticEvents,
+  guildSupportConfig,
+  guildSupportRequests,
+  guildSupportQueue
 }) {
   await guildSettings.createIndex({ guildId: 1 }, { unique: true });
 
@@ -232,6 +235,22 @@ async function ensureIndexes({
   await staticEvents.createIndex({ guildId: 1 });
   await staticEvents.createIndex({ guildId: 1, dayOfWeek: 1 });
   await staticEvents.createIndex({ createdAt: -1 });
+
+  // Guild Support Config indexes
+  await guildSupportConfig.createIndex({ guildId: 1 }, { unique: true });
+
+  // Guild Support Requests indexes
+  await guildSupportRequests.createIndex({ guildId: 1 });
+  await guildSupportRequests.createIndex({ guildId: 1, userId: 1 });
+  await guildSupportRequests.createIndex({ guildId: 1, discordId: 1 });
+  await guildSupportRequests.createIndex({ guildId: 1, status: 1 });
+  await guildSupportRequests.createIndex({ createdAt: -1 });
+  await guildSupportRequests.createIndex({ userId: 1, guildId: 1, status: 1 });
+
+  // Guild Support Queue indexes
+  await guildSupportQueue.createIndex({ guildId: 1, requestId: 1 }, { unique: true });
+  await guildSupportQueue.createIndex({ guildId: 1, position: 1 });
+  await guildSupportQueue.createIndex({ guildId: 1, fulfilledAt: 1 });
 
   console.log('All indexes created successfully');
 }
