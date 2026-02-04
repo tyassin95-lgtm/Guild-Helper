@@ -3150,10 +3150,13 @@ class WebServer {
         .find({ guildId })
         .toArray();
 
-      // Create a lookup for given items
-      const givenItemsLookup = new Set();
+      // Create a lookup for given items - Map of userId -> Set of itemIds
+      const givenItemsLookup = new Map();
       for (const given of givenItems) {
-        givenItemsLookup.add(`${given.userId}:${given.itemId}`);
+        if (!givenItemsLookup.has(given.userId)) {
+          givenItemsLookup.set(given.userId, new Set());
+        }
+        givenItemsLookup.get(given.userId).add(given.itemId);
       }
 
       // Format submissions with user info
@@ -3161,18 +3164,24 @@ class WebServer {
         submissions.map(async (submission) => {
           const member = await guild.members.fetch(submission.userId).catch(() => null);
           
+          const userGivenItems = givenItemsLookup.get(submission.userId) || new Set();
+          
           const formatItems = (itemIds) => {
             if (!itemIds || itemIds.length === 0) return [];
             return itemIds.map(itemId => {
               const item = getItemById(itemId);
+              if (!item) {
+                console.warn(`Unknown item ID in wishlist: ${itemId}`);
+                return null;
+              }
               return {
                 id: itemId,
-                name: item?.name || 'Unknown Item',
-                imageUrl: item?.icon || '',
-                category: item?.category || 'Unknown',
-                received: givenItemsLookup.has(`${submission.userId}:${itemId}`)
+                name: item.name,
+                imageUrl: item.icon || '',
+                category: item.category || 'Unknown',
+                received: userGivenItems.has(itemId)
               };
-            }).filter(item => item.name !== 'Unknown Item');
+            }).filter(item => item !== null);
           };
 
           return {

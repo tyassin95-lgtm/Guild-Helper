@@ -90,6 +90,15 @@ function formatDate(dateStr) {
 }
 
 /**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/**
  * Get event icon based on type
  */
 function getEventIcon(eventType) {
@@ -148,6 +157,7 @@ async function loadTabData(tabId) {
       await loadMembers();
       await loadWishlistSubmissions();
       await loadGivenItems();
+      await loadWishlistedItems();
       break;
     case 'reminders':
       await loadReminderStats();
@@ -1091,10 +1101,10 @@ function renderWishlistSubmissions() {
 
     return `
       <div class="wishlist-user-card">
-        <div class="wishlist-user-header" onclick="toggleWishlistUser('${sub.userId}')">
+        <div class="wishlist-user-header" data-user-id="${escapeHtml(sub.userId)}">
           <div class="wishlist-user-info">
-            <img src="${sub.avatarUrl || '/static/images/default-avatar.png'}" alt="${sub.displayName}" class="user-avatar">
-            <span class="user-name">${sub.displayName}</span>
+            <img src="${escapeHtml(sub.avatarUrl || '/static/images/default-avatar.png')}" alt="${escapeHtml(sub.displayName)}" class="user-avatar">
+            <span class="user-name">${escapeHtml(sub.displayName)}</span>
           </div>
           <div class="wishlist-stats">
             <span class="wishlist-stat">${totalItems} items</span>
@@ -1104,20 +1114,24 @@ function renderWishlistSubmissions() {
             </svg>
           </div>
         </div>
-        <div class="wishlist-user-items" id="wishlist-${sub.userId}" style="display: none;">
+        <div class="wishlist-user-items" id="wishlist-${escapeHtml(sub.userId)}" style="display: none;">
           ${allItems.map(cat => `
             <div class="wishlist-category">
-              <h4 class="wishlist-category-title">${cat.category}</h4>
+              <h4 class="wishlist-category-title">${escapeHtml(cat.category)}</h4>
               <div class="wishlist-items-grid">
                 ${cat.items.map(item => `
                   <div class="wishlist-item ${item.received ? 'received' : ''}">
-                    <img src="${item.imageUrl}" alt="${item.name}" class="wishlist-item-image">
+                    <img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" class="wishlist-item-image">
                     <div class="wishlist-item-info">
-                      <span class="wishlist-item-name">${item.name}</span>
+                      <span class="wishlist-item-name">${escapeHtml(item.name)}</span>
                       ${item.received ? '<span class="received-badge">✓ Received</span>' : ''}
                     </div>
                     ${!item.received ? `
-                      <button class="btn btn-sm btn-success" onclick="giveItemToUser('${item.id}', '${sub.userId}', '${sub.displayName}', '${item.name}')">
+                      <button class="btn btn-sm btn-success give-item-btn" 
+                        data-item-id="${escapeHtml(item.id)}" 
+                        data-user-id="${escapeHtml(sub.userId)}"
+                        data-user-name="${escapeHtml(sub.displayName)}"
+                        data-item-name="${escapeHtml(item.name)}">
                         Give
                       </button>
                     ` : ''}
@@ -1130,6 +1144,25 @@ function renderWishlistSubmissions() {
       </div>
     `;
   }).join('');
+
+  // Add event delegation for wishlist headers
+  container.querySelectorAll('.wishlist-user-header').forEach(header => {
+    header.addEventListener('click', function() {
+      const userId = this.getAttribute('data-user-id');
+      toggleWishlistUser(userId);
+    });
+  });
+
+  // Add event delegation for give item buttons
+  container.querySelectorAll('.give-item-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const itemId = this.getAttribute('data-item-id');
+      const userId = this.getAttribute('data-user-id');
+      const userName = this.getAttribute('data-user-name');
+      const itemName = this.getAttribute('data-item-name');
+      giveItemToUser(itemId, userId, userName, itemName);
+    });
+  });
 }
 
 function toggleWishlistUser(userId) {
@@ -1177,18 +1210,18 @@ function renderGivenItems() {
         <div class="table-row">
           <div class="table-col">
             <div class="user-cell">
-              <img src="${item.avatarUrl || '/static/images/default-avatar.png'}" alt="${item.displayName}" class="user-avatar-small">
-              <span>${item.displayName}</span>
+              <img src="${escapeHtml(item.avatarUrl || '/static/images/default-avatar.png')}" alt="${escapeHtml(item.displayName)}" class="user-avatar-small">
+              <span>${escapeHtml(item.displayName)}</span>
             </div>
           </div>
           <div class="table-col">
             <div class="item-cell">
-              <img src="${item.itemImageUrl}" alt="${item.itemName}" class="item-icon-small">
-              <span>${item.itemName}</span>
+              <img src="${escapeHtml(item.itemImageUrl)}" alt="${escapeHtml(item.itemName)}" class="item-icon-small">
+              <span>${escapeHtml(item.itemName)}</span>
             </div>
           </div>
           <div class="table-col">
-            <span>${item.givenByName}</span>
+            <span>${escapeHtml(item.givenByName)}</span>
           </div>
           <div class="table-col">
             <span>${formatDate(item.givenAt)}</span>
