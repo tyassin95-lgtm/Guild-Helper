@@ -520,6 +520,11 @@ class WebServer {
       await this.handleAdminGetEventPartyToken(req, res);
     });
 
+    // API: Get party history
+    this.app.get('/api/admin-panel/party-history', requireAdmin, async (req, res) => {
+      await this.handleAdminGetPartyHistory(req, res);
+    });
+
     // API: Reset user party info
     this.app.post('/api/admin-panel/reset-party', requireAdmin, async (req, res) => {
       await this.handleAdminResetParty(req, res);
@@ -755,6 +760,15 @@ class WebServer {
       }
 
       const { eventId, userId } = validation.data;
+
+      const event = await this.collections.pvpEvents.findOne({ 
+        _id: new ObjectId(eventId) 
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
       const { processedParties, availableMembers } = req.body;
 
       // Validate data
@@ -764,7 +778,7 @@ class WebServer {
 
       // Update formation in database
       await this.collections.eventParties.updateOne(
-        { eventId: new ObjectId(eventId) },
+        { eventId: new ObjectId(eventId), guildId: event.guildId },
         {
           $set: {
             processedParties,
@@ -788,18 +802,44 @@ class WebServer {
         }
       );
 
-      // Send DMs to all party members
-      const event = await this.collections.pvpEvents.findOne({ 
-        _id: new ObjectId(eventId) 
-      });
-
       const eventInfo = {
         eventType: event.eventType,
         location: event.location,
         eventTime: event.eventTime
       };
 
-      const dmResults = await this.sendPartyDMs(processedParties, eventInfo);
+      let dmResults;
+      try {
+        dmResults = await this.sendPartyDMs(processedParties, eventInfo);
+      } catch (error) {
+        console.error('Error sending party DMs:', error);
+        dmResults = { successful: [], failed: [], error: error.message };
+      }
+
+      if (!dmResults || typeof dmResults !== 'object') {
+        dmResults = { successful: [], failed: [], error: 'Invalid DM results' };
+      }
+
+      dmResults.sentSuccessfully = !dmResults.error && dmResults.failed.length === 0;
+
+      const dmResultsUpdate = {
+        dmResults
+      };
+
+      if (!dmResults.sentSuccessfully) {
+        dmResultsUpdate.approved = false;
+        dmResultsUpdate.approvedBy = null;
+        dmResultsUpdate.approvedAt = null;
+      }
+
+      await this.collections.eventParties.updateOne(
+        { eventId: new ObjectId(eventId), guildId: event.guildId },
+        { $set: dmResultsUpdate }
+      );
+
+      if (!dmResults.sentSuccessfully) {
+        return res.status(500).json({ error: 'Failed to send party DMs' });
+      }
 
       // Invalidate token (one-time use)
       this.activeTokens.delete(req.params.token);
@@ -2479,6 +2519,89 @@ class WebServer {
     } catch (error) {
       console.error('Error getting events:', error);
       res.status(500).json({ error: 'Failed to get events' });
+    }
+  }
+
+  /**
+   * Get party history for past event parties that were sent via DM
+   */
+  async handleAdminGetPartyHistory(req, res) {
+    try {
+      const { guildId } = req.session;
+
+      const formations = await this.collections.eventParties
+        .find({
+          guildId,
+          approved: true,
+          dmResults: { $exists: true },
+          'dmResults.sentSuccessfully': true,
+          approvedAt: { $exists: true }
+        })
+        .sort({ approvedAt: -1 })
+        .toArray();
+
+      if (formations.length === 0) {
+        return res.json({ parties: [] });
+      }
+
+      const eventIds = formations.map(f => f.eventId).filter(Boolean);
+      const events = await this.collections.pvpEvents
+        .find({ _id: { $in: eventIds } })
+        .toArray();
+
+      const eventById = new Map(events.map(event => [event._id.toString(), event]));
+
+      const eventTypeNames = {
+        siege: 'Siege',
+        riftstone: 'Riftstone Fight',
+        boonstone: 'Boonstone Fight',
+        wargames: 'Wargames',
+        warboss: 'War Boss',
+        guildevent: 'Guild Event'
+      };
+
+      const now = new Date();
+
+      const missingEvents = new Set();
+      const parties = formations
+        .map(formation => {
+          const event = eventById.get(formation.eventId?.toString());
+          const eventTime = event?.eventTime ? new Date(event.eventTime) : null;
+          const isValidPastEvent = eventTime ? eventTime < now : false;
+          if (!event || !isValidPastEvent) {
+            if (!event) {
+              missingEvents.add(formation.eventId?.toString());
+            }
+            return null;
+          }
+
+          const dmResults = formation.dmResults || {};
+          const dmSuccessCount = (dmResults.successful || []).length;
+          const dmFailedCount = (dmResults.failed || []).length;
+          const dmTotalCount = dmSuccessCount + dmFailedCount;
+
+          return {
+            _id: event._id.toString(),
+            eventType: event.eventType,
+            eventTypeName: eventTypeNames[event.eventType] || event.eventType,
+            location: event.location,
+            eventTime: event.eventTime,
+            approvedAt: formation.approvedAt,
+            dmSuccessCount,
+            dmFailedCount,
+            dmTotalCount
+          };
+        })
+        .filter(Boolean);
+
+      if (missingEvents.size > 0) {
+        console.warn('Party history missing event records:', [...missingEvents]);
+      }
+
+      res.json({ parties });
+    } catch (error) {
+      console.error('Error getting party history:', error);
+      res.status(500).json({ error: 'Failed to get party history' });
     }
   }
 
