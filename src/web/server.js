@@ -570,6 +570,16 @@ class WebServer {
       await this.handleAdminGiveItem(req, res);
     });
 
+    // API: Get wishlist submissions grouped by user
+    this.app.get('/api/admin-panel/wishlist-submissions', requireAdmin, async (req, res) => {
+      await this.handleAdminGetWishlistSubmissions(req, res);
+    });
+
+    // API: Get given items history
+    this.app.get('/api/admin-panel/given-items', requireAdmin, async (req, res) => {
+      await this.handleAdminGetGivenItems(req, res);
+    });
+
     // API: Send party info reminders
     this.app.post('/api/admin-panel/remind-parties', requireAdmin, async (req, res) => {
       await this.handleAdminRemindParties(req, res);
@@ -3113,6 +3123,131 @@ class WebServer {
     } catch (error) {
       console.error('Error giving items:', error);
       res.status(500).json({ error: 'Failed to give items' });
+    }
+  }
+
+  /**
+   * Get wishlist submissions grouped by user
+   */
+  async handleAdminGetWishlistSubmissions(req, res) {
+    try {
+      const { guildId } = req.session;
+
+      // Get all wishlist submissions
+      const submissions = await this.collections.wishlistSubmissions
+        .find({ guildId })
+        .toArray();
+
+      if (submissions.length === 0) {
+        return res.json({ submissions: [] });
+      }
+
+      const { getItemById } = require('../features/wishlist/utils/items');
+      const guild = await this.client.guilds.fetch(guildId);
+
+      // Get given items for this guild
+      const givenItems = await this.collections.wishlistGivenItems
+        .find({ guildId })
+        .toArray();
+
+      // Create a lookup for given items
+      const givenItemsLookup = new Set();
+      for (const given of givenItems) {
+        givenItemsLookup.add(`${given.userId}:${given.itemId}`);
+      }
+
+      // Format submissions with user info
+      const formattedSubmissions = await Promise.all(
+        submissions.map(async (submission) => {
+          const member = await guild.members.fetch(submission.userId).catch(() => null);
+          
+          const formatItems = (itemIds) => {
+            if (!itemIds || itemIds.length === 0) return [];
+            return itemIds.map(itemId => {
+              const item = getItemById(itemId);
+              return {
+                id: itemId,
+                name: item?.name || 'Unknown Item',
+                imageUrl: item?.icon || '',
+                category: item?.category || 'Unknown',
+                received: givenItemsLookup.has(`${submission.userId}:${itemId}`)
+              };
+            }).filter(item => item.name !== 'Unknown Item');
+          };
+
+          return {
+            userId: submission.userId,
+            displayName: member?.displayName || 'Unknown User',
+            avatarUrl: member?.user.displayAvatarURL() || '',
+            archbossWeapon: formatItems(submission.archbossWeapon),
+            archbossArmor: formatItems(submission.archbossArmor),
+            t3Weapons: formatItems(submission.t3Weapons),
+            t3Armors: formatItems(submission.t3Armors),
+            t3Accessories: formatItems(submission.t3Accessories)
+          };
+        })
+      );
+
+      // Sort by display name
+      formattedSubmissions.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+      res.json({ submissions: formattedSubmissions });
+
+    } catch (error) {
+      console.error('Error getting wishlist submissions:', error);
+      res.status(500).json({ error: 'Failed to get wishlist submissions' });
+    }
+  }
+
+  /**
+   * Get given items history
+   */
+  async handleAdminGetGivenItems(req, res) {
+    try {
+      const { guildId } = req.session;
+
+      // Get all given items
+      const givenItems = await this.collections.wishlistGivenItems
+        .find({ guildId })
+        .toArray();
+
+      if (givenItems.length === 0) {
+        return res.json({ givenItems: [] });
+      }
+
+      const { getItemById } = require('../features/wishlist/utils/items');
+      const guild = await this.client.guilds.fetch(guildId);
+
+      // Format given items with user and item info
+      const formattedGivenItems = await Promise.all(
+        givenItems.map(async (given) => {
+          const member = await guild.members.fetch(given.userId).catch(() => null);
+          const givenByMember = await guild.members.fetch(given.givenBy).catch(() => null);
+          const item = getItemById(given.itemId);
+
+          return {
+            userId: given.userId,
+            displayName: member?.displayName || 'Unknown User',
+            avatarUrl: member?.user.displayAvatarURL() || '',
+            itemId: given.itemId,
+            itemName: item?.name || 'Unknown Item',
+            itemImageUrl: item?.icon || '',
+            itemCategory: item?.category || 'Unknown',
+            givenAt: given.givenAt,
+            givenBy: given.givenBy,
+            givenByName: givenByMember?.displayName || 'Unknown Admin'
+          };
+        })
+      );
+
+      // Sort by date (most recent first)
+      formattedGivenItems.sort((a, b) => new Date(b.givenAt) - new Date(a.givenAt));
+
+      res.json({ givenItems: formattedGivenItems });
+
+    } catch (error) {
+      console.error('Error getting given items:', error);
+      res.status(500).json({ error: 'Failed to get given items' });
     }
   }
 

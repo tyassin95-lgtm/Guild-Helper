@@ -10,6 +10,8 @@ let membersData = [];
 let eventsData = [];
 let channelsData = [];
 let wishlistedItemsData = [];
+let wishlistSubmissionsData = [];
+let givenItemsData = [];
 let pendingDistributions = new Map(); // itemId -> Set of userIds
 let selectedRollUsers = new Set();
 let templatesData = [];
@@ -144,7 +146,8 @@ async function loadTabData(tabId) {
       await loadItemCategories();
       await loadChannels();
       await loadMembers();
-      await loadWishlistedItems();
+      await loadWishlistSubmissions();
+      await loadGivenItems();
       break;
     case 'reminders':
       await loadReminderStats();
@@ -1010,6 +1013,212 @@ document.getElementById('giveItemBtn').addEventListener('click', async () => {
     Give Item(s)
   `;
   updateGiveItemButton();
+});
+
+// ==========================================
+// Items Tab - Wishlist Submissions
+// ==========================================
+
+async function loadWishlistSubmissions() {
+  const container = document.getElementById('wishlistSubmissions');
+  container.innerHTML = '<div class="loading">Loading wishlists...</div>';
+
+  try {
+    const result = await apiCall('/wishlist-submissions');
+    wishlistSubmissionsData = result.submissions;
+    renderWishlistSubmissions();
+  } catch (error) {
+    console.error('Failed to load wishlist submissions:', error);
+    container.innerHTML = '<div class="no-data">Failed to load wishlists</div>';
+  }
+}
+
+async function loadGivenItems() {
+  const container = document.getElementById('givenItemsSection');
+  container.innerHTML = '<div class="loading">Loading given items...</div>';
+
+  try {
+    const result = await apiCall('/given-items');
+    givenItemsData = result.givenItems;
+    renderGivenItems();
+  } catch (error) {
+    console.error('Failed to load given items:', error);
+    container.innerHTML = '<div class="no-data">Failed to load given items</div>';
+  }
+}
+
+function renderWishlistSubmissions() {
+  const container = document.getElementById('wishlistSubmissions');
+  const userFilter = document.getElementById('wishlistSearchUser')?.value.toLowerCase() || '';
+  const itemFilter = document.getElementById('wishlistSearchItem')?.value.toLowerCase() || '';
+
+  // Filter submissions
+  let filtered = wishlistSubmissionsData.filter(sub => {
+    if (userFilter && !sub.displayName.toLowerCase().includes(userFilter)) return false;
+    
+    if (itemFilter) {
+      const allItems = [
+        ...sub.archbossWeapon,
+        ...sub.archbossArmor,
+        ...sub.t3Weapons,
+        ...sub.t3Armors,
+        ...sub.t3Accessories
+      ];
+      if (!allItems.some(item => item.name.toLowerCase().includes(itemFilter))) return false;
+    }
+    
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="no-data">No wishlists found</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(sub => {
+    const allItems = [
+      { category: 'Archboss Weapons', items: sub.archbossWeapon },
+      { category: 'Archboss Armor', items: sub.archbossArmor },
+      { category: 'T3 Weapons', items: sub.t3Weapons },
+      { category: 'T3 Armors', items: sub.t3Armors },
+      { category: 'T3 Accessories', items: sub.t3Accessories }
+    ].filter(cat => cat.items.length > 0);
+
+    const totalItems = allItems.reduce((sum, cat) => sum + cat.items.length, 0);
+    const receivedItems = allItems.reduce((sum, cat) => 
+      sum + cat.items.filter(item => item.received).length, 0
+    );
+
+    return `
+      <div class="wishlist-user-card">
+        <div class="wishlist-user-header" onclick="toggleWishlistUser('${sub.userId}')">
+          <div class="wishlist-user-info">
+            <img src="${sub.avatarUrl || '/static/images/default-avatar.png'}" alt="${sub.displayName}" class="user-avatar">
+            <span class="user-name">${sub.displayName}</span>
+          </div>
+          <div class="wishlist-stats">
+            <span class="wishlist-stat">${totalItems} items</span>
+            ${receivedItems > 0 ? `<span class="wishlist-stat received">${receivedItems} received</span>` : ''}
+            <svg class="chevron" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+        </div>
+        <div class="wishlist-user-items" id="wishlist-${sub.userId}" style="display: none;">
+          ${allItems.map(cat => `
+            <div class="wishlist-category">
+              <h4 class="wishlist-category-title">${cat.category}</h4>
+              <div class="wishlist-items-grid">
+                ${cat.items.map(item => `
+                  <div class="wishlist-item ${item.received ? 'received' : ''}">
+                    <img src="${item.imageUrl}" alt="${item.name}" class="wishlist-item-image">
+                    <div class="wishlist-item-info">
+                      <span class="wishlist-item-name">${item.name}</span>
+                      ${item.received ? '<span class="received-badge">✓ Received</span>' : ''}
+                    </div>
+                    ${!item.received ? `
+                      <button class="btn btn-sm btn-success" onclick="giveItemToUser('${item.id}', '${sub.userId}', '${sub.displayName}', '${item.name}')">
+                        Give
+                      </button>
+                    ` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleWishlistUser(userId) {
+  const element = document.getElementById(`wishlist-${userId}`);
+  const isVisible = element.style.display !== 'none';
+  element.style.display = isVisible ? 'none' : 'block';
+}
+
+async function giveItemToUser(itemId, userId, userName, itemName) {
+  if (!confirm(`Give "${itemName}" to ${userName}?`)) return;
+
+  try {
+    const result = await apiCall('/give-item', 'POST', {
+      distributions: [{ itemId, userIds: [userId] }]
+    });
+
+    showToast(result.message, 'success');
+
+    // Reload data
+    await loadWishlistSubmissions();
+    await loadGivenItems();
+
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+function renderGivenItems() {
+  const container = document.getElementById('givenItemsSection');
+
+  if (givenItemsData.length === 0) {
+    container.innerHTML = '<div class="no-data">No items have been given out yet</div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="given-items-table">
+      <div class="table-header">
+        <div class="table-col">User</div>
+        <div class="table-col">Item</div>
+        <div class="table-col">Given By</div>
+        <div class="table-col">Date</div>
+      </div>
+      ${givenItemsData.map(item => `
+        <div class="table-row">
+          <div class="table-col">
+            <div class="user-cell">
+              <img src="${item.avatarUrl || '/static/images/default-avatar.png'}" alt="${item.displayName}" class="user-avatar-small">
+              <span>${item.displayName}</span>
+            </div>
+          </div>
+          <div class="table-col">
+            <div class="item-cell">
+              <img src="${item.itemImageUrl}" alt="${item.itemName}" class="item-icon-small">
+              <span>${item.itemName}</span>
+            </div>
+          </div>
+          <div class="table-col">
+            <span>${item.givenByName}</span>
+          </div>
+          <div class="table-col">
+            <span>${formatDate(item.givenAt)}</span>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// Event listeners for filters
+document.addEventListener('DOMContentLoaded', () => {
+  const userSearch = document.getElementById('wishlistSearchUser');
+  const itemSearch = document.getElementById('wishlistSearchItem');
+  
+  if (userSearch) {
+    userSearch.addEventListener('input', () => {
+      if (wishlistSubmissionsData.length > 0) {
+        renderWishlistSubmissions();
+      }
+    });
+  }
+  
+  if (itemSearch) {
+    itemSearch.addEventListener('input', () => {
+      if (wishlistSubmissionsData.length > 0) {
+        renderWishlistSubmissions();
+      }
+    });
+  }
 });
 
 // ==========================================
