@@ -65,7 +65,10 @@ function getCollections(db = _db) {
     automodWarnings: db.collection('automodWarnings'),
     messageTranslations: db.collection('messageTranslations'),
     eventParties: db.collection('eventParties'),
-    staticEvents: db.collection('staticEvents')
+    staticEvents: db.collection('staticEvents'),
+    guildSupportConfig: db.collection('guildSupportConfig'),
+    guildSupportRequests: db.collection('guildSupportRequests'),
+    guildSupportQueue: db.collection('guildSupportQueue')
   };
 }
 

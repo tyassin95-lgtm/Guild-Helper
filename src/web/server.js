@@ -495,6 +495,30 @@ class WebServer {
     });
 
     // ==========================================
+    // Guild Support Routes (User)
+    // ==========================================
+
+    // API: Get guild support information content
+    this.app.get('/api/guild-support/info', requireAuth, async (req, res) => {
+      await this.handleGetGuildSupportInfo(req, res);
+    });
+
+    // API: Submit a support request
+    this.app.post('/api/guild-support/request', requireAuth, async (req, res) => {
+      await this.handleSubmitSupportRequest(req, res);
+    });
+
+    // API: Get current user's support requests
+    this.app.get('/api/guild-support/my-requests', requireAuth, async (req, res) => {
+      await this.handleGetMyRequests(req, res);
+    });
+
+    // API: Get public priority queue (approved requests only)
+    this.app.get('/api/guild-support/queue', requireAuth, async (req, res) => {
+      await this.handleGetSupportQueue(req, res);
+    });
+
+    // ==========================================
     // Admin Panel Routes
     // ==========================================
 
@@ -636,6 +660,45 @@ class WebServer {
     // API: Get party details
     this.app.get('/api/admin-panel/party-details/:eventPartyId', requireAdmin, async (req, res) => {
       await this.handleAdminGetPartyDetails(req, res);
+    });
+
+    // ==========================================
+    // Guild Support Admin Routes
+    // ==========================================
+
+    // API: Get guild support configuration
+    this.app.get('/api/admin/guild-support/config', requireAdmin, async (req, res) => {
+      await this.handleAdminGetGuildSupportConfig(req, res);
+    });
+
+    // API: Update guild support configuration
+    this.app.post('/api/admin/guild-support/config', requireAdmin, async (req, res) => {
+      await this.handleAdminUpdateGuildSupportConfig(req, res);
+    });
+
+    // API: Get all support requests (admin)
+    this.app.get('/api/admin/guild-support/requests', requireAdmin, async (req, res) => {
+      await this.handleAdminGetAllRequests(req, res);
+    });
+
+    // API: Get specific support request details (admin)
+    this.app.get('/api/admin/guild-support/request/:id', requireAdmin, async (req, res) => {
+      await this.handleAdminGetRequestDetails(req, res);
+    });
+
+    // API: Update support request (approve/deny/update)
+    this.app.patch('/api/admin/guild-support/request/:id', requireAdmin, async (req, res) => {
+      await this.handleAdminUpdateRequest(req, res);
+    });
+
+    // API: Reorder priority queue
+    this.app.post('/api/admin/guild-support/queue/reorder', requireAdmin, async (req, res) => {
+      await this.handleAdminReorderQueue(req, res);
+    });
+
+    // API: Mark request as fulfilled
+    this.app.post('/api/admin/guild-support/queue/fulfill/:id', requireAdmin, async (req, res) => {
+      await this.handleAdminFulfillRequest(req, res);
     });
 
     // 404 handler
@@ -3934,6 +3997,509 @@ class WebServer {
     } catch (error) {
       console.error('Error getting party details:', error);
       res.status(500).json({ error: 'Failed to get party details' });
+    }
+  }
+
+  // ==========================================
+  // Guild Support Handlers (User)
+  // ==========================================
+
+  /**
+   * Get guild support information content
+   */
+  async handleGetGuildSupportInfo(req, res) {
+    try {
+      const { guildId } = req.session;
+
+      // Get guild support configuration
+      const config = await this.collections.guildSupportConfig.findOne({ guildId });
+
+      res.json({
+        infoContent: config?.infoContent || '',
+        hasConfig: !!config
+      });
+
+    } catch (error) {
+      console.error('Error getting guild support info:', error);
+      res.status(500).json({ error: 'Failed to get guild support information' });
+    }
+  }
+
+  /**
+   * Submit a support request
+   */
+  async handleSubmitSupportRequest(req, res) {
+    try {
+      const { guildId, userId } = req.session;
+      const { formData, files } = req.body;
+
+      // Get configuration to validate against schema
+      const config = await this.collections.guildSupportConfig.findOne({ guildId });
+      if (!config || !config.requestSchema) {
+        return res.status(400).json({ error: 'Support request form is not configured' });
+      }
+
+      // Validate required fields
+      const schema = config.requestSchema;
+      for (const field of schema) {
+        if (field.required && !formData[field.name]) {
+          return res.status(400).json({ error: `Field "${field.label}" is required` });
+        }
+      }
+
+      // Create the request
+      const request = {
+        guildId,
+        userId,
+        discordId: req.session.discordId || userId,
+        formData,
+        files: files || [],
+        status: 'pending',
+        approvedAmount: null,
+        adminNotes: [],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const result = await this.collections.guildSupportRequests.insertOne(request);
+
+      res.json({
+        success: true,
+        requestId: result.insertedId,
+        message: 'Support request submitted successfully'
+      });
+
+    } catch (error) {
+      console.error('Error submitting support request:', error);
+      res.status(500).json({ error: 'Failed to submit support request' });
+    }
+  }
+
+  /**
+   * Get current user's support requests
+   */
+  async handleGetMyRequests(req, res) {
+    try {
+      const { guildId, userId } = req.session;
+
+      // Get user's requests
+      const requests = await this.collections.guildSupportRequests.find({
+        guildId,
+        userId
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+      // For each approved request, get queue position if exists
+      const requestsWithQueue = await Promise.all(requests.map(async (request) => {
+        if (request.status === 'approved') {
+          const queueEntry = await this.collections.guildSupportQueue.findOne({
+            guildId,
+            requestId: request._id
+          });
+          return {
+            ...request,
+            queuePosition: queueEntry?.position || null
+          };
+        }
+        return request;
+      }));
+
+      res.json({
+        requests: requestsWithQueue
+      });
+
+    } catch (error) {
+      console.error('Error getting user requests:', error);
+      res.status(500).json({ error: 'Failed to get support requests' });
+    }
+  }
+
+  /**
+   * Get public priority queue (approved requests only)
+   */
+  async handleGetSupportQueue(req, res) {
+    try {
+      const { guildId } = req.session;
+
+      // Get queue entries sorted by position
+      const queueEntries = await this.collections.guildSupportQueue.find({
+        guildId,
+        fulfilledAt: null
+      })
+      .sort({ position: 1 })
+      .toArray();
+
+      // Fetch request details for each queue entry
+      const queue = await Promise.all(queueEntries.map(async (entry) => {
+        const request = await this.collections.guildSupportRequests.findOne({
+          _id: entry.requestId
+        });
+
+        if (!request) return null;
+
+        // Get username from guild member (via Discord client)
+        let username = 'Unknown User';
+        try {
+          if (this.client && request.discordId) {
+            const guild = this.client.guilds.cache.get(guildId);
+            if (guild) {
+              const member = await guild.members.fetch(request.discordId).catch(() => null);
+              if (member) {
+                username = member.user.username;
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching username:', err);
+        }
+
+        return {
+          position: entry.position,
+          username,
+          approvedAmount: request.approvedAmount,
+          requestId: request._id,
+          createdAt: request.createdAt
+        };
+      }));
+
+      // Filter out null entries
+      const validQueue = queue.filter(item => item !== null);
+
+      res.json({
+        queue: validQueue
+      });
+
+    } catch (error) {
+      console.error('Error getting support queue:', error);
+      res.status(500).json({ error: 'Failed to get support queue' });
+    }
+  }
+
+  // ==========================================
+  // Guild Support Handlers (Admin)
+  // ==========================================
+
+  /**
+   * Get guild support configuration (admin)
+   */
+  async handleAdminGetGuildSupportConfig(req, res) {
+    try {
+      const { guildId } = req.session;
+
+      const config = await this.collections.guildSupportConfig.findOne({ guildId });
+
+      res.json({
+        config: config || {
+          guildId,
+          infoContent: '',
+          requestSchema: []
+        }
+      });
+
+    } catch (error) {
+      console.error('Error getting guild support config:', error);
+      res.status(500).json({ error: 'Failed to get configuration' });
+    }
+  }
+
+  /**
+   * Update guild support configuration (admin)
+   */
+  async handleAdminUpdateGuildSupportConfig(req, res) {
+    try {
+      const { guildId } = req.session;
+      const { infoContent, requestSchema } = req.body;
+
+      // Validate request schema
+      if (requestSchema && !Array.isArray(requestSchema)) {
+        return res.status(400).json({ error: 'Invalid request schema format' });
+      }
+
+      const updateData = {
+        guildId,
+        infoContent: infoContent || '',
+        requestSchema: requestSchema || [],
+        updatedAt: new Date()
+      };
+
+      await this.collections.guildSupportConfig.updateOne(
+        { guildId },
+        { $set: updateData },
+        { upsert: true }
+      );
+
+      res.json({
+        success: true,
+        message: 'Configuration updated successfully'
+      });
+
+    } catch (error) {
+      console.error('Error updating guild support config:', error);
+      res.status(500).json({ error: 'Failed to update configuration' });
+    }
+  }
+
+  /**
+   * Get all support requests (admin)
+   */
+  async handleAdminGetAllRequests(req, res) {
+    try {
+      const { guildId } = req.session;
+      const { status } = req.query;
+
+      // Build query
+      const query = { guildId };
+      if (status) {
+        query.status = status;
+      }
+
+      // Get all requests
+      const requests = await this.collections.guildSupportRequests.find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      // Fetch usernames for each request
+      const requestsWithUsernames = await Promise.all(requests.map(async (request) => {
+        let username = 'Unknown User';
+        try {
+          if (this.client && request.discordId) {
+            const guild = this.client.guilds.cache.get(guildId);
+            if (guild) {
+              const member = await guild.members.fetch(request.discordId).catch(() => null);
+              if (member) {
+                username = member.user.username;
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching username:', err);
+        }
+
+        return {
+          ...request,
+          username
+        };
+      }));
+
+      res.json({
+        requests: requestsWithUsernames
+      });
+
+    } catch (error) {
+      console.error('Error getting all requests:', error);
+      res.status(500).json({ error: 'Failed to get support requests' });
+    }
+  }
+
+  /**
+   * Get specific support request details (admin)
+   */
+  async handleAdminGetRequestDetails(req, res) {
+    try {
+      const { guildId } = req.session;
+      const requestId = req.params.id;
+
+      const request = await this.collections.guildSupportRequests.findOne({
+        _id: new ObjectId(requestId),
+        guildId
+      });
+
+      if (!request) {
+        return res.status(404).json({ error: 'Request not found' });
+      }
+
+      // Get username
+      let username = 'Unknown User';
+      try {
+        if (this.client && request.discordId) {
+          const guild = this.client.guilds.cache.get(guildId);
+          if (guild) {
+            const member = await guild.members.fetch(request.discordId).catch(() => null);
+            if (member) {
+              username = member.user.username;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching username:', err);
+      }
+
+      res.json({
+        request: {
+          ...request,
+          username
+        }
+      });
+
+    } catch (error) {
+      console.error('Error getting request details:', error);
+      res.status(500).json({ error: 'Failed to get request details' });
+    }
+  }
+
+  /**
+   * Update support request (approve/deny/update)
+   */
+  async handleAdminUpdateRequest(req, res) {
+    try {
+      const { guildId } = req.session;
+      const requestId = req.params.id;
+      const { status, approvedAmount, adminNote } = req.body;
+
+      // Validate status
+      const validStatuses = ['pending', 'approved', 'denied', 'fulfilled'];
+      if (status && !validStatuses.includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+      }
+
+      const updateData = {
+        updatedAt: new Date()
+      };
+
+      if (status) {
+        updateData.status = status;
+      }
+
+      if (approvedAmount !== undefined) {
+        updateData.approvedAmount = approvedAmount;
+      }
+
+      // Handle admin note
+      if (adminNote) {
+        await this.collections.guildSupportRequests.updateOne(
+          { _id: new ObjectId(requestId), guildId },
+          {
+            $push: {
+              adminNotes: {
+                note: adminNote,
+                addedBy: req.session.userId,
+                addedAt: new Date()
+              }
+            }
+          }
+        );
+      }
+
+      // Update request
+      await this.collections.guildSupportRequests.updateOne(
+        { _id: new ObjectId(requestId), guildId },
+        { $set: updateData }
+      );
+
+      // If approved, add to queue
+      if (status === 'approved' && approvedAmount) {
+        // Get current max position
+        const maxPositionEntry = await this.collections.guildSupportQueue.findOne(
+          { guildId },
+          { sort: { position: -1 } }
+        );
+        const newPosition = (maxPositionEntry?.position || 0) + 1;
+
+        await this.collections.guildSupportQueue.updateOne(
+          { guildId, requestId: new ObjectId(requestId) },
+          {
+            $set: {
+              guildId,
+              requestId: new ObjectId(requestId),
+              position: newPosition,
+              approvedAmount,
+              createdAt: new Date()
+            }
+          },
+          { upsert: true }
+        );
+      }
+
+      // If denied or fulfilled, remove from queue
+      if (status === 'denied' || status === 'fulfilled') {
+        await this.collections.guildSupportQueue.deleteOne({
+          guildId,
+          requestId: new ObjectId(requestId)
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Request updated successfully'
+      });
+
+    } catch (error) {
+      console.error('Error updating request:', error);
+      res.status(500).json({ error: 'Failed to update request' });
+    }
+  }
+
+  /**
+   * Reorder priority queue
+   */
+  async handleAdminReorderQueue(req, res) {
+    try {
+      const { guildId } = req.session;
+      const { order } = req.body; // Array of request IDs in new order
+
+      if (!Array.isArray(order)) {
+        return res.status(400).json({ error: 'Invalid order format' });
+      }
+
+      // Update positions for all entries
+      const updatePromises = order.map((requestId, index) => {
+        return this.collections.guildSupportQueue.updateOne(
+          { guildId, requestId: new ObjectId(requestId) },
+          { $set: { position: index + 1 } }
+        );
+      });
+
+      await Promise.all(updatePromises);
+
+      res.json({
+        success: true,
+        message: 'Queue reordered successfully'
+      });
+
+    } catch (error) {
+      console.error('Error reordering queue:', error);
+      res.status(500).json({ error: 'Failed to reorder queue' });
+    }
+  }
+
+  /**
+   * Mark request as fulfilled
+   */
+  async handleAdminFulfillRequest(req, res) {
+    try {
+      const { guildId } = req.session;
+      const requestId = req.params.id;
+
+      // Update request status
+      await this.collections.guildSupportRequests.updateOne(
+        { _id: new ObjectId(requestId), guildId },
+        {
+          $set: {
+            status: 'fulfilled',
+            updatedAt: new Date()
+          }
+        }
+      );
+
+      // Update queue entry to mark as fulfilled
+      await this.collections.guildSupportQueue.updateOne(
+        { guildId, requestId: new ObjectId(requestId) },
+        {
+          $set: {
+            fulfilledAt: new Date()
+          }
+        }
+      );
+
+      res.json({
+        success: true,
+        message: 'Request marked as fulfilled'
+      });
+
+    } catch (error) {
+      console.error('Error fulfilling request:', error);
+      res.status(500).json({ error: 'Failed to mark request as fulfilled' });
     }
   }
 
