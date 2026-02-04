@@ -372,11 +372,6 @@ body::before {
   .features {
     grid-template-columns: 1fr;
   }
-
-  .logo {
-    width: 64px;
-    height: 64px;
-  }
 }
 
 @media (max-width: 480px) {
