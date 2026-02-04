@@ -767,21 +767,6 @@ class WebServer {
         return res.status(400).json({ error: 'Invalid party data' });
       }
 
-      // Update formation in database
-      await this.collections.eventParties.updateOne(
-        { eventId: new ObjectId(eventId) },
-        {
-          $set: {
-            processedParties,
-            availableMembers: availableMembers || [],
-            lastModified: new Date(),
-            approved: true,
-            approvedBy: userId,
-            approvedAt: new Date()
-          }
-        }
-      );
-
       // Send DMs to all party members
       const event = await this.collections.pvpEvents.findOne({ 
         _id: new ObjectId(eventId) 
@@ -799,6 +784,21 @@ class WebServer {
 
       const dmResults = await this.sendPartyDMs(processedParties, eventInfo);
 
+      // Update formation in database
+      await this.collections.eventParties.updateOne(
+        { eventId: new ObjectId(eventId) },
+        {
+          $set: {
+            processedParties,
+            availableMembers: availableMembers || [],
+            lastModified: new Date(),
+            approved: true,
+            approvedBy: userId,
+            approvedAt: new Date()
+          }
+        }
+      );
+
       // Update event status
       await this.collections.pvpEvents.updateOne(
         { _id: new ObjectId(eventId) },
@@ -810,12 +810,16 @@ class WebServer {
         }
       );
 
-      await this.collections.eventParties.updateOne(
+      const dmResultsUpdate = await this.collections.eventParties.updateOne(
         { eventId: new ObjectId(eventId) },
         {
           $set: { dmResults }
         }
       );
+
+      if (dmResultsUpdate.matchedCount === 0) {
+        return res.status(404).json({ error: 'Party formation not found' });
+      }
 
       // Invalidate token (one-time use)
       this.activeTokens.delete(req.params.token);
@@ -2541,6 +2545,9 @@ class WebServer {
         .map(formation => {
           const event = eventById.get(formation.eventId?.toString());
           const eventTime = event?.eventTime ? new Date(event.eventTime) : null;
+          if (!eventTime) {
+            console.warn('Party history event missing eventTime:', formation.eventId?.toString());
+          }
           const isPastEvent = eventTime ? eventTime < now : false;
           if (!event || !isPastEvent) {
             return null;
