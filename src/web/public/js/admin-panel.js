@@ -1889,7 +1889,7 @@ async function loadPriorityQueue() {
     }
     
     const queueHtml = queue.map(item => `
-      <div class="queue-item" data-request-id="${item.requestId}">
+      <div class="queue-item" draggable="true" data-request-id="${item.requestId}">
         <div class="queue-handle">⋮⋮</div>
         <div class="queue-position">#${item.position}</div>
         <div class="queue-info">
@@ -1902,10 +1902,98 @@ async function loadPriorityQueue() {
     
     container.innerHTML = queueHtml;
     
-    // TODO: Add drag-and-drop reordering functionality
+    // Add drag-and-drop reordering functionality
+    setupQueueDragAndDrop(container);
   } catch (error) {
     console.error('Error loading priority queue:', error);
     showToast('Failed to load queue', 'error');
+  }
+}
+
+/**
+ * Setup drag-and-drop for priority queue reordering
+ */
+function setupQueueDragAndDrop(container) {
+  const items = container.querySelectorAll('.queue-item');
+  let draggedItem = null;
+
+  items.forEach(item => {
+    item.addEventListener('dragstart', function(e) {
+      draggedItem = this;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    item.addEventListener('dragend', function(e) {
+      this.classList.remove('dragging');
+      items.forEach(i => i.classList.remove('drag-over'));
+    });
+
+    item.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      
+      if (this !== draggedItem) {
+        // Get all items
+        const allItems = [...container.querySelectorAll('.queue-item')];
+        const draggedIndex = allItems.indexOf(draggedItem);
+        const targetIndex = allItems.indexOf(this);
+        
+        // Add visual feedback
+        items.forEach(i => i.classList.remove('drag-over'));
+        this.classList.add('drag-over');
+        
+        // Insert before or after depending on direction
+        if (draggedIndex < targetIndex) {
+          this.parentNode.insertBefore(draggedItem, this.nextSibling);
+        } else {
+          this.parentNode.insertBefore(draggedItem, this);
+        }
+      }
+    });
+
+    item.addEventListener('drop', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // After drop, save the new order
+      saveQueueOrder();
+    });
+  });
+}
+
+/**
+ * Save the new queue order after drag-and-drop
+ */
+async function saveQueueOrder() {
+  try {
+    const container = document.getElementById('priorityQueueList');
+    const items = container.querySelectorAll('.queue-item');
+    const order = Array.from(items).map(item => item.dataset.requestId);
+    
+    const response = await fetch('/api/admin/guild-support/queue/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ order })
+    });
+    
+    if (!response.ok) throw new Error('Failed to reorder queue');
+    
+    // Update position numbers in UI
+    items.forEach((item, index) => {
+      const positionEl = item.querySelector('.queue-position');
+      if (positionEl) {
+        positionEl.textContent = `#${index + 1}`;
+      }
+    });
+    
+    showToast('Queue reordered successfully', 'success');
+  } catch (error) {
+    console.error('Error saving queue order:', error);
+    showToast('Failed to save queue order', 'error');
+    // Reload the queue to revert changes
+    await loadPriorityQueue();
   }
 }
 

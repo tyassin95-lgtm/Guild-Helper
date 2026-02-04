@@ -1882,11 +1882,23 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   margin-bottom: 10px;
   border: 1px solid var(--border-color);
   transition: all 0.2s;
+  cursor: move;
 }
 
 .queue-item:hover {
   border-color: var(--accent-primary);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.queue-item.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.queue-item.drag-over {
+  border-color: var(--accent-primary);
+  background: rgba(var(--accent-primary-rgb, 88, 166, 255), 0.1);
+  border-width: 2px;
 }
 
 .queue-handle {
