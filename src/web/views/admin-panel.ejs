@@ -76,10 +76,16 @@
     <div id="tab-history" class="tab-content">
       <div class="card">
         <h2 class="card-title">Party History</h2>
-        <p class="card-description">View historical party formations from past events. See how parties were structured and which members attended.</p>
-        
-        <div id="partyHistoryList" class="history-list">
-          <div class="loading">Loading party history...</div>
+        <p class="card-description">
+          View historical party formations from past events. See how parties were structured and which members attended.
+        </p>
+
+        <!-- Scrollable Wrapper -->
+        <div id="partyHistoryWrapper" class="scrollable-list">
+          <div id="partyHistoryList" class="history-list">
+            <div class="loading">Loading party history...</div>
+            <!-- Party entries go here -->
+          </div>
         </div>
       </div>
 
