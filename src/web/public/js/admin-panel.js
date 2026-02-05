@@ -1779,7 +1779,7 @@ async function viewRequestDetails(requestId) {
             ${request.status === 'pending' ? `
               <div class="form-group">
                 <label for="approvedAmount">Approved Amount</label>
-                <input type="number" id="approvedAmount" class="form-control" placeholder="Enter amount" value="${request.totalRequested || ''}">
+                <input type="number" id="approvedAmount" class="form-control" placeholder="Enter amount" value="${request.totalRequested || ''}" min="0" step="0.01">
               </div>
               <button class="btn btn-success" onclick="approveRequest('${request._id}')">Approve</button>
               <button class="btn btn-danger" onclick="denyRequest('${request._id}')">Deny</button>

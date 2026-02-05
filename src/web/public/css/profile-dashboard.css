@@ -1509,13 +1509,13 @@ select.form-control {
 }
 
 .form-control:hover {
-  border-color: rgba(88, 166, 255, 0.3);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .form-control:focus {
   outline: none;
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 4px rgba(88, 166, 255, 0.1);
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
   transform: translateY(-1px);
 }
 
@@ -1556,7 +1556,7 @@ textarea.form-control {
 
 .radio-label:hover, .checkbox-label:hover {
   background: var(--hover-bg);
-  border-color: var(--accent-primary);
+  border-color: var(--accent-blue);
   transform: translateX(4px);
 }
 
@@ -1597,7 +1597,7 @@ textarea.form-control {
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, var(--accent-primary), transparent);
+  background: linear-gradient(90deg, var(--accent-blue), transparent);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -1615,7 +1615,7 @@ textarea.form-control {
 .support-request-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  border-left-color: var(--accent-primary);
+  border-left-color: var(--accent-blue);
 }
 
 .support-request-card:last-child {
@@ -1829,7 +1829,7 @@ textarea.form-control {
 .queue-row:hover {
   background: var(--hover-bg);
   transform: translateX(4px);
-  box-shadow: inset 4px 0 0 var(--accent-primary);
+  box-shadow: inset 4px 0 0 var(--accent-blue);
 }
 
 .queue-col {
@@ -1842,7 +1842,7 @@ textarea.form-control {
 
 .queue-col.queue-position {
   font-weight: 700;
-  color: var(--accent-primary);
+  color: var(--accent-blue);
   font-size: 16px;
 }
 

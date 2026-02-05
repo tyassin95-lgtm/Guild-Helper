@@ -4064,8 +4064,15 @@ class WebServer {
         }
       }
 
-      // Extract totalRequested from formData if exists
-      const totalRequested = formData.totalRequested ? parseFloat(formData.totalRequested) : null;
+      // Extract totalRequested from formData if exists and validate
+      let totalRequested = null;
+      if (formData.totalRequested) {
+        const parsedAmount = parseFloat(formData.totalRequested);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+          return res.status(400).json({ error: 'Total requested amount must be a valid positive number' });
+        }
+        totalRequested = parsedAmount;
+      }
 
       // Create the request
       const request = {
@@ -4505,13 +4512,18 @@ class WebServer {
         return res.status(404).json({ error: 'Request not found' });
       }
 
-      // Update request status to fulfilled
+      // Update request status to fulfilled and set amountFulfilled to the maximum
+      const finalAmount = Math.max(
+        request.amountFulfilled || 0,
+        request.approvedAmount || request.totalRequested || 0
+      );
+
       await this.collections.guildSupportRequests.updateOne(
         { _id: new ObjectId(requestId), guildId },
         {
           $set: {
             status: 'fulfilled',
-            amountFulfilled: request.approvedAmount || request.totalRequested || 0,
+            amountFulfilled: finalAmount,
             updatedAt: new Date()
           }
         }
