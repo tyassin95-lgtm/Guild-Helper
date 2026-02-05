@@ -1857,7 +1857,13 @@ async function loadMyRequests() {
       return;
     }
     
-    const requestsHtml = data.requests.map(request => `
+    const requestsHtml = data.requests.map(request => {
+      const targetAmount = request.approvedAmount || request.totalRequested || 0;
+      const fulfilledAmount = request.amountFulfilled || 0;
+      const progressPercent = targetAmount > 0 ? Math.min((fulfilledAmount / targetAmount) * 100, 100) : 0;
+      const isPartiallyFulfilled = request.status === 'approved' && fulfilledAmount > 0 && fulfilledAmount < targetAmount;
+      
+      return `
       <div class="support-request-card">
         <div class="support-request-header">
           <div class="support-request-status status-${request.status}">${request.status.toUpperCase()}</div>
@@ -1870,14 +1876,27 @@ async function loadMyRequests() {
             </div>
           `).join('')}
         </div>
-        ${request.status === 'approved' && request.approvedAmount ? `
+        ${request.status === 'approved' && targetAmount > 0 ? `
+          <div class="support-progress-container">
+            <div class="support-progress-header">
+              <span class="progress-label">${isPartiallyFulfilled ? 'Partial Fulfillment Progress' : 'Fulfillment Progress'}</span>
+              <span class="progress-amounts">
+                <span class="fulfilled">${fulfilledAmount}</span> / ${targetAmount}
+              </span>
+            </div>
+            <div class="support-progress-bar">
+              <div class="support-progress-fill" style="width: ${progressPercent}%"></div>
+            </div>
+          </div>
+        ` : ''}
+        ${request.status === 'approved' ? `
           <div class="support-request-approved">
-            <strong>Approved Amount:</strong> ${request.approvedAmount}
+            <strong>Approved Amount:</strong> ${targetAmount}
             ${request.queuePosition ? `<span class="queue-position">Queue Position: #${request.queuePosition}</span>` : ''}
           </div>
         ` : ''}
       </div>
-    `).join('');
+    `}).join('');
     
     container.innerHTML = requestsHtml;
   } catch (error) {
@@ -1906,16 +1925,34 @@ async function loadSupportQueue() {
           <div class="queue-col">Position</div>
           <div class="queue-col">Username</div>
           <div class="queue-col">Amount</div>
+          <div class="queue-col">Progress</div>
           <div class="queue-col">Submitted</div>
         </div>
-        ${data.queue.map(item => `
+        ${data.queue.map(item => {
+          const targetAmount = item.approvedAmount || item.totalRequested || 0;
+          const fulfilledAmount = item.amountFulfilled || 0;
+          const progressPercent = targetAmount > 0 ? Math.min((fulfilledAmount / targetAmount) * 100, 100) : 0;
+          
+          return `
           <div class="queue-row">
             <div class="queue-col queue-position">#${item.position}</div>
             <div class="queue-col">${item.username}</div>
-            <div class="queue-col">${item.approvedAmount || 'N/A'}</div>
+            <div class="queue-col">${targetAmount || 'N/A'}</div>
+            <div class="queue-col">
+              ${targetAmount > 0 ? `
+                <div style="width: 100%;">
+                  <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 3px;">
+                    ${fulfilledAmount}/${targetAmount}
+                  </div>
+                  <div class="queue-progress-mini">
+                    <div class="queue-progress-mini-fill" style="width: ${progressPercent}%"></div>
+                  </div>
+                </div>
+              ` : 'N/A'}
+            </div>
             <div class="queue-col">${formatRelativeTime(item.createdAt)}</div>
           </div>
-        `).join('')}
+        `}).join('')}
       </div>
     `;
     
