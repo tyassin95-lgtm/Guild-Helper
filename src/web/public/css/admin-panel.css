@@ -2208,7 +2208,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .tab-content .card,
 .tab-content .reminder-stats,
 .tab-content .support-request-item {
-  max-width: 700px;        /* Adjust width as needed */
+  max-width: 1200px;        /* Adjust width as needed */
   width: 100%;             /* Allow shrink on smaller screens */
   margin-left: auto;        /* Center horizontally */
   margin-right: auto;       /* Center horizontally */
