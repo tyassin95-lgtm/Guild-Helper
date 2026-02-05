@@ -1920,12 +1920,6 @@ async function addPartialFulfillment(requestId) {
     showToast(error.message || 'Failed to add partial fulfillment', 'error');
   }
 }
-    await loadPriorityQueue();
-  } catch (error) {
-    console.error('Error fulfilling request:', error);
-    showToast('Failed to fulfill request', 'error');
-  }
-}
 
 /**
  * Add admin note
