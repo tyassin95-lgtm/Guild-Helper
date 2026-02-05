@@ -701,6 +701,11 @@ class WebServer {
       await this.handleAdminFulfillRequest(req, res);
     });
 
+    // API: Add partial fulfillment to request
+    this.app.post('/api/admin/guild-support/request/:id/fulfill-partial', requireAdmin, async (req, res) => {
+      await this.handleAdminPartialFulfillRequest(req, res);
+    });
+
     // 404 handler
     this.app.use((req, res) => {
       res.status(404).send('Page not found');
@@ -4059,6 +4064,9 @@ class WebServer {
         }
       }
 
+      // Extract totalRequested from formData if exists
+      const totalRequested = formData.totalRequested ? parseFloat(formData.totalRequested) : null;
+
       // Create the request
       const request = {
         guildId,
@@ -4067,7 +4075,9 @@ class WebServer {
         formData,
         files: files || [],
         status: 'pending',
-        approvedAmount: null,
+        totalRequested, // Total amount requested by user
+        approvedAmount: null, // Amount approved by admin (may differ from totalRequested)
+        amountFulfilled: 0, // Amount fulfilled so far (supports partial fulfillment)
         adminNotes: [],
         createdAt: new Date(),
         updatedAt: new Date()
@@ -4170,6 +4180,8 @@ class WebServer {
           position: entry.position,
           username,
           approvedAmount: request.approvedAmount,
+          totalRequested: request.totalRequested,
+          amountFulfilled: request.amountFulfilled || 0,
           requestId: request._id,
           createdAt: request.createdAt
         };
@@ -4483,26 +4495,33 @@ class WebServer {
       const { guildId } = req.session;
       const requestId = req.params.id;
 
-      // Update request status
+      // Get the request to check current fulfillment
+      const request = await this.collections.guildSupportRequests.findOne({
+        _id: new ObjectId(requestId),
+        guildId
+      });
+
+      if (!request) {
+        return res.status(404).json({ error: 'Request not found' });
+      }
+
+      // Update request status to fulfilled
       await this.collections.guildSupportRequests.updateOne(
         { _id: new ObjectId(requestId), guildId },
         {
           $set: {
             status: 'fulfilled',
+            amountFulfilled: request.approvedAmount || request.totalRequested || 0,
             updatedAt: new Date()
           }
         }
       );
 
-      // Update queue entry to mark as fulfilled
-      await this.collections.guildSupportQueue.updateOne(
-        { guildId, requestId: new ObjectId(requestId) },
-        {
-          $set: {
-            fulfilledAt: new Date()
-          }
-        }
-      );
+      // Remove from queue (mark as fulfilled)
+      await this.collections.guildSupportQueue.deleteOne({
+        guildId,
+        requestId: new ObjectId(requestId)
+      });
 
       res.json({
         success: true,
@@ -4512,6 +4531,90 @@ class WebServer {
     } catch (error) {
       console.error('Error fulfilling request:', error);
       res.status(500).json({ error: 'Failed to mark request as fulfilled' });
+    }
+  }
+
+  /**
+   * Add partial fulfillment to a request
+   */
+  async handleAdminPartialFulfillRequest(req, res) {
+    try {
+      const { guildId } = req.session;
+      const requestId = req.params.id;
+      const { amount, adminNote } = req.body;
+
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ error: 'Invalid fulfillment amount' });
+      }
+
+      // Get the current request
+      const request = await this.collections.guildSupportRequests.findOne({
+        _id: new ObjectId(requestId),
+        guildId
+      });
+
+      if (!request) {
+        return res.status(404).json({ error: 'Request not found' });
+      }
+
+      if (request.status !== 'approved') {
+        return res.status(400).json({ error: 'Can only fulfill approved requests' });
+      }
+
+      // Calculate new fulfilled amount
+      const currentFulfilled = request.amountFulfilled || 0;
+      const newFulfilled = currentFulfilled + parseFloat(amount);
+      const targetAmount = request.approvedAmount || request.totalRequested || 0;
+
+      // Check if this fulfillment completes the request
+      const isComplete = newFulfilled >= targetAmount;
+
+      // Build update data
+      const updateData = {
+        amountFulfilled: newFulfilled,
+        updatedAt: new Date()
+      };
+
+      if (isComplete) {
+        updateData.status = 'fulfilled';
+      }
+
+      // Add admin note about the partial fulfillment
+      const fulfillmentNote = adminNote || `Fulfilled ${amount} (Total: ${newFulfilled}/${targetAmount})`;
+      await this.collections.guildSupportRequests.updateOne(
+        { _id: new ObjectId(requestId), guildId },
+        {
+          $set: updateData,
+          $push: {
+            adminNotes: {
+              note: fulfillmentNote,
+              addedBy: req.session.userId,
+              addedAt: new Date()
+            }
+          }
+        }
+      );
+
+      // If complete, remove from queue
+      if (isComplete) {
+        await this.collections.guildSupportQueue.deleteOne({
+          guildId,
+          requestId: new ObjectId(requestId)
+        });
+      }
+
+      res.json({
+        success: true,
+        amountFulfilled: newFulfilled,
+        isComplete,
+        message: isComplete 
+          ? 'Request fully fulfilled and removed from queue'
+          : `Partial fulfillment added: ${amount} (Total: ${newFulfilled}/${targetAmount})`
+      });
+
+    } catch (error) {
+      console.error('Error adding partial fulfillment:', error);
+      res.status(500).json({ error: 'Failed to add partial fulfillment' });
     }
   }
 
