@@ -1064,6 +1064,32 @@ function renderWishlist() {
 
   const canEdit = !wishlistData.isFrozen && !wishlistData.hasSubmitted;
 
+  // Calculate how many items have been received per category
+  const receivedCounts = {
+    archbossWeapon: 0,
+    archbossArmor: 0,
+    t3Weapons: 0,
+    t3Armors: 0,
+    t3Accessories: 0
+  };
+
+  // Count received items per category
+  for (const givenItem of wishlistData.givenItems || []) {
+    const itemId = givenItem.itemId;
+    // Check which category this item belongs to
+    if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
+      receivedCounts.archbossWeapon++;
+    } else if (WISHLIST_ITEMS.archbossArmors.find(i => i.id === itemId)) {
+      receivedCounts.archbossArmor++;
+    } else if (WISHLIST_ITEMS.t3Weapons.find(i => i.id === itemId)) {
+      receivedCounts.t3Weapons++;
+    } else if (WISHLIST_ITEMS.t3Armors.find(i => i.id === itemId)) {
+      receivedCounts.t3Armors++;
+    } else if (WISHLIST_ITEMS.t3Accessories.find(i => i.id === itemId)) {
+      receivedCounts.t3Accessories++;
+    }
+  }
+
   const sections = [
     { key: 'archbossWeapon', title: 'Archboss Weapons', items: WISHLIST_ITEMS.archbossWeapons, limit: WISHLIST_LIMITS.archbossWeapon, selected: pendingWishlist?.archbossWeapon || [] },
     { key: 'archbossArmor', title: 'Archboss Armor', items: WISHLIST_ITEMS.archbossArmors, limit: WISHLIST_LIMITS.archbossArmor, selected: pendingWishlist?.archbossArmor || [] },
@@ -1072,17 +1098,23 @@ function renderWishlist() {
     { key: 't3Accessories', title: 'T3 Accessories', items: WISHLIST_ITEMS.t3Accessories, limit: WISHLIST_LIMITS.t3Accessories, selected: pendingWishlist?.t3Accessories || [] }
   ];
 
-  const html = sections.map(section => `
-    <div class="wishlist-section">
+  const html = sections.map(section => {
+    // Check if this category is fully exhausted by received items
+    const categoryExhausted = receivedCounts[section.key] >= section.limit;
+
+    return `
+    <div class="wishlist-section ${categoryExhausted ? 'exhausted' : ''}">
       <div class="wishlist-section-title">
-        ${section.title}
+        ${section.title}${categoryExhausted ? ' 🔒' : ''}
         <span class="limit">${section.selected.length}/${section.limit}</span>
       </div>
+      ${categoryExhausted ? '<div class="exhausted-notice">All slots filled with received items</div>' : ''}
       <div class="wishlist-items">
         ${section.items.map(item => {
           const isSelected = section.selected.includes(item.id);
           const received = isItemReceived(item.id);
-          const disabled = !canEdit || received;
+          // Disable item if can't edit, already received, OR category is exhausted
+          const disabled = !canEdit || received || categoryExhausted;
 
           return `
             <div class="wishlist-item ${isSelected ? 'selected' : ''} ${received ? 'received' : ''} ${disabled && !received ? 'disabled' : ''}"
@@ -1096,7 +1128,7 @@ function renderWishlist() {
         }).join('')}
       </div>
     </div>
-  `).join('');
+  `}).join('');
 
   const actionsHtml = canEdit ? `
     <div class="wishlist-actions">
@@ -1116,14 +1148,45 @@ function toggleWishlistItem(category, itemId) {
   if (wishlistData.isFrozen || wishlistData.hasSubmitted) return;
   if (!pendingWishlist) initPendingWishlist();
 
-  let items = pendingWishlist[category] || [];
+  // Calculate how many items have been received in this category
+  let receivedInCategory = 0;
+  for (const givenItem of wishlistData.givenItems || []) {
+    const receivedItemId = givenItem.itemId;
+    // Determine which category this item belongs to
+    let itemCategory = null;
+    if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === receivedItemId)) {
+      itemCategory = 'archbossWeapon';
+    } else if (WISHLIST_ITEMS.archbossArmors.find(i => i.id === receivedItemId)) {
+      itemCategory = 'archbossArmor';
+    } else if (WISHLIST_ITEMS.t3Weapons.find(i => i.id === receivedItemId)) {
+      itemCategory = 't3Weapons';
+    } else if (WISHLIST_ITEMS.t3Armors.find(i => i.id === receivedItemId)) {
+      itemCategory = 't3Armors';
+    } else if (WISHLIST_ITEMS.t3Accessories.find(i => i.id === receivedItemId)) {
+      itemCategory = 't3Accessories';
+    }
+
+    if (itemCategory === category) {
+      receivedInCategory++;
+    }
+  }
+
   const limit = WISHLIST_LIMITS[category];
+
+  // Prevent adding items if category is exhausted
+  if (receivedInCategory >= limit) {
+    return; // Category is exhausted, don't allow any changes
+  }
+
+  let items = pendingWishlist[category] || [];
 
   const index = items.indexOf(itemId);
   if (index > -1) {
     items.splice(index, 1);
   } else {
-    if (items.length >= limit) {
+    // Calculate remaining slots: limit - received
+    const remainingSlots = limit - receivedInCategory;
+    if (items.length >= remainingSlots) {
       items.shift();
     }
     items.push(itemId);

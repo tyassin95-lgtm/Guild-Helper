@@ -1910,8 +1910,39 @@ class WebServer {
         return res.status(400).json({ error: 'Wishlist already submitted. Contact an admin to reset.' });
       }
 
-      // Validate limits
-      const limits = {
+      // Get user's received items to calculate dynamic limits
+      const receivedItems = await this.collections.wishlistGivenItems.find({
+        userId,
+        guildId
+      }).toArray();
+
+      const { WISHLIST_ITEMS } = require('../features/wishlist/utils/items');
+
+      // Count received items per category
+      const receivedCounts = {
+        archbossWeapon: 0,
+        archbossArmor: 0,
+        t3Weapons: 0,
+        t3Armors: 0,
+        t3Accessories: 0
+      };
+
+      for (const item of receivedItems) {
+        if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === item.itemId)) {
+          receivedCounts.archbossWeapon++;
+        } else if (WISHLIST_ITEMS.archbossArmors.find(i => i.id === item.itemId)) {
+          receivedCounts.archbossArmor++;
+        } else if (WISHLIST_ITEMS.t3Weapons.find(i => i.id === item.itemId)) {
+          receivedCounts.t3Weapons++;
+        } else if (WISHLIST_ITEMS.t3Armors.find(i => i.id === item.itemId)) {
+          receivedCounts.t3Armors++;
+        } else if (WISHLIST_ITEMS.t3Accessories.find(i => i.id === item.itemId)) {
+          receivedCounts.t3Accessories++;
+        }
+      }
+
+      // Base limits
+      const baseLimits = {
         archbossWeapon: 1,
         archbossArmor: 1,
         t3Weapons: 1,
@@ -1919,12 +1950,22 @@ class WebServer {
         t3Accessories: 2
       };
 
-      if (archbossWeapon?.length > limits.archbossWeapon ||
-          archbossArmor?.length > limits.archbossArmor ||
-          t3Weapons?.length > limits.t3Weapons ||
-          t3Armors?.length > limits.t3Armors ||
-          t3Accessories?.length > limits.t3Accessories) {
-        return res.status(400).json({ error: 'Wishlist exceeds item limits' });
+      // Calculate remaining slots for each category
+      const remainingLimits = {
+        archbossWeapon: Math.max(0, baseLimits.archbossWeapon - receivedCounts.archbossWeapon),
+        archbossArmor: Math.max(0, baseLimits.archbossArmor - receivedCounts.archbossArmor),
+        t3Weapons: Math.max(0, baseLimits.t3Weapons - receivedCounts.t3Weapons),
+        t3Armors: Math.max(0, baseLimits.t3Armors - receivedCounts.t3Armors),
+        t3Accessories: Math.max(0, baseLimits.t3Accessories - receivedCounts.t3Accessories)
+      };
+
+      // Validate against remaining limits
+      if (archbossWeapon?.length > remainingLimits.archbossWeapon ||
+          archbossArmor?.length > remainingLimits.archbossArmor ||
+          t3Weapons?.length > remainingLimits.t3Weapons ||
+          t3Armors?.length > remainingLimits.t3Armors ||
+          t3Accessories?.length > remainingLimits.t3Accessories) {
+        return res.status(400).json({ error: 'Wishlist exceeds available item limits (accounting for received items)' });
       }
 
       const updateData = {
@@ -2872,15 +2913,23 @@ class WebServer {
         guildId
       });
 
-      if (!existingWishlist) {
-        return res.status(404).json({ error: 'User does not have a wishlist to reset' });
-      }
-
       // Check if user has received items
       const receivedItems = await this.collections.wishlistGivenItems.find({
         userId,
         guildId
       }).toArray();
+
+      const hasReceivedItems = receivedItems.length > 0;
+
+      if (!existingWishlist && !hasReceivedItems) {
+        return res.status(404).json({ error: 'User does not have a submitted wishlist or any received items' });
+      }
+
+      if (!existingWishlist) {
+        return res.status(404).json({ 
+          error: `User does not have a submitted wishlist to reset.${hasReceivedItems ? ` They have ${receivedItems.length} received item(s) on record which will remain visible in the wishlist panel.` : ''}` 
+        });
+      }
 
       // Delete the wishlist submission (keep given items as historical record)
       await this.collections.wishlistSubmissions.deleteOne({
