@@ -2202,3 +2202,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   }
 }
 
+/* ==========================================
+   Constrain Wide Boxes in Tabs
+   ========================================== */
+.tab-content .card,
+.tab-content .reminder-stats,
+.tab-content .support-request-item {
+  max-width: 700px;        /* Adjust width as needed */
+  width: 100%;             /* Allow shrink on smaller screens */
+  margin-left: auto;        /* Center horizontally */
+  margin-right: auto;       /* Center horizontally */
+  flex: 0 1 auto;           /* Prevent stretching in flex containers */
+  box-sizing: border-box;   /* Include padding/border in width */
+}
