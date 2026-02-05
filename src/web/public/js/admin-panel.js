@@ -1666,7 +1666,13 @@ async function loadSupportRequests(status = '') {
       return;
     }
     
-    const requestsHtml = requests.map(request => `
+    const requestsHtml = requests.map(request => {
+      const targetAmount = request.approvedAmount || request.totalRequested || 0;
+      const fulfilledAmount = request.amountFulfilled || 0;
+      const progressPercent = targetAmount > 0 ? Math.min((fulfilledAmount / targetAmount) * 100, 100) : 0;
+      const hasProgress = request.status === 'approved' && targetAmount > 0;
+      
+      return `
       <div class="support-request-item" data-id="${request._id}">
         <div class="request-item-header">
           <div>
@@ -1680,9 +1686,22 @@ async function loadSupportRequests(status = '') {
             `<span><strong>${key}:</strong> ${Array.isArray(value) ? value.join(', ') : value}</span>`
           ).join(' • ')}
         </div>
-        <button class="btn btn-sm btn-secondary" onclick="viewRequestDetails('${request._id}')">View Details</button>
+        ${hasProgress ? `
+          <div class="admin-progress-container">
+            <div class="admin-progress-header">
+              <span class="progress-label">Fulfillment Progress</span>
+              <span class="progress-amounts">
+                <span class="fulfilled">${fulfilledAmount}</span> / ${targetAmount}
+              </span>
+            </div>
+            <div class="admin-progress-bar">
+              <div class="admin-progress-fill" style="width: ${progressPercent}%"></div>
+            </div>
+          </div>
+        ` : ''}
+        <button class="btn btn-sm btn-secondary" onclick="viewRequestDetails('${request._id}')" style="margin-top: 8px;">View Details</button>
       </div>
-    `).join('');
+    `}).join('');
     
     container.innerHTML = requestsHtml;
   } catch (error) {
@@ -1717,6 +1736,11 @@ async function viewRequestDetails(requestId) {
         `).join('')
       : '<p class="text-muted">No admin notes yet.</p>';
     
+    const targetAmount = request.approvedAmount || request.totalRequested || 0;
+    const fulfilledAmount = request.amountFulfilled || 0;
+    const progressPercent = targetAmount > 0 ? Math.min((fulfilledAmount / targetAmount) * 100, 100) : 0;
+    const hasProgress = request.status === 'approved' && targetAmount > 0;
+    
     modalContent.innerHTML = `
       <div class="request-details">
         <div class="detail-section">
@@ -1724,7 +1748,19 @@ async function viewRequestDetails(requestId) {
           <div class="detail-field"><strong>User:</strong> ${request.username}</div>
           <div class="detail-field"><strong>Status:</strong> <span class="request-status status-${request.status}">${request.status}</span></div>
           <div class="detail-field"><strong>Submitted:</strong> ${formatDate(request.createdAt)}</div>
+          ${request.totalRequested ? `<div class="detail-field"><strong>Total Requested:</strong> ${request.totalRequested}</div>` : ''}
           ${request.approvedAmount ? `<div class="detail-field"><strong>Approved Amount:</strong> ${request.approvedAmount}</div>` : ''}
+          ${hasProgress ? `
+            <div class="detail-field"><strong>Amount Fulfilled:</strong> ${fulfilledAmount}</div>
+            <div style="margin-top: 12px;">
+              <div class="admin-progress-bar">
+                <div class="admin-progress-fill" style="width: ${progressPercent}%"></div>
+              </div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; text-align: center;">
+                ${progressPercent.toFixed(0)}% Complete
+              </div>
+            </div>
+          ` : ''}
         </div>
         
         <div class="detail-section">
@@ -1743,13 +1779,20 @@ async function viewRequestDetails(requestId) {
             ${request.status === 'pending' ? `
               <div class="form-group">
                 <label for="approvedAmount">Approved Amount</label>
-                <input type="text" id="approvedAmount" class="form-control" placeholder="Enter amount">
+                <input type="number" id="approvedAmount" class="form-control" placeholder="Enter amount" value="${request.totalRequested || ''}" min="0" step="0.01">
               </div>
               <button class="btn btn-success" onclick="approveRequest('${request._id}')">Approve</button>
               <button class="btn btn-danger" onclick="denyRequest('${request._id}')">Deny</button>
             ` : ''}
             ${request.status === 'approved' ? `
-              <button class="btn btn-primary" onclick="fulfillRequest('${request._id}')">Mark as Fulfilled</button>
+              <div class="partial-fulfill-container">
+                <div class="form-group">
+                  <label for="partialAmount">Add Partial Fulfillment</label>
+                  <input type="number" id="partialAmount" class="form-control" placeholder="Amount to fulfill" step="0.01">
+                </div>
+                <button class="btn btn-primary" onclick="addPartialFulfillment('${request._id}')">Add Partial</button>
+              </div>
+              <button class="btn btn-success" onclick="fulfillRequest('${request._id}')" style="margin-top: 12px;">Mark as Fully Fulfilled</button>
             ` : ''}
             <div class="form-group" style="margin-top: 16px;">
               <label for="adminNote">Add Admin Note</label>
@@ -1839,6 +1882,42 @@ async function fulfillRequest(requestId) {
   } catch (error) {
     console.error('Error fulfilling request:', error);
     showToast('Failed to fulfill request', 'error');
+  }
+}
+
+/**
+ * Add partial fulfillment to a request
+ */
+async function addPartialFulfillment(requestId) {
+  const partialAmount = document.getElementById('partialAmount').value;
+  
+  if (!partialAmount || partialAmount <= 0) {
+    showToast('Please enter a valid amount', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/admin/guild-support/request/${requestId}/fulfill-partial`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: parseFloat(partialAmount) })
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to add partial fulfillment');
+    }
+    
+    showToast(result.message, 'success');
+    
+    // Refresh the view
+    await viewRequestDetails(requestId);
+    await loadSupportRequests();
+    await loadPriorityQueue();
+  } catch (error) {
+    console.error('Error adding partial fulfillment:', error);
+    showToast(error.message || 'Failed to add partial fulfillment', 'error');
   }
 }
 
@@ -2118,6 +2197,7 @@ window.viewRequestDetails = viewRequestDetails;
 window.approveRequest = approveRequest;
 window.denyRequest = denyRequest;
 window.fulfillRequest = fulfillRequest;
+window.addPartialFulfillment = addPartialFulfillment;
 window.addAdminNote = addAdminNote;
 
 // ==========================================
