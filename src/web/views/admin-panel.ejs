@@ -308,19 +308,25 @@
     
       <div class="card">
         <h2 class="card-title">Wishlists</h2>
-        <p class="card-description">View and manage guild member wishlists. Distribute items directly from this interface.</p>
-        
+        <p class="card-description">
+          View and manage guild member wishlists. Distribute items directly from this interface.
+        </p>
+
         <!-- Filter Controls -->
         <div class="wishlist-controls">
           <input type="text" id="wishlistSearchUser" class="form-control" placeholder="Search by user name..." style="flex: 1;">
           <input type="text" id="wishlistSearchItem" class="form-control" placeholder="Search by item name..." style="flex: 1;">
         </div>
 
-        <!-- Wishlist Submissions -->
-        <div id="wishlistSubmissions" class="wishlist-submissions">
-          <div class="loading">Loading wishlists...</div>
+        <!-- Scrollable Wrapper for Wishlist Submissions -->
+        <div id="wishlistWrapper" class="scrollable-list">
+          <div id="wishlistSubmissions" class="wishlist-submissions">
+            <div class="loading">Loading wishlists...</div>
+            <!-- Wishlist user cards go here -->
+          </div>
         </div>
-
+      </div>
+      
         <!-- Items Already Given Out -->
         <div class="wishlist-section-header" style="margin-top: 30px;">
           <h3>Items Already Given Out</h3>

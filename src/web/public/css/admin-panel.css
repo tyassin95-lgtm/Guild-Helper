@@ -1382,21 +1382,26 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* ==========================================
-   Wishlist Submissions Styles
+   Wishlist Submissions Styles (Updated Scroll)
    ========================================== */
 
-.wishlist-controls {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
+/* Scrollable wrapper for wishlists */
+#wishlistWrapper.scrollable-list {
+  max-height: 500px;      /* Fixed height, tweak as needed */
+  overflow-y: auto;       /* Enable vertical scroll */
+  padding-right: 8px;     /* Prevent scrollbar overlap */
+  margin-top: 12px;
+  border-top: 1px solid var(--border-color); /* Optional visual separator */
 }
 
+/* Wishlist submissions remain flex column inside scrollable wrapper */
 .wishlist-submissions {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
+/* Wishlist user cards */
 .wishlist-user-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -1538,6 +1543,27 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   font-size: 11px;
   color: var(--success-color);
   font-weight: 600;
+}
+
+/* ==========================================
+   Scrollbar (Modern Thin)
+   ========================================== */
+#wishlistWrapper.scrollable-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+#wishlistWrapper.scrollable-list::-webkit-scrollbar-track {
+  background: var(--bg-input);
+  border-radius: 3px;
+}
+
+#wishlistWrapper.scrollable-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+#wishlistWrapper.scrollable-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 /* ==========================================
