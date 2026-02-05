@@ -2049,7 +2049,7 @@ function setupGuildSupportHandlers() {
   // Field type change handler
   document.getElementById('fieldType')?.addEventListener('change', (e) => {
     const optionsGroup = document.getElementById('fieldOptionsGroup');
-    const needsOptions = ['radio', 'checkbox', 'select'].includes(e.target.value);
+    const needsOptions = ['radio', 'select'].includes(e.target.value);
     optionsGroup.style.display = needsOptions ? 'block' : 'none';
   });
   
@@ -2073,7 +2073,7 @@ function setupGuildSupportHandlers() {
       required
     };
     
-    if (['radio', 'checkbox', 'select'].includes(type) && optionsText) {
+    if (['radio', 'select'].includes(type) && optionsText) {
       field.options = optionsText.split('\n').filter(opt => opt.trim() !== '');
     }
     
