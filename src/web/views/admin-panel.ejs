@@ -102,6 +102,17 @@
 
     <!-- Tab Content: Events -->
     <div id="tab-events" class="tab-content">
+
+      <!-- Active Events Card -->
+      <div class="card">
+        <h2 class="card-title">Active Events</h2>
+        <p class="card-description">View attendance codes and manage existing events.</p>
+        <div id="eventsList" class="event-list">
+          <div class="loading">Loading events...</div>
+        </div>
+      </div>
+      </div>
+    
       <!-- Create Event Card -->
       <div class="card">
         <h2 class="card-title">Create PvP Event</h2>
@@ -229,42 +240,9 @@
           </button>
         </div>
       </div>
-
-      <!-- Active Events Card -->
-      <div class="card">
-        <h2 class="card-title">Active Events</h2>
-        <p class="card-description">View attendance codes and manage existing events.</p>
-        <div id="eventsList" class="event-list">
-          <div class="loading">Loading events...</div>
-        </div>
-      </div>
-    </div>
-
+      
     <!-- Tab Content: Items -->
     <div id="tab-items" class="tab-content">
-      <div class="card">
-        <h2 class="card-title">Wishlists</h2>
-        <p class="card-description">View and manage guild member wishlists. Distribute items directly from this interface.</p>
-        
-        <!-- Filter Controls -->
-        <div class="wishlist-controls">
-          <input type="text" id="wishlistSearchUser" class="form-control" placeholder="Search by user name..." style="flex: 1;">
-          <input type="text" id="wishlistSearchItem" class="form-control" placeholder="Search by item name..." style="flex: 1;">
-        </div>
-
-        <!-- Wishlist Submissions -->
-        <div id="wishlistSubmissions" class="wishlist-submissions">
-          <div class="loading">Loading wishlists...</div>
-        </div>
-
-        <!-- Items Already Given Out -->
-        <div class="wishlist-section-header" style="margin-top: 30px;">
-          <h3>Items Already Given Out</h3>
-        </div>
-        <div id="givenItemsSection" class="given-items-section">
-          <div class="loading">Loading given items...</div>
-        </div>
-      </div>
 
       <div class="card">
         <h2 class="card-title">Create Item Roll</h2>
@@ -320,6 +298,30 @@
           </svg>
           Create Item Roll
         </button>
+      </div>
+    
+      <div class="card">
+        <h2 class="card-title">Wishlists</h2>
+        <p class="card-description">View and manage guild member wishlists. Distribute items directly from this interface.</p>
+        
+        <!-- Filter Controls -->
+        <div class="wishlist-controls">
+          <input type="text" id="wishlistSearchUser" class="form-control" placeholder="Search by user name..." style="flex: 1;">
+          <input type="text" id="wishlistSearchItem" class="form-control" placeholder="Search by item name..." style="flex: 1;">
+        </div>
+
+        <!-- Wishlist Submissions -->
+        <div id="wishlistSubmissions" class="wishlist-submissions">
+          <div class="loading">Loading wishlists...</div>
+        </div>
+
+        <!-- Items Already Given Out -->
+        <div class="wishlist-section-header" style="margin-top: 30px;">
+          <h3>Items Already Given Out</h3>
+        </div>
+        <div id="givenItemsSection" class="given-items-section">
+          <div class="loading">Loading given items...</div>
+        </div>
       </div>
     </div>
 
@@ -397,6 +399,38 @@
 
     <!-- Tab Content: Guild Support -->
     <div id="tab-guildsupport" class="tab-content">
+
+      <!-- Request Review Panel -->
+      <div class="card">
+        <h2 class="card-title">Support Requests</h2>
+        <p class="card-description">Review and manage support requests from guild members.</p>
+
+        <div class="support-filters">
+          <label for="requestStatusFilter">Filter by Status:</label>
+          <select id="requestStatusFilter" class="form-control" style="width: 200px;">
+            <option value="">All</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="denied">Denied</option>
+            <option value="fulfilled">Fulfilled</option>
+          </select>
+        </div>
+
+        <div id="requestsList">
+          <div class="loading">Loading requests...</div>
+        </div>
+      </div>
+
+      <!-- Priority Queue Manager -->
+      <div class="card">
+        <h2 class="card-title">Priority Queue Manager</h2>
+        <p class="card-description">Manage the priority queue of approved support requests. Drag to reorder.</p>
+
+        <div id="priorityQueueList">
+          <div class="loading">Loading queue...</div>
+        </div>
+      </div>
+      
       <!-- Information Editor -->
       <div class="card">
         <h2 class="card-title">Support Information Editor</h2>
@@ -441,37 +475,6 @@
             </svg>
             Save Form Schema
           </button>
-        </div>
-      </div>
-
-      <!-- Request Review Panel -->
-      <div class="card">
-        <h2 class="card-title">Support Requests</h2>
-        <p class="card-description">Review and manage support requests from guild members.</p>
-        
-        <div class="support-filters">
-          <label for="requestStatusFilter">Filter by Status:</label>
-          <select id="requestStatusFilter" class="form-control" style="width: 200px;">
-            <option value="">All</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="denied">Denied</option>
-            <option value="fulfilled">Fulfilled</option>
-          </select>
-        </div>
-        
-        <div id="requestsList">
-          <div class="loading">Loading requests...</div>
-        </div>
-      </div>
-
-      <!-- Priority Queue Manager -->
-      <div class="card">
-        <h2 class="card-title">Priority Queue Manager</h2>
-        <p class="card-description">Manage the priority queue of approved support requests. Drag to reorder.</p>
-        
-        <div id="priorityQueueList">
-          <div class="loading">Loading queue...</div>
         </div>
       </div>
     </div>
