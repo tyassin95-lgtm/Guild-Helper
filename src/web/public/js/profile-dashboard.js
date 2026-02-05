@@ -1773,17 +1773,6 @@ function generateFormField(field) {
       });
       fieldHtml += '</div>';
       break;
-    case 'checkbox':
-      fieldHtml += '<div class="checkbox-group">';
-      field.options?.forEach(option => {
-        fieldHtml += `
-          <label class="checkbox-label">
-            <input type="checkbox" name="${field.name}[]" value="${option}">
-            <span>${option}</span>
-          </label>`;
-      });
-      fieldHtml += '</div>';
-      break;
     case 'select':
       fieldHtml += `<select id="${field.name}" name="${field.name}" class="form-control" ${required}>
         <option value="">Select...</option>`;
@@ -1791,10 +1780,6 @@ function generateFormField(field) {
         fieldHtml += `<option value="${option}">${option}</option>`;
       });
       fieldHtml += '</select>';
-      break;
-    case 'file':
-      fieldHtml += `<input type="file" id="${field.name}" name="${field.name}" class="form-control" ${required}>
-        <small class="form-text">Maximum file size: 10MB</small>`;
       break;
   }
   
@@ -1816,18 +1801,10 @@ async function handleSupportRequestSubmit(e) {
   for (let i = 0; i < formElements.length; i++) {
     const element = formElements[i];
     if (element.name && element.type !== 'submit') {
-      if (element.type === 'checkbox') {
-        if (!formData[element.name]) formData[element.name] = [];
-        if (element.checked) {
-          formData[element.name].push(element.value);
-        }
-      } else if (element.type === 'radio') {
+      if (element.type === 'radio') {
         if (element.checked) {
           formData[element.name] = element.value;
         }
-      } else if (element.type === 'file') {
-        // For now, skip file uploads - would need separate upload handling
-        formData[element.name] = element.files.length > 0 ? element.files[0].name : '';
       } else {
         formData[element.name] = element.value;
       }
