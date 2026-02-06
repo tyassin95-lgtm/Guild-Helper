@@ -350,6 +350,11 @@ select.form-control {
   padding-right: 36px;
 }
 
+select.form-control option {
+  background: #0d1117;
+  color: #f3f4f6;
+}
+
 /* ==========================================
    Buttons
    ========================================== */
@@ -1890,4 +1895,3 @@ textarea.form-control {
     gap: 6px;
   }
 }
-
