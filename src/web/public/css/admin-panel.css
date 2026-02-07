@@ -1626,11 +1626,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   gap: 16px;
 }
 
-.wishlist-submissions-scrollable {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
 .wishlist-user-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
