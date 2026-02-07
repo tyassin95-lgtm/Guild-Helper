@@ -2129,7 +2129,8 @@ async function openInboxMessage(messageId) {
   const typeLabel = message.messageType.charAt(0).toUpperCase() + message.messageType.slice(1);
   const timestamp = new Date(message.messageTimestamp).toLocaleString();
   
-  showToast(`
+  // Create delete button with proper event listener (no inline onclick)
+  const messageHtml = `
     <div class="inbox-message-full">
       <div class="inbox-message-full-header">
         <span class="inbox-message-type ${typeClass}">${typeLabel}</span>
@@ -2138,10 +2139,24 @@ async function openInboxMessage(messageId) {
       ${message.messageTitle ? `<h3>${escapeHtml(message.messageTitle)}</h3>` : ''}
       <div class="inbox-message-full-content">${escapeHtml(message.messageContent)}</div>
       <div class="inbox-message-actions">
-        <button onclick="deleteInboxMessage('${messageId}')" class="btn btn-danger btn-sm">Delete</button>
+        <button class="btn btn-danger btn-sm inbox-delete-btn" data-message-id="${escapeHtml(messageId)}">Delete</button>
       </div>
     </div>
-  `, 'info', 10000);
+  `;
+  
+  showToast(messageHtml, 'info', 10000);
+  
+  // Attach event listener to delete button after toast is shown
+  // Use setTimeout to ensure the toast DOM is rendered
+  setTimeout(() => {
+    const deleteBtn = document.querySelector('.toast .inbox-delete-btn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', function() {
+        const msgId = this.dataset.messageId;
+        deleteInboxMessage(msgId);
+      });
+    }
+  }, 100);
 }
 
 /**
@@ -2272,11 +2287,18 @@ function initInboxFilters() {
 
 /**
  * Escape HTML to prevent XSS
+ * Uses efficient string replacement instead of DOM manipulation
  */
 function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  if (!text) return '';
+  const htmlEscapeMap = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  };
+  return String(text).replace(/[&<>"']/g, char => htmlEscapeMap[char]);
 }
 
 
