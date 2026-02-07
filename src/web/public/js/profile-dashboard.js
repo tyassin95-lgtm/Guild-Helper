@@ -171,6 +171,8 @@ document.addEventListener('DOMContentLoaded', () => {
   loadRosterData();
   loadItemRollsData();
   checkAdminAccess();
+  initInboxFilters();
+  updateUnreadCount(); // Update unread count badge on page load
 });
 
 // ==========================================
@@ -256,6 +258,9 @@ function setupTabs() {
           break;
         case 'guildsupport':
           loadGuildSupportData();
+          break;
+        case 'inbox':
+          loadInbox();
           break;
       }
     });
@@ -2026,6 +2031,253 @@ async function loadSupportQueue() {
   }
 }
 
+
+// ==========================================
+// Inbox Functionality
+// ==========================================
+let currentInboxFilter = 'all';
+let inboxMessages = [];
+
+/**
+ * Load inbox messages and update unread count
+ */
+async function loadInbox() {
+  try {
+    const response = await fetch('/api/inbox/messages');
+    if (!response.ok) throw new Error('Failed to fetch inbox messages');
+    
+    const data = await response.json();
+    inboxMessages = data.messages || [];
+    
+    displayInboxMessages(inboxMessages);
+    updateUnreadCount();
+    
+  } catch (error) {
+    console.error('Error loading inbox:', error);
+    const container = document.getElementById('inbox-content');
+    if (container) {
+      container.innerHTML = '<p class="error-message">Failed to load inbox messages</p>';
+    }
+  }
+}
+
+/**
+ * Display inbox messages
+ */
+function displayInboxMessages(messages) {
+  const container = document.getElementById('inbox-content');
+  if (!container) return;
+  
+  // Filter messages based on current filter
+  let filteredMessages = messages;
+  if (currentInboxFilter !== 'all') {
+    filteredMessages = messages.filter(msg => msg.messageType === currentInboxFilter);
+  }
+  
+  if (filteredMessages.length === 0) {
+    container.innerHTML = '<p class="empty-state">No messages to display</p>';
+    return;
+  }
+  
+  const messagesHtml = filteredMessages.map(msg => {
+    const isUnread = !msg.isRead;
+    const timestamp = formatRelativeTime(msg.messageTimestamp);
+    const typeClass = `inbox-message-type-${msg.messageType}`;
+    const typeLabel = msg.messageType.charAt(0).toUpperCase() + msg.messageType.slice(1);
+    
+    return `
+      <div class="inbox-message ${isUnread ? 'unread' : ''}" data-message-id="${msg._id}">
+        <div class="inbox-message-header">
+          <span class="inbox-message-type ${typeClass}">${typeLabel}</span>
+          <span class="inbox-message-time">${timestamp}</span>
+        </div>
+        ${msg.messageTitle ? `<div class="inbox-message-title">${escapeHtml(msg.messageTitle)}</div>` : ''}
+        <div class="inbox-message-preview">${escapeHtml(msg.messageContent.substring(0, 100))}${msg.messageContent.length > 100 ? '...' : ''}</div>
+        ${isUnread ? '<div class="inbox-unread-indicator"></div>' : ''}
+      </div>
+    `;
+  }).join('');
+  
+  container.innerHTML = messagesHtml;
+  
+  // Add click handlers to messages
+  container.querySelectorAll('.inbox-message').forEach(messageEl => {
+    messageEl.addEventListener('click', () => {
+      const messageId = messageEl.dataset.messageId;
+      openInboxMessage(messageId);
+    });
+  });
+}
+
+/**
+ * Open and display a single inbox message
+ */
+async function openInboxMessage(messageId) {
+  const message = inboxMessages.find(m => m._id === messageId);
+  if (!message) return;
+  
+  // Mark as read if unread
+  if (!message.isRead) {
+    await markMessageAsRead(messageId);
+    message.isRead = true;
+    updateUnreadCount();
+    displayInboxMessages(inboxMessages);
+  }
+  
+  // Show message in modal or expanded view
+  const typeClass = `inbox-message-type-${message.messageType}`;
+  const typeLabel = message.messageType.charAt(0).toUpperCase() + message.messageType.slice(1);
+  const timestamp = new Date(message.messageTimestamp).toLocaleString();
+  
+  showToast(`
+    <div class="inbox-message-full">
+      <div class="inbox-message-full-header">
+        <span class="inbox-message-type ${typeClass}">${typeLabel}</span>
+        <span class="inbox-message-time">${timestamp}</span>
+      </div>
+      ${message.messageTitle ? `<h3>${escapeHtml(message.messageTitle)}</h3>` : ''}
+      <div class="inbox-message-full-content">${escapeHtml(message.messageContent)}</div>
+      <div class="inbox-message-actions">
+        <button onclick="deleteInboxMessage('${messageId}')" class="btn btn-danger btn-sm">Delete</button>
+      </div>
+    </div>
+  `, 'info', 10000);
+}
+
+/**
+ * Mark a message as read
+ */
+async function markMessageAsRead(messageId) {
+  try {
+    const response = await fetch('/api/inbox/mark-read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId })
+    });
+    
+    if (!response.ok) throw new Error('Failed to mark message as read');
+    return true;
+  } catch (error) {
+    console.error('Error marking message as read:', error);
+    return false;
+  }
+}
+
+/**
+ * Mark all messages as read
+ */
+async function markAllAsRead() {
+  try {
+    const response = await fetch('/api/inbox/mark-all-read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (!response.ok) throw new Error('Failed to mark all as read');
+    
+    const data = await response.json();
+    showToast(`Marked ${data.count} message(s) as read`, 'success');
+    
+    // Update local state
+    inboxMessages.forEach(msg => msg.isRead = true);
+    updateUnreadCount();
+    displayInboxMessages(inboxMessages);
+    
+  } catch (error) {
+    console.error('Error marking all as read:', error);
+    showToast('Failed to mark all as read', 'error');
+  }
+}
+
+/**
+ * Delete an inbox message
+ */
+async function deleteInboxMessage(messageId) {
+  if (!confirm('Are you sure you want to delete this message?')) return;
+  
+  try {
+    const response = await fetch(`/api/inbox/message/${messageId}`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) throw new Error('Failed to delete message');
+    
+    showToast('Message deleted', 'success');
+    
+    // Remove from local state and refresh
+    inboxMessages = inboxMessages.filter(m => m._id !== messageId);
+    displayInboxMessages(inboxMessages);
+    updateUnreadCount();
+    
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    showToast('Failed to delete message', 'error');
+  }
+}
+
+/**
+ * Update unread count badge
+ */
+async function updateUnreadCount() {
+  try {
+    const response = await fetch('/api/inbox/unread-count');
+    if (!response.ok) throw new Error('Failed to fetch unread count');
+    
+    const data = await response.json();
+    const badge = document.getElementById('inbox-badge');
+    const markAllBtn = document.getElementById('mark-all-read-btn');
+    
+    if (badge) {
+      if (data.count > 0) {
+        badge.textContent = data.count;
+        badge.style.display = 'inline-block';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+    
+    if (markAllBtn) {
+      markAllBtn.style.display = data.count > 0 ? 'inline-block' : 'none';
+    }
+    
+  } catch (error) {
+    console.error('Error updating unread count:', error);
+  }
+}
+
+/**
+ * Initialize inbox filters
+ */
+function initInboxFilters() {
+  const filterButtons = document.querySelectorAll('.inbox-filters .filter-btn');
+  
+  filterButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Update active state
+      filterButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      // Update filter and redisplay
+      currentInboxFilter = btn.dataset.filter;
+      displayInboxMessages(inboxMessages);
+    });
+  });
+  
+  // Mark all as read button
+  const markAllBtn = document.getElementById('mark-all-read-btn');
+  if (markAllBtn) {
+    markAllBtn.addEventListener('click', markAllAsRead);
+  }
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 
 // ==========================================
