@@ -1665,14 +1665,21 @@ function renderRollCard(roll, isActive) {
 // ==========================================
 // Toast Notifications
 // ==========================================
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', duration = 3000) {
   const toast = document.getElementById('toast');
-  toast.textContent = message;
+  
+  // Check if message contains HTML tags
+  if (/<[^>]+>/.test(message)) {
+    toast.innerHTML = message;
+  } else {
+    toast.textContent = message;
+  }
+  
   toast.className = `toast ${type} show`;
 
   setTimeout(() => {
     toast.classList.remove('show');
-  }, 3000);
+  }, duration);
 }
 
 // ==========================================
@@ -2139,7 +2146,7 @@ async function openInboxMessage(messageId) {
       ${message.messageTitle ? `<h3>${escapeHtml(message.messageTitle)}</h3>` : ''}
       <div class="inbox-message-full-content">${escapeHtml(message.messageContent)}</div>
       <div class="inbox-message-actions">
-        <button class="btn btn-danger btn-sm inbox-delete-btn" data-message-id="${escapeHtml(messageId)}">Delete</button>
+        <button class="btn btn-danger btn-sm inbox-delete-btn" data-message-id="${messageId}">Delete</button>
       </div>
     </div>
   `;
@@ -2147,16 +2154,18 @@ async function openInboxMessage(messageId) {
   showToast(messageHtml, 'info', 10000);
   
   // Attach event listener to delete button after toast is shown
-  // Use setTimeout to ensure the toast DOM is rendered
-  setTimeout(() => {
-    const deleteBtn = document.querySelector('.toast .inbox-delete-btn');
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', function() {
-        const msgId = this.dataset.messageId;
-        deleteInboxMessage(msgId);
-      });
-    }
-  }, 100);
+  // Use requestAnimationFrame to ensure the toast DOM is rendered
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const deleteBtn = document.querySelector('.toast .inbox-delete-btn');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', function() {
+          const msgId = this.dataset.messageId;
+          deleteInboxMessage(msgId);
+        });
+      }
+    });
+  });
 }
 
 /**
