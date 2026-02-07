@@ -2042,6 +2042,8 @@ async function loadSupportQueue() {
 // ==========================================
 // Inbox Functionality
 // ==========================================
+const INBOX_MESSAGE_TOAST_DURATION = 10000; // 10 seconds
+
 let currentInboxFilter = 'all';
 let inboxMessages = [];
 
@@ -2151,20 +2153,18 @@ async function openInboxMessage(messageId) {
     </div>
   `;
   
-  showToast(messageHtml, 'info', 10000);
+  showToast(messageHtml, 'info', INBOX_MESSAGE_TOAST_DURATION);
   
   // Attach event listener to delete button after toast is shown
-  // Use requestAnimationFrame to ensure the toast DOM is rendered
+  // Using a single requestAnimationFrame to ensure DOM is ready
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      const deleteBtn = document.querySelector('.toast .inbox-delete-btn');
-      if (deleteBtn) {
-        deleteBtn.addEventListener('click', function() {
-          const msgId = this.dataset.messageId;
-          deleteInboxMessage(msgId);
-        });
-      }
-    });
+    const deleteBtn = document.querySelector('.toast .inbox-delete-btn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', function() {
+        const msgId = this.dataset.messageId;
+        deleteInboxMessage(msgId);
+      });
+    }
   });
 }
 
@@ -2297,11 +2297,15 @@ function initInboxFilters() {
 /**
  * Escape HTML to prevent XSS
  * Uses efficient string replacement instead of DOM manipulation
+ * Note: The regex handles all characters in a single pass with a map callback,
+ * preventing double-escaping issues. Ampersand is listed first in the map
+ * as a documentation best practice, even though the order doesn't affect
+ * the replacement logic due to the single-pass regex approach.
  */
 function escapeHtml(text) {
   if (!text) return '';
   const htmlEscapeMap = {
-    '&': '&amp;',
+    '&': '&amp;',  // Listed first to document standard escape order
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',

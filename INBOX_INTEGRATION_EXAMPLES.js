@@ -5,7 +5,10 @@
  * to the website inbox when sending DMs to users.
  */
 
-const { sendInboxMessage } = require('../../utils/inboxHelper');
+// Example require statement - adjust path based on where you use this
+// If used in bot feature files: const { sendInboxMessage } = require('../../utils/inboxHelper');
+// If used in root directory: const { sendInboxMessage } = require('./src/utils/inboxHelper');
+const { sendInboxMessage } = require('./src/utils/inboxHelper');
 
 /**
  * Example 1: Modify remindparty.js to save party info reminders to inbox

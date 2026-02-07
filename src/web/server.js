@@ -4407,6 +4407,12 @@ class WebServer {
   async handleBotSendInboxMessage(req, res) {
     try {
       // Validate bot token
+      // Note: BOT_INBOX_TOKEN should be set explicitly for production use.
+      // Falling back to DISCORD_TOKEN is acceptable here because:
+      // 1. Both tokens identify the same bot instance
+      // 2. This endpoint only allows creating inbox messages, no sensitive operations
+      // 3. The bot already has access to send DMs directly to users
+      // For enhanced security, set BOT_INBOX_TOKEN to a separate value in production
       const botToken = req.headers.authorization?.replace('Bearer ', '');
       const expectedToken = process.env.BOT_INBOX_TOKEN || process.env.DISCORD_TOKEN;
 

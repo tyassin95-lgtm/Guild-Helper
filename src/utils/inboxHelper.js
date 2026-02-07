@@ -30,7 +30,7 @@ async function sendInboxMessage(collections, { discordUserId, title, content, ty
 
   const inboxMessage = {
     userId: user.userId, // Discord user ID - website users are identified by Discord ID
-    discordUserId: discordUserId,
+    discordUserId: discordUserId, // Duplicate for clarity and potential future bot-side queries
     messageTitle: title || null,
     messageContent: content,
     messageType: type,
