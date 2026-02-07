@@ -567,6 +567,11 @@ class WebServer {
       await this.handleAdminResetWishlist(req, res);
     });
 
+    // API: Reset all party bonuses
+    this.app.post('/api/admin-panel/reset-bonuses', requireAdmin, async (req, res) => {
+      await this.handleAdminResetBonuses(req, res);
+    });
+
     // API: Get item categories
     this.app.get('/api/admin-panel/item-categories', requireAdmin, async (req, res) => {
       await this.handleAdminGetItemCategories(req, res);
@@ -2966,6 +2971,47 @@ class WebServer {
     } catch (error) {
       console.error('Error resetting wishlist:', error);
       res.status(500).json({ error: 'Failed to reset wishlist' });
+    }
+  }
+
+  /**
+   * Reset all party bonuses
+   */
+  async handleAdminResetBonuses(req, res) {
+    try {
+      const { guildId } = req.session;
+
+      // Get current stats before reset
+      const currentBonuses = await this.collections.pvpBonuses.countDocuments({ guildId });
+      const settings = await this.collections.guildSettings.findOne({ guildId });
+      const weeklyEvents = settings?.weeklyTotalEvents || 0;
+
+      // Reset all bonuses for this guild
+      const result = await this.collections.pvpBonuses.deleteMany({ guildId });
+
+      // Reset the weekly event counter
+      await this.collections.guildSettings.updateOne(
+        { guildId },
+        { 
+          $set: { 
+            weeklyTotalEvents: 0,
+            lastUpdated: new Date()
+          }
+        },
+        { upsert: true }
+      );
+
+      res.json({
+        success: true,
+        message: 'PvP bonus reset complete',
+        deletedCount: result.deletedCount,
+        previousBonusCount: currentBonuses,
+        previousWeeklyEvents: weeklyEvents
+      });
+
+    } catch (error) {
+      console.error('Error resetting bonuses:', error);
+      res.status(500).json({ error: 'Failed to reset party bonuses' });
     }
   }
 

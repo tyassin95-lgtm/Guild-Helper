@@ -1317,6 +1317,50 @@ document.getElementById('resetWishlistBtn').addEventListener('click', () => {
   openModal('confirmModal');
 });
 
+document.getElementById('resetBonusesBtn').addEventListener('click', () => {
+  document.getElementById('confirmModalTitle').textContent = 'Reset All Party Bonuses';
+  document.getElementById('confirmModalMessage').textContent =
+    '⚠️ WARNING: This will reset ALL PvP bonuses for this server.\n\n' +
+    'This will:\n' +
+    '• Clear all weekly PvP attendance bonuses\n' +
+    '• Clear all attendance counters\n' +
+    '• Reset weekly event count to 0\n' +
+    '• Reset all bonus counts to 0\n\n' +
+    'This action cannot be undone!\n\n' +
+    'Are you sure you want to proceed?';
+
+  const confirmBtn = document.getElementById('confirmModalBtn');
+  confirmBtn.onclick = async () => {
+    closeModal('confirmModal');
+
+    const btn = document.getElementById('resetBonusesBtn');
+    btn.disabled = true;
+    btn.textContent = 'Resetting...';
+
+    try {
+      const result = await apiCall('/reset-bonuses', 'POST', {});
+      showToast(
+        `${result.message}. Reset ${result.deletedCount} bonus record(s) and reset weekly event counter from ${result.previousWeeklyEvents} to 0.`,
+        'success'
+      );
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18"/>
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+      </svg>
+      Reset All Party Bonuses
+    `;
+  };
+
+  openModal('confirmModal');
+});
+
 // ==========================================
 // Party History Tab
 // ==========================================
