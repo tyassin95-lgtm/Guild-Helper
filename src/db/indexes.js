@@ -43,7 +43,8 @@ async function ensureIndexes({
   staticEvents,
   guildSupportConfig,
   guildSupportRequests,
-  guildSupportQueue
+  guildSupportQueue,
+  inboxMessages
 }) {
   await guildSettings.createIndex({ guildId: 1 }, { unique: true });
 
@@ -251,6 +252,12 @@ async function ensureIndexes({
   await guildSupportQueue.createIndex({ guildId: 1, requestId: 1 }, { unique: true });
   await guildSupportQueue.createIndex({ guildId: 1, position: 1 });
   await guildSupportQueue.createIndex({ guildId: 1, fulfilledAt: 1 });
+
+  // Inbox Messages indexes
+  await inboxMessages.createIndex({ userId: 1, messageTimestamp: -1 });
+  await inboxMessages.createIndex({ userId: 1, isRead: 1 });
+  await inboxMessages.createIndex({ discordUserId: 1 });
+  await inboxMessages.createIndex({ messageTimestamp: -1 });
 
   console.log('All indexes created successfully');
 }

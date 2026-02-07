@@ -77,6 +77,14 @@
         </svg>
         <span class="tab-text">Guild Support</span>
       </button>
+      <button class="tab-btn" data-tab="inbox">
+        <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 12h-6l-2 3h-4l-2-3H2"></path>
+          <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+        </svg>
+        <span class="tab-text">Inbox</span>
+        <span class="tab-badge" id="inbox-badge" style="display: none;">0</span>
+      </button>
     </nav>
 
     <!-- Sidebar Footer Actions -->
@@ -237,6 +245,26 @@
         <h2 class="card-title">Submit Support Request</h2>
         <div id="support-form-container">
           <div class="loading">Loading form...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inbox Tab -->
+    <div id="tab-inbox" class="tab-content">
+      <div class="card">
+        <div class="card-header-with-actions">
+          <h2 class="card-title">Your Inbox</h2>
+          <button id="mark-all-read-btn" class="btn btn-secondary" style="display: none;">Mark All Read</button>
+        </div>
+        <div class="inbox-filters">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="system">System</button>
+          <button class="filter-btn" data-filter="support">Support</button>
+          <button class="filter-btn" data-filter="reward">Rewards</button>
+          <button class="filter-btn" data-filter="warning">Warnings</button>
+        </div>
+        <div id="inbox-content">
+          <div class="loading">Loading messages...</div>
         </div>
       </div>
     </div>

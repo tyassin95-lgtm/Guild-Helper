@@ -519,6 +519,40 @@ class WebServer {
     });
 
     // ==========================================
+    // Inbox Routes
+    // ==========================================
+
+    // API: Get inbox messages for logged-in user
+    this.app.get('/api/inbox/messages', requireAuth, async (req, res) => {
+      await this.handleGetInboxMessages(req, res);
+    });
+
+    // API: Mark a message as read
+    this.app.post('/api/inbox/mark-read', requireAuth, async (req, res) => {
+      await this.handleMarkMessageAsRead(req, res);
+    });
+
+    // API: Get unread message count
+    this.app.get('/api/inbox/unread-count', requireAuth, async (req, res) => {
+      await this.handleGetUnreadCount(req, res);
+    });
+
+    // API: Mark all messages as read
+    this.app.post('/api/inbox/mark-all-read', requireAuth, async (req, res) => {
+      await this.handleMarkAllAsRead(req, res);
+    });
+
+    // API: Delete a message
+    this.app.delete('/api/inbox/message/:messageId', requireAuth, async (req, res) => {
+      await this.handleDeleteMessage(req, res);
+    });
+
+    // API: Bot endpoint to send inbox message (requires bot token)
+    this.app.post('/api/bot/inbox', async (req, res) => {
+      await this.handleBotSendInboxMessage(req, res);
+    });
+
+    // ==========================================
     // Admin Panel Routes
     // ==========================================
 
@@ -4253,6 +4287,164 @@ class WebServer {
     } catch (error) {
       console.error('Error getting support queue:', error);
       res.status(500).json({ error: 'Failed to get support queue' });
+    }
+  }
+
+  // ==========================================
+  // Inbox Handlers
+  // ==========================================
+
+  /**
+   * Get inbox messages for logged-in user
+   */
+  async handleGetInboxMessages(req, res) {
+    try {
+      const { getInboxMessages } = require('../utils/inboxHelper');
+      const { userId } = req.session;
+
+      const messages = await getInboxMessages(this.collections, userId, {
+        limit: 100,
+        skip: 0
+      });
+
+      res.json({ messages });
+    } catch (error) {
+      console.error('Error getting inbox messages:', error);
+      res.status(500).json({ error: 'Failed to get inbox messages' });
+    }
+  }
+
+  /**
+   * Mark a message as read
+   */
+  async handleMarkMessageAsRead(req, res) {
+    try {
+      const { markMessageAsRead } = require('../utils/inboxHelper');
+      const { userId } = req.session;
+      const { messageId } = req.body;
+
+      if (!messageId) {
+        return res.status(400).json({ error: 'Message ID is required' });
+      }
+
+      const success = await markMessageAsRead(this.collections, messageId, userId);
+
+      if (success) {
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: 'Message not found or already read' });
+      }
+    } catch (error) {
+      console.error('Error marking message as read:', error);
+      res.status(500).json({ error: 'Failed to mark message as read' });
+    }
+  }
+
+  /**
+   * Get unread message count
+   */
+  async handleGetUnreadCount(req, res) {
+    try {
+      const { getUnreadCount } = require('../utils/inboxHelper');
+      const { userId } = req.session;
+
+      const count = await getUnreadCount(this.collections, userId);
+
+      res.json({ count });
+    } catch (error) {
+      console.error('Error getting unread count:', error);
+      res.status(500).json({ error: 'Failed to get unread count' });
+    }
+  }
+
+  /**
+   * Mark all messages as read
+   */
+  async handleMarkAllAsRead(req, res) {
+    try {
+      const { markAllAsRead } = require('../utils/inboxHelper');
+      const { userId } = req.session;
+
+      const count = await markAllAsRead(this.collections, userId);
+
+      res.json({ success: true, count });
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+      res.status(500).json({ error: 'Failed to mark all as read' });
+    }
+  }
+
+  /**
+   * Delete a message
+   */
+  async handleDeleteMessage(req, res) {
+    try {
+      const { deleteMessage } = require('../utils/inboxHelper');
+      const { userId } = req.session;
+      const { messageId } = req.params;
+
+      if (!messageId) {
+        return res.status(400).json({ error: 'Message ID is required' });
+      }
+
+      const success = await deleteMessage(this.collections, messageId, userId);
+
+      if (success) {
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: 'Message not found' });
+      }
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      res.status(500).json({ error: 'Failed to delete message' });
+    }
+  }
+
+  /**
+   * Bot endpoint to send inbox message
+   * Requires bot token authentication
+   */
+  async handleBotSendInboxMessage(req, res) {
+    try {
+      // Validate bot token
+      // Note: BOT_INBOX_TOKEN should be set explicitly for production use.
+      // Falling back to DISCORD_TOKEN is acceptable here because:
+      // 1. Both tokens identify the same bot instance
+      // 2. This endpoint only allows creating inbox messages, no sensitive operations
+      // 3. The bot already has access to send DMs directly to users
+      // For enhanced security, set BOT_INBOX_TOKEN to a separate value in production
+      const botToken = req.headers.authorization?.replace('Bearer ', '');
+      const expectedToken = process.env.BOT_INBOX_TOKEN || process.env.DISCORD_TOKEN;
+
+      if (!botToken || botToken !== expectedToken) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid bot token' });
+      }
+
+      const { sendInboxMessage } = require('../utils/inboxHelper');
+      const { discord_user_id, title, content, type, timestamp } = req.body;
+
+      // Validate required fields
+      if (!discord_user_id || !content) {
+        return res.status(400).json({ error: 'discord_user_id and content are required' });
+      }
+
+      // Send the inbox message
+      const message = await sendInboxMessage(this.collections, {
+        discordUserId: discord_user_id,
+        title: title || null,
+        content,
+        type: type || 'system',
+        timestamp: timestamp ? new Date(timestamp) : new Date()
+      });
+
+      if (message) {
+        res.json({ success: true, messageId: message._id.toString() });
+      } else {
+        res.status(404).json({ error: 'User not found or message could not be sent' });
+      }
+    } catch (error) {
+      console.error('Error sending inbox message from bot:', error);
+      res.status(500).json({ error: 'Failed to send inbox message' });
     }
   }
 
