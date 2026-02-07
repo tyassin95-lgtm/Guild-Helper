@@ -1623,9 +1623,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-height: 400px;
-  overflow-y: auto;
-  padding-right: 8px;
 }
 
 .wishlist-user-card {
@@ -1786,6 +1783,33 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .wishlist-submissions::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Wishlist wrapper for scrolling */
+.wishlist-wrapper {
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+  margin-bottom: 20px;
+}
+
+/* Scrollbar styling for wishlist wrapper */
+.wishlist-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.wishlist-wrapper::-webkit-scrollbar-track {
+  background: var(--bg-input);
+  border-radius: 3px;
+}
+
+.wishlist-wrapper::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.wishlist-wrapper::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
 
