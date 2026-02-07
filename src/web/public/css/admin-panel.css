@@ -1,6 +1,5 @@
 /**
  * Admin Panel Styles
- * Based on profile-dashboard.css design system
  */
 
 /* ==========================================
@@ -1624,6 +1623,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
 }
 
 .wishlist-user-card {
@@ -1769,6 +1771,24 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   font-weight: 600;
 }
 
+.wishlist-submissions::-webkit-scrollbar {
+  width: 6px;
+}
+
+.wishlist-submissions::-webkit-scrollbar-track {
+  background: var(--bg-input);
+  border-radius: 3px;
+}
+
+.wishlist-submissions::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.wishlist-submissions::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
 /* ==========================================
    Given Items Section Styles
    ========================================== */
@@ -1885,7 +1905,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 /* ==========================================
-   Guild Support Styles (Admin) - Modern Revamp
+   Guild Support Styles
    ========================================== */
 
 /* Smooth animations */
