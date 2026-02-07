@@ -2208,3 +2208,58 @@ window.addAdminNote = addAdminNote;
 document.addEventListener('DOMContentLoaded', () => {
   loadEventsForParties();
 });
+
+
+// ==========================================
+// Sidebar Toggle Functionality
+// ==========================================
+(function initSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  const sidebarOverlay = document.getElementById('sidebarOverlay');
+  const mainContent = document.getElementById('mainContent');
+
+  if (!sidebar || !sidebarToggle) return;
+
+  // Toggle sidebar on button click
+  sidebarToggle.addEventListener('click', () => {
+    const isMobile = window.innerWidth <= 768;
+    
+    if (isMobile) {
+      // Mobile: toggle slide in/out
+      sidebar.classList.toggle('mobile-open');
+      sidebarOverlay.classList.toggle('active');
+    } else {
+      // Desktop: toggle collapsed/expanded
+      sidebar.classList.toggle('collapsed');
+      mainContent.classList.toggle('sidebar-collapsed');
+    }
+  });
+
+  // Close sidebar when clicking overlay (mobile)
+  if (sidebarOverlay) {
+    sidebarOverlay.addEventListener('click', () => {
+      sidebar.classList.remove('mobile-open');
+      sidebarOverlay.classList.remove('active');
+    });
+  }
+
+  // Handle window resize
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const isMobile = window.innerWidth <= 768;
+      
+      if (!isMobile) {
+        // Remove mobile classes on desktop
+        sidebar.classList.remove('mobile-open');
+        sidebarOverlay.classList.remove('active');
+      } else {
+        // Remove desktop collapsed state on mobile
+        sidebar.classList.remove('collapsed');
+        mainContent.classList.remove('sidebar-collapsed');
+      }
+    }, 250);
+  });
+})();
