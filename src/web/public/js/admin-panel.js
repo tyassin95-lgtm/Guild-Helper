@@ -2216,12 +2216,13 @@ document.addEventListener('DOMContentLoaded', () => {
 (function initSidebar() {
   const sidebar = document.getElementById('sidebar');
   const sidebarToggle = document.getElementById('sidebarToggle');
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
   const sidebarOverlay = document.getElementById('sidebarOverlay');
   const mainContent = document.getElementById('mainContent');
 
   if (!sidebar || !sidebarToggle) return;
 
-  // Toggle sidebar on button click
+  // Toggle sidebar on button click (inside sidebar)
   sidebarToggle.addEventListener('click', () => {
     const isMobile = window.innerWidth <= 768;
     
@@ -2235,6 +2236,14 @@ document.addEventListener('DOMContentLoaded', () => {
       mainContent.classList.toggle('sidebar-collapsed');
     }
   });
+
+  // Mobile menu button (outside sidebar, visible on mobile)
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener('click', () => {
+      sidebar.classList.add('mobile-open');
+      sidebarOverlay.classList.add('active');
+    });
+  }
 
   // Close sidebar when clicking overlay (mobile)
   if (sidebarOverlay) {
