@@ -1734,7 +1734,8 @@ async function loadGuildSupportData() {
     loadSupportInfo(),
     loadSupportForm(),
     loadMyRequests(),
-    loadSupportQueue()
+    loadSupportQueue(),
+    loadFulfilledHistory()
   ]);
 }
 
@@ -2023,6 +2024,63 @@ async function loadSupportQueue() {
   } catch (error) {
     console.error('Error loading support queue:', error);
     container.innerHTML = '<p class="error-message">Failed to load queue</p>';
+  }
+}
+
+/**
+ * Load fulfilled requests history
+ */
+async function loadFulfilledHistory() {
+  const container = document.getElementById('fulfilled-history-content');
+  try {
+    const response = await fetch('/api/guild-support/fulfilled-history');
+    const data = await response.json();
+    
+    if (!data.history || data.history.length === 0) {
+      container.innerHTML = '<p class="text-muted">No fulfilled requests yet.</p>';
+      return;
+    }
+    
+    const historyHtml = `
+      <div class="fulfilled-history-list">
+        ${data.history.map(item => {
+          const amountFulfilled = item.amountFulfilled || 0;
+          const fulfilledDate = new Date(item.updatedAt);
+          const formattedDate = fulfilledDate.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          });
+          
+          return `
+          <div class="history-item">
+            <div class="history-item-main">
+              <div class="history-item-player">
+                <svg class="history-item-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span class="history-item-username">${item.username}</span>
+              </div>
+              <div class="history-item-amount">
+                <svg class="history-amount-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="1" x2="12" y2="23"></line>
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+                <span class="history-amount-value">${amountFulfilled}</span>
+              </div>
+            </div>
+            <div class="history-item-date">${formattedDate}</div>
+          </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+    
+    container.innerHTML = historyHtml;
+  } catch (error) {
+    console.error('Error loading fulfilled history:', error);
+    container.innerHTML = '<p class="error-message">Failed to load fulfillment history</p>';
   }
 }
 
