@@ -93,52 +93,9 @@ function getWishlistCounts(wishlist) {
   };
 }
 
-/**
- * Check if all wishlist picks are exhausted (submitted + received items >= limits for all categories)
- * @param {Object} submission - The submitted wishlist
- * @param {Array} receivedItemIds - Array of received item IDs
- * @param {Object} WISHLIST_ITEMS - The wishlist items catalog
- * @returns {boolean} True if all categories are at their limit
- */
-function areAllPicksExhausted(submission, receivedItemIds, WISHLIST_ITEMS) {
-  // Count received items per category
-  const receivedCounts = {
-    archbossWeapon: 0,
-    archbossArmor: 0,
-    t3Weapons: 0,
-    t3Armors: 0,
-    t3Accessories: 0
-  };
-
-  for (const itemId of receivedItemIds) {
-    if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
-      receivedCounts.archbossWeapon++;
-    } else if (WISHLIST_ITEMS.archbossArmors.find(i => i.id === itemId)) {
-      receivedCounts.archbossArmor++;
-    } else if (WISHLIST_ITEMS.t3Weapons.find(i => i.id === itemId)) {
-      receivedCounts.t3Weapons++;
-    } else if (WISHLIST_ITEMS.t3Armors.find(i => i.id === itemId)) {
-      receivedCounts.t3Armors++;
-    } else if (WISHLIST_ITEMS.t3Accessories.find(i => i.id === itemId)) {
-      receivedCounts.t3Accessories++;
-    }
-  }
-
-  // Check if all categories are at their limit
-  const archbossWeaponAtLimit = receivedCounts.archbossWeapon >= LIMITS.archbossWeapon;
-  const archbossArmorAtLimit = receivedCounts.archbossArmor >= LIMITS.archbossArmor;
-  const t3WeaponsAtLimit = receivedCounts.t3Weapons >= LIMITS.t3Weapons;
-  const t3ArmorsAtLimit = receivedCounts.t3Armors >= LIMITS.t3Armors;
-  const t3AccessoriesAtLimit = receivedCounts.t3Accessories >= LIMITS.t3Accessories;
-
-  return archbossWeaponAtLimit && archbossArmorAtLimit && t3WeaponsAtLimit && 
-         t3ArmorsAtLimit && t3AccessoriesAtLimit;
-}
-
 module.exports = {
   LIMITS,
   validateWishlist,
   isWishlistEmpty,
-  getWishlistCounts,
-  areAllPicksExhausted
+  getWishlistCounts
 };

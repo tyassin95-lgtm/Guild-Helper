@@ -1,7 +1,7 @@
+// Handler for /mywishlist command
 const { PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { buildUserWishlistEmbed } = require('../utils/panelBuilder');
-const { isWishlistEmpty, areAllPicksExhausted } = require('../utils/wishlistValidator');
-const { draftWishlists } = require('../utils/wishlistStorage');
+const { isWishlistEmpty } = require('../utils/wishlistValidator');
 
 async function handleMyWishlist({ interaction, collections }) {
   // Check if command was used in a server (not in DMs)
@@ -54,99 +54,21 @@ async function handleMyWishlist({ interaction, collections }) {
   });
 
   if (existingSubmission) {
-    // User already submitted - check if all picks are exhausted
-    const { WISHLIST_ITEMS } = require('../utils/items');
-    
-    if (areAllPicksExhausted(existingSubmission, receivedItemIds, WISHLIST_ITEMS)) {
-      // All picks exhausted - show read-only view
-      // Create display wishlist that merges submission with received items
-      const displayWishlist = {
-        archbossWeapon: [...(existingSubmission.archbossWeapon || [])],
-        archbossArmor: [...(existingSubmission.archbossArmor || [])],
-        t3Weapons: [...(existingSubmission.t3Weapons || [])],
-        t3Armors: [...(existingSubmission.t3Armors || [])],
-        t3Accessories: [...(existingSubmission.t3Accessories || [])]
-      };
+    // User already submitted - show wishlist with received items marked
 
-      // Add received items that aren't already in the submission
-      if (receivedItemIds.length > 0) {
-        for (const itemId of receivedItemIds) {
-          if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
-            if (!displayWishlist.archbossWeapon.includes(itemId)) {
-              displayWishlist.archbossWeapon.push(itemId);
-            }
-          } else if (WISHLIST_ITEMS.archbossArmors.find(i => i.id === itemId)) {
-            if (!displayWishlist.archbossArmor.includes(itemId)) {
-              displayWishlist.archbossArmor.push(itemId);
-            }
-          } else if (WISHLIST_ITEMS.t3Weapons.find(i => i.id === itemId)) {
-            if (!displayWishlist.t3Weapons.includes(itemId)) {
-              displayWishlist.t3Weapons.push(itemId);
-            }
-          } else if (WISHLIST_ITEMS.t3Armors.find(i => i.id === itemId)) {
-            if (!displayWishlist.t3Armors.includes(itemId)) {
-              displayWishlist.t3Armors.push(itemId);
-            }
-          } else if (WISHLIST_ITEMS.t3Accessories.find(i => i.id === itemId)) {
-            if (!displayWishlist.t3Accessories.includes(itemId)) {
-              displayWishlist.t3Accessories.push(itemId);
-            }
-          }
-        }
-      }
-
-      const embed = buildUserWishlistEmbed({
-        wishlist: displayWishlist,
-        user: interaction.user,
-        frozen: false,
-        receivedItemIds: receivedItemIds,
-        receivedItems: receivedItems
-      });
-
-      embed.setColor('#e74c3c');
-      embed.setTitle('🎯 Your Submitted Wishlist');
-
-      let description = '**Your wishlist has been submitted and all picks are exhausted.**\n\n';
-
-      if (receivedItemIds.length > 0) {
-        description += `✅ **You have received ${receivedItemIds.length} item${receivedItemIds.length !== 1 ? 's' : ''}!**\n\n`;
-      }
-
-      description += 'If you need to make changes, contact an administrator to reset your wishlist.\n\n';
-      description += embed.data.description;
-
-      embed.setDescription(description);
-
-      return interaction.reply({ embeds: [embed], flags: [64] });
-    }
-    
-    // Not all picks exhausted - allow editing with pre-populated form
-    const draftKey = `${interaction.guildId}_${interaction.user.id}`;
-    
-    // Pre-populate draft with existing submission if not already in draft
-    if (!draftWishlists.has(draftKey)) {
-      draftWishlists.set(draftKey, {
-        archbossWeapon: [...(existingSubmission.archbossWeapon || [])],
-        archbossArmor: [...(existingSubmission.archbossArmor || [])],
-        t3Weapons: [...(existingSubmission.t3Weapons || [])],
-        t3Armors: [...(existingSubmission.t3Armors || [])],
-        t3Accessories: [...(existingSubmission.t3Accessories || [])]
-      });
-    }
-    
-    const draft = draftWishlists.get(draftKey);
-    
-    // Create display wishlist that merges draft with received items
+    // Create display wishlist that merges submission with received items
     const displayWishlist = {
-      archbossWeapon: [...(draft.archbossWeapon || [])],
-      archbossArmor: [...(draft.archbossArmor || [])],
-      t3Weapons: [...(draft.t3Weapons || [])],
-      t3Armors: [...(draft.t3Armors || [])],
-      t3Accessories: [...(draft.t3Accessories || [])]
+      archbossWeapon: [...(existingSubmission.archbossWeapon || [])],
+      archbossArmor: [...(existingSubmission.archbossArmor || [])],
+      t3Weapons: [...(existingSubmission.t3Weapons || [])],
+      t3Armors: [...(existingSubmission.t3Armors || [])],
+      t3Accessories: [...(existingSubmission.t3Accessories || [])]
     };
 
-    // Add received items that aren't already in the draft
+    // Add received items that aren't already in the submission
     if (receivedItemIds.length > 0) {
+      const { WISHLIST_ITEMS } = require('../utils/items');
+
       for (const itemId of receivedItemIds) {
         if (WISHLIST_ITEMS.archbossWeapons.find(i => i.id === itemId)) {
           if (!displayWishlist.archbossWeapon.includes(itemId)) {
@@ -172,7 +94,6 @@ async function handleMyWishlist({ interaction, collections }) {
       }
     }
 
-    // Build embed with editable message
     const embed = buildUserWishlistEmbed({
       wishlist: displayWishlist,
       user: interaction.user,
@@ -181,28 +102,21 @@ async function handleMyWishlist({ interaction, collections }) {
       receivedItems: receivedItems
     });
 
-    embed.setColor('#f39c12');
-    embed.setTitle('🎯 Your Wishlist (Previously Submitted)');
+    embed.setColor('#e74c3c');
+    embed.setTitle('🎯 Your Submitted Wishlist');
 
-    let description = '**You have previously submitted a wishlist, but you can still make changes.**\n\n';
-    
+    let description = '**Your wishlist has already been submitted.**\n\n';
+
     if (receivedItemIds.length > 0) {
       description += `✅ **You have received ${receivedItemIds.length} item${receivedItemIds.length !== 1 ? 's' : ''}!**\n\n`;
     }
-    
-    description += 'Select categories below to modify your picks, then click Submit to save your changes.\n\n';
+
+    description += 'If you need to make changes, contact an administrator to reset your wishlist.\n\n';
     description += embed.data.description;
 
     embed.setDescription(description);
 
-    // Create action buttons (some may be disabled if categories are fully received)
-    const buttons = createWishlistButtons(draft, receivedItemIds);
-
-    return interaction.reply({
-      embeds: [embed],
-      components: buttons,
-      flags: [64]
-    });
+    return interaction.reply({ embeds: [embed], flags: [64] });
   }
 
   // No submission exists - show draft form

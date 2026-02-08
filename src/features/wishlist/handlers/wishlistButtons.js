@@ -1,7 +1,7 @@
 // Button handlers for wishlist system
 const { buildUserWishlistEmbed } = require('../utils/panelBuilder');
 const { createWishlistButtons } = require('../commands/mywishlist');
-const { validateWishlist, isWishlistEmpty, areAllPicksExhausted } = require('../utils/wishlistValidator');
+const { validateWishlist, isWishlistEmpty } = require('../utils/wishlistValidator');
 const { updateWishlistPanels } = require('../commands/wishlists');
 const { createCategorySelect } = require('./wishlistSelects');
 const { draftWishlists } = require('../utils/wishlistStorage');
@@ -359,29 +359,17 @@ async function handleSubmit({ interaction, collections, client }) {
     });
   }
 
-  // Check if user already submitted and if all picks are exhausted
+  // Check if user already submitted
   const existingSubmission = await wishlistSubmissions.findOne({
     userId: interaction.user.id,
     guildId: interaction.guildId
   });
 
   if (existingSubmission) {
-    // Get user's received items
-    const receivedItems = await wishlistGivenItems.find({
-      userId: interaction.user.id,
-      guildId: interaction.guildId
-    }).toArray();
-
-    const receivedItemIds = receivedItems.map(item => item.itemId);
-
-    // Check if all picks are exhausted
-    if (areAllPicksExhausted(existingSubmission, receivedItemIds, WISHLIST_ITEMS)) {
-      return interaction.reply({
-        content: '❌ Your wishlist has already been submitted and all picks have been exhausted. Contact an administrator to reset your wishlist.',
-        flags: [64]
-      });
-    }
-    // If not all picks exhausted, allow resubmission (continue with the flow)
+    return interaction.reply({
+      content: '❌ Your wishlist has already been submitted and cannot be edited.',
+      flags: [64]
+    });
   }
 
   // Get draft
@@ -407,25 +395,18 @@ async function handleSubmit({ interaction, collections, client }) {
   await interaction.deferUpdate();
 
   try {
-    // Save to database (use updateOne with upsert to allow resubmission)
-    await wishlistSubmissions.updateOne(
-      {
-        userId: interaction.user.id,
-        guildId: interaction.guildId
-      },
-      {
-        $set: {
-          archbossWeapon: draft.archbossWeapon,
-          archbossArmor: draft.archbossArmor,
-          t3Weapons: draft.t3Weapons,
-          t3Armors: draft.t3Armors,
-          t3Accessories: draft.t3Accessories,
-          submittedAt: new Date(),
-          lastModified: new Date()
-        }
-      },
-      { upsert: true }
-    );
+    // Save to database
+    await wishlistSubmissions.insertOne({
+      userId: interaction.user.id,
+      guildId: interaction.guildId,
+      archbossWeapon: draft.archbossWeapon,
+      archbossArmor: draft.archbossArmor,
+      t3Weapons: draft.t3Weapons,
+      t3Armors: draft.t3Armors,
+      t3Accessories: draft.t3Accessories,
+      submittedAt: new Date(),
+      lastModified: new Date()
+    });
 
     // Clear draft from memory
     draftWishlists.delete(draftKey);
