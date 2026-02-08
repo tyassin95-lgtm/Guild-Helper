@@ -154,6 +154,10 @@ let hasProfileChanges = false;
 let pendingWishlist = null;
 let hasUnsavedChanges = false;
 
+// Inbox state
+let inboxCurrentPage = 1;
+let inboxTotalPages = 1;
+
 // Spam prevention
 const processingEvents = new Set();
 const rsvpCooldowns = new Map();
@@ -171,6 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadRosterData();
   loadItemRollsData();
   checkAdminAccess();
+  loadInboxUnreadCount();
 });
 
 // ==========================================
@@ -256,6 +261,9 @@ function setupTabs() {
           break;
         case 'guildsupport':
           loadGuildSupportData();
+          break;
+        case 'inbox':
+          loadInboxMessages();
           break;
       }
     });
@@ -2027,6 +2035,180 @@ async function loadSupportQueue() {
 }
 
 
+
+// ==========================================
+// Inbox Functionality
+// ==========================================
+
+/**
+ * Load unread inbox message count and update badge
+ */
+async function loadInboxUnreadCount() {
+  try {
+    const response = await fetch(`/api/inbox/unread-count?_=${Date.now()}`);
+    if (!response.ok) return;
+    const data = await response.json();
+    updateInboxBadge(data.unreadCount);
+  } catch (error) {
+    console.error('Error loading inbox unread count:', error);
+  }
+}
+
+/**
+ * Update the inbox badge number
+ */
+function updateInboxBadge(count) {
+  const badge = document.getElementById('inboxBadge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+  // Also update the unread label inside inbox tab
+  const label = document.getElementById('inboxUnreadLabel');
+  if (label) {
+    label.textContent = count > 0 ? `${count} unread` : '';
+  }
+}
+
+/**
+ * Load inbox messages for the current page
+ */
+async function loadInboxMessages(page) {
+  if (page !== undefined) inboxCurrentPage = page;
+  const container = document.getElementById('inbox-content');
+  try {
+    const response = await fetch(`/api/inbox/messages?page=${inboxCurrentPage}&limit=20&_=${Date.now()}`);
+    if (!response.ok) throw new Error('Failed to load messages');
+    const data = await response.json();
+
+    if (!data.messages || data.messages.length === 0) {
+      container.innerHTML = '<p class="text-muted">Your inbox is empty.</p>';
+      document.getElementById('inboxPagination').style.display = 'none';
+      return;
+    }
+
+    inboxTotalPages = data.pagination.totalPages;
+
+    const messagesHtml = data.messages.map(msg => {
+      const date = new Date(msg.timestamp);
+      const timeStr = formatInboxDate(date);
+      const readClass = msg.isRead ? 'inbox-message-read' : 'inbox-message-unread';
+      const readIcon = msg.isRead
+        ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle></svg>';
+      const toggleTitle = msg.isRead ? 'Mark as unread' : 'Mark as read';
+
+      return `
+        <div class="inbox-message ${readClass}" data-id="${msg._id}">
+          <div class="inbox-message-indicator"></div>
+          <div class="inbox-message-body">
+            <div class="inbox-message-content">${escapeHtml(msg.content)}</div>
+            <div class="inbox-message-time">${timeStr}</div>
+          </div>
+          <div class="inbox-message-actions">
+            <button class="inbox-action-btn" title="${toggleTitle}" onclick="toggleInboxRead('${msg._id}', ${!msg.isRead})">
+              ${readIcon}
+            </button>
+            <button class="inbox-action-btn inbox-delete-btn" title="Delete" onclick="deleteInboxMessage('${msg._id}')">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = `<div class="inbox-message-list">${messagesHtml}</div>`;
+
+    // Pagination controls
+    const pagination = document.getElementById('inboxPagination');
+    if (inboxTotalPages > 1) {
+      pagination.style.display = 'flex';
+      document.getElementById('inboxPageInfo').textContent = `Page ${inboxCurrentPage} of ${inboxTotalPages}`;
+      document.getElementById('inboxPrevBtn').disabled = inboxCurrentPage <= 1;
+      document.getElementById('inboxNextBtn').disabled = inboxCurrentPage >= inboxTotalPages;
+      document.getElementById('inboxPrevBtn').onclick = () => loadInboxMessages(inboxCurrentPage - 1);
+      document.getElementById('inboxNextBtn').onclick = () => loadInboxMessages(inboxCurrentPage + 1);
+    } else {
+      pagination.style.display = 'none';
+    }
+  } catch (error) {
+    console.error('Error loading inbox messages:', error);
+    container.innerHTML = '<p class="error-message">Failed to load inbox messages</p>';
+  }
+}
+
+/**
+ * Toggle a message's read/unread status
+ */
+async function toggleInboxRead(messageId, isRead) {
+  try {
+    const response = await fetch(`/api/inbox/messages/${messageId}/read`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isRead })
+    });
+    if (!response.ok) throw new Error('Failed to update message');
+    await loadInboxMessages();
+    await loadInboxUnreadCount();
+  } catch (error) {
+    console.error('Error toggling message read:', error);
+    showToast('Failed to update message', 'error');
+  }
+}
+
+/**
+ * Delete an inbox message (soft delete)
+ */
+async function deleteInboxMessage(messageId) {
+  try {
+    const response = await fetch(`/api/inbox/messages/${messageId}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Failed to delete message');
+    showToast('Message deleted', 'success');
+    await loadInboxMessages();
+    await loadInboxUnreadCount();
+  } catch (error) {
+    console.error('Error deleting inbox message:', error);
+    showToast('Failed to delete message', 'error');
+  }
+}
+
+/**
+ * Format a date for inbox display
+ */
+function formatInboxDate(date) {
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const year = date.getFullYear();
+  return `${month}/${day}/${year}`;
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 // ==========================================
 // Sidebar Toggle Functionality
