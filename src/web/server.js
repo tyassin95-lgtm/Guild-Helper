@@ -1909,10 +1909,24 @@ class WebServer {
         return res.status(400).json({ error: 'Wishlists are currently frozen' });
       }
 
-      // Check if already submitted
+      // Check if already submitted and if all picks are exhausted
       const existing = await this.collections.wishlistSubmissions.findOne({ userId, guildId });
       if (existing?.submittedAt) {
-        return res.status(400).json({ error: 'Wishlist already submitted. Contact an admin to reset.' });
+        // Get user's received items
+        const receivedItems = await this.collections.wishlistGivenItems.find({
+          userId,
+          guildId
+        }).toArray();
+
+        const receivedItemIds = receivedItems.map(item => item.itemId);
+        const { WISHLIST_ITEMS } = require('../features/wishlist/utils/items');
+        const { areAllPicksExhausted } = require('../features/wishlist/utils/wishlistValidator');
+
+        // Check if all picks are exhausted
+        if (areAllPicksExhausted(existing, receivedItemIds, WISHLIST_ITEMS)) {
+          return res.status(400).json({ error: 'Wishlist already submitted and all picks exhausted. Contact an admin to reset.' });
+        }
+        // If not all picks exhausted, allow resubmission (continue with the flow)
       }
 
       // Get user's received items to calculate dynamic limits
