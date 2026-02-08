@@ -68,8 +68,7 @@ function getCollections(db = _db) {
     staticEvents: db.collection('staticEvents'),
     guildSupportConfig: db.collection('guildSupportConfig'),
     guildSupportRequests: db.collection('guildSupportRequests'),
-    guildSupportQueue: db.collection('guildSupportQueue'),
-    inboxMessages: db.collection('inboxMessages')
+    guildSupportQueue: db.collection('guildSupportQueue')
   };
 }
 
