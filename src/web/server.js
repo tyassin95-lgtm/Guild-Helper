@@ -518,6 +518,11 @@ class WebServer {
       await this.handleGetSupportQueue(req, res);
     });
 
+    // API: Get fulfilled requests history
+    this.app.get('/api/guild-support/fulfilled-history', requireAuth, async (req, res) => {
+      await this.handleGetFulfilledHistory(req, res);
+    });
+
     // ==========================================
     // Admin Panel Routes
     // ==========================================
@@ -4253,6 +4258,60 @@ class WebServer {
     } catch (error) {
       console.error('Error getting support queue:', error);
       res.status(500).json({ error: 'Failed to get support queue' });
+    }
+  }
+
+  /**
+   * Get fulfilled requests history
+   */
+  async handleGetFulfilledHistory(req, res) {
+    try {
+      const { guildId } = req.session;
+
+      // Get fulfilled requests sorted by most recently updated (fulfilled)
+      const fulfilledRequests = await this.collections.guildSupportRequests.find({
+        guildId,
+        status: 'fulfilled'
+      })
+      .sort({ updatedAt: -1 })
+      .limit(50) // Limit to last 50 fulfilled requests
+      .toArray();
+
+      // Fetch usernames for each request
+      const history = await Promise.all(fulfilledRequests.map(async (request) => {
+        // Get username from guild member (via Discord client)
+        let username = 'Unknown User';
+        try {
+          if (this.client && request.discordId) {
+            const guild = this.client.guilds.cache.get(guildId);
+            if (guild) {
+              const member = await guild.members.fetch(request.discordId).catch(() => null);
+              if (member) {
+                username = member.user.username;
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching username:', err);
+        }
+
+        return {
+          username,
+          amountFulfilled: request.amountFulfilled || 0,
+          totalRequested: request.totalRequested,
+          approvedAmount: request.approvedAmount,
+          createdAt: request.createdAt,
+          updatedAt: request.updatedAt
+        };
+      }));
+
+      res.json({
+        history
+      });
+
+    } catch (error) {
+      console.error('Error getting fulfilled history:', error);
+      res.status(500).json({ error: 'Failed to get fulfilled history' });
     }
   }
 
