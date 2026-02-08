@@ -2034,6 +2034,11 @@ async function loadFulfilledHistory() {
   const container = document.getElementById('fulfilled-history-content');
   try {
     const response = await fetch('/api/guild-support/fulfilled-history');
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
     const data = await response.json();
     
     if (!data.history || data.history.length === 0) {
