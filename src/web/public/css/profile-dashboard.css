@@ -2177,6 +2177,8 @@ textarea.form-control {
 .history-amount-icon {
   color: var(--accent-green);
   flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .history-amount-value {
