@@ -1787,6 +1787,10 @@ class WebServer {
         return res.status(404).json({ error: 'Event not found' });
       }
 
+      if (event.closed) {
+        return res.status(400).json({ error: 'Event is closed' });
+      }
+
       // Check if user has signed up
       const hasSignedUp = event.rsvpAttending?.includes(userId) ||
                          event.rsvpMaybe?.includes(userId) ||
@@ -1796,28 +1800,67 @@ class WebServer {
         return res.status(400).json({ error: 'You must sign up for the event first' });
       }
 
-      // Check if already recorded
-      if (event.attendees?.includes(userId)) {
-        return res.status(400).json({ error: 'You have already recorded attendance' });
-      }
-
-      // Verify code
+      // Verify code first (before checking attendance to save a DB query)
       if (event.password !== code) {
         return res.status(400).json({ error: 'Incorrect attendance code' });
       }
 
-      // Record attendance
-      await this.collections.pvpEvents.updateOne(
-        { _id: new ObjectId(eventId) },
-        { $push: { attendees: userId } }
+      // Get the bonus points for this event
+      const bonusPoints = event.bonusPoints || 10;
+
+      // Check if this is the first attendee for this event
+      const isFirstAttendee = !event.attendees || event.attendees.length === 0;
+
+      // Use atomic operation to add user to attendees (prevents race conditions)
+      const updateResult = await this.collections.pvpEvents.updateOne(
+        {
+          _id: new ObjectId(eventId),
+          attendees: { $ne: userId },
+          closed: false
+        },
+        {
+          $push: { attendees: userId }
+        }
       );
 
-      // Award bonus points
+      // If matchedCount is 0, either the user already recorded attendance or event was closed
+      if (updateResult.matchedCount === 0) {
+        const currentEvent = await this.collections.pvpEvents.findOne({ _id: new ObjectId(eventId) });
+
+        if (!currentEvent) {
+          return res.status(404).json({ error: 'Event not found' });
+        }
+
+        if (currentEvent.closed) {
+          return res.status(400).json({ error: 'Event is closed' });
+        }
+
+        if (currentEvent.attendees && currentEvent.attendees.includes(userId)) {
+          return res.status(400).json({ error: 'You have already recorded attendance' });
+        }
+
+        return res.status(400).json({ error: 'Unable to record attendance. Please try again.' });
+      }
+
+      // If this is the first attendee, increment the guild's weekly event counter
+      if (isFirstAttendee) {
+        await this.collections.guildSettings.updateOne(
+          { guildId },
+          {
+            $inc: { weeklyTotalEvents: 1 },
+            $set: { lastUpdated: new Date() }
+          },
+          { upsert: true }
+        );
+        console.log(`✅ Incremented weeklyTotalEvents for guild ${guildId} (first attendee via web)`);
+      }
+
+      // Award bonus points and increment eventsAttended counter
       await this.collections.pvpBonuses.updateOne(
         { userId, guildId },
         {
           $inc: {
-            bonusCount: event.bonusPoints || 0,
+            bonusCount: bonusPoints,
             eventsAttended: 1
           },
           $set: { lastUpdated: new Date() }
