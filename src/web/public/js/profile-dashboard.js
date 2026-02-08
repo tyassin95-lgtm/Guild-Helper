@@ -2068,7 +2068,7 @@ async function loadFulfilledHistory() {
                 <span class="history-item-username">${item.username}</span>
               </div>
               <div class="history-item-amount">
-                <img src="/images/currency-icon.svg" alt="Currency" class="history-amount-icon" width="16" height="16">
+                <img src="/static/images/currency-icon.svg" alt="Currency" class="history-amount-icon" width="16" height="16">
                 <span class="history-amount-value">${amountFulfilled}</span>
               </div>
             </div>
