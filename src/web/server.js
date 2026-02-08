@@ -1791,6 +1791,15 @@ class WebServer {
         return res.status(400).json({ error: 'Event is closed' });
       }
 
+      // Check if user has signed up
+      const hasSignedUp = event.rsvpAttending?.includes(userId) ||
+                         event.rsvpMaybe?.includes(userId) ||
+                         event.rsvpNotAttending?.includes(userId);
+
+      if (!hasSignedUp) {
+        return res.status(400).json({ error: 'You must sign up for the event first' });
+      }
+
       // Verify code first (before checking attendance to save a DB query)
       if (event.password !== code) {
         return res.status(400).json({ error: 'Incorrect attendance code' });
