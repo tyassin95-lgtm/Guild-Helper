@@ -4264,7 +4264,7 @@ class WebServer {
 
         if (!request) return null;
 
-        // Get username from guild member (via Discord client)
+        // Get display name from guild member (per-server nickname via Discord client)
         let username = 'Unknown User';
         try {
           if (this.client && request.discordId) {
@@ -4272,7 +4272,7 @@ class WebServer {
             if (guild) {
               const member = await guild.members.fetch(request.discordId).catch(() => null);
               if (member) {
-                username = member.user.username;
+                username = member.displayName;
               }
             }
           }
@@ -4320,9 +4320,9 @@ class WebServer {
       .limit(50) // Limit to last 50 fulfilled requests
       .toArray();
 
-      // Fetch usernames for each request
+      // Fetch display names for each request
       const history = await Promise.all(fulfilledRequests.map(async (request) => {
-        // Get username from guild member (via Discord client)
+        // Get display name from guild member (per-server nickname via Discord client)
         let username = 'Unknown User';
         try {
           if (this.client && request.discordId) {
@@ -4330,7 +4330,7 @@ class WebServer {
             if (guild) {
               const member = await guild.members.fetch(request.discordId).catch(() => null);
               if (member) {
-                username = member.user.username;
+                username = member.displayName;
               }
             }
           }
@@ -4441,7 +4441,7 @@ class WebServer {
         .sort({ createdAt: -1 })
         .toArray();
 
-      // Fetch usernames for each request
+      // Fetch display names for each request
       const requestsWithUsernames = await Promise.all(requests.map(async (request) => {
         let username = 'Unknown User';
         try {
@@ -4450,7 +4450,7 @@ class WebServer {
             if (guild) {
               const member = await guild.members.fetch(request.discordId).catch(() => null);
               if (member) {
-                username = member.user.username;
+                username = member.displayName;
               }
             }
           }
@@ -4491,7 +4491,7 @@ class WebServer {
         return res.status(404).json({ error: 'Request not found' });
       }
 
-      // Get username
+      // Get display name (per-server nickname)
       let username = 'Unknown User';
       try {
         if (this.client && request.discordId) {
@@ -4499,7 +4499,7 @@ class WebServer {
           if (guild) {
             const member = await guild.members.fetch(request.discordId).catch(() => null);
             if (member) {
-              username = member.user.username;
+              username = member.displayName;
             }
           }
         }
