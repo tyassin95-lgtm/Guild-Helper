@@ -2066,6 +2066,13 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   margin-bottom: 20px;
 }
 
+/* Support Requests List - Scrollable Container */
+#requestsList {
+  max-height: 600px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 /* Support Request Items - Enhanced Design */
 .support-request-item {
   background: var(--card-bg-secondary);
