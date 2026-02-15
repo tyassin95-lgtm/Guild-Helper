@@ -185,15 +185,6 @@ async function handlePartiesPanel({ interaction, collections }) {
           value: roleText,
           inline: false
         });
-
-        // Party titles/roles
-        if (partyTitles.length > 0) {
-          embed.addFields({
-            name: '🏷️ Party Role',
-            value: partyTitles.join(' · '),
-            inline: false
-          });
-        }
       }
 
       embeds.push(embed);
