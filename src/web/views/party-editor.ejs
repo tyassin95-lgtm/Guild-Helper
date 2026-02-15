@@ -256,7 +256,7 @@
     .party-composition {
       font-size: 11px;
       color: var(--text-secondary);
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       display: flex;
       gap: 8px;
       justify-content: center;
@@ -271,6 +271,49 @@
     .comp-tank { color: var(--tank-color); }
     .comp-healer { color: var(--healer-color); }
     .comp-dps { color: var(--dps-color); }
+
+    .party-titles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 8px;
+      min-height: 22px;
+    }
+
+    .title-chip {
+      font-size: 9px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      cursor: pointer;
+      border: 1px solid;
+      font-weight: 600;
+      transition: all 0.15s ease;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .title-chip.active {
+      background: rgba(139, 92, 246, 0.25);
+      border-color: var(--accent-purple);
+      color: var(--accent-purple);
+    }
+
+    .title-chip.inactive {
+      background: rgba(107, 114, 128, 0.1);
+      border-color: rgba(107, 114, 128, 0.25);
+      color: var(--text-muted);
+    }
+
+    .title-chip.inactive:hover {
+      background: rgba(139, 92, 246, 0.1);
+      border-color: rgba(139, 92, 246, 0.4);
+      color: var(--text-secondary);
+    }
+
+    .title-chip.active:hover {
+      background: rgba(139, 92, 246, 0.4);
+    }
 
     .members-list {
       min-height: 60px;
@@ -860,6 +903,15 @@
     // Global state
     const TOKEN = '<%= token %>';
     const DEFAULT_AVATAR = 'https://cdn.discordapp.com/embed/avatars/0.png';
+    const PARTY_TITLES = [
+      'PvP Main Ball',
+      'PvP Flank Party',
+      'PvP Capture Party',
+      'PvE Damage Party',
+      'PvE Event Party',
+      'PvP Distraction Party'
+    ];
+    const STATIC_PARTY_TITLES = <%- staticPartyTitles %>;
     let parties = [];
     let availableMembers = [];
     let draggedMember = null;
@@ -890,14 +942,23 @@
       const formationData = <%- formation %>;
       parties = formationData.processedParties || [];
 
+      // Apply static party title defaults (use existing titles if already set on the party)
+      parties.forEach(party => {
+        if (!party.titles || party.titles.length === 0) {
+          party.titles = STATIC_PARTY_TITLES[party.partyNumber] || [];
+        }
+      });
+
       // Ensure we always have 12 party slots
       while (parties.length < 12) {
+        const nextNum = parties.length + 1;
         parties.push({
-          partyNumber: parties.length + 1,
+          partyNumber: nextNum,
           status: 'empty',
           members: [],
           removedMembers: [],
-          composition: { tank: 0, healer: 0, dps: 0 }
+          composition: { tank: 0, healer: 0, dps: 0 },
+          titles: STATIC_PARTY_TITLES[nextNum] || []
         });
       }
 
@@ -929,13 +990,28 @@
       document.getElementById('party-count').textContent = parties.filter(p => p.members.length > 0).length;
     }
 
+    // Toggle a party title on/off
+    function toggleTitle(event, partyIndex, title) {
+      event.stopPropagation();
+      const party = parties[partyIndex];
+      if (!party.titles) party.titles = [];
+      const idx = party.titles.indexOf(title);
+      if (idx >= 0) {
+        party.titles.splice(idx, 1);
+      } else {
+        party.titles.push(title);
+      }
+      render();
+    }
+
     // Create empty party structure
     function createEmptyParty(partyNumber) {
       return {
         partyNumber,
         status: 'empty',
         members: [],
-        composition: { tank: 0, healer: 0, dps: 0 }
+        composition: { tank: 0, healer: 0, dps: 0 },
+        titles: STATIC_PARTY_TITLES[partyNumber] || []
       };
     }
 
@@ -958,6 +1034,12 @@
         ? `<button class="disband-btn" onclick="disbandParty(${partyIndex})" title="Disband party">&#10005;</button>`
         : '';
 
+      const selectedTitles = party.titles || [];
+      const titlesHTML = PARTY_TITLES.map(t => {
+        const isActive = selectedTitles.includes(t);
+        return `<span class="title-chip ${isActive ? 'active' : 'inactive'}" onclick="toggleTitle(event, ${partyIndex}, '${t}')">${t}</span>`;
+      }).join('');
+
       div.innerHTML = `
         <div class="party-header">
           <div class="party-title">Party ${party.partyNumber}</div>
@@ -971,6 +1053,7 @@
           <span class="comp-item comp-healer">H: ${party.composition.healer}</span>
           <span class="comp-item comp-dps">D: ${party.composition.dps}</span>
         </div>
+        <div class="party-titles">${titlesHTML}</div>
         <div class="members-list" id="party-${partyIndex}-members">
           ${party.members.map((member, memberIndex) =>
             createMemberCardHTML(member, partyIndex, memberIndex)

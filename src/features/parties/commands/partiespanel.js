@@ -123,9 +123,11 @@ async function handlePartiesPanel({ interaction, collections }) {
       }
 
       // Regular party handling
+      const partyTitles = party.titles || [];
+      const titleSuffix = partyTitles.length > 0 ? ` — ${partyTitles.join(' · ')}` : '';
       const embed = new EmbedBuilder()
         .setColor(members.length >= 6 ? '#10B981' : members.length >= 4 ? '#F59E0B' : '#EF4444')
-        .setTitle(`⚔️ Party ${party.partyNumber}`)
+        .setTitle(`⚔️ Party ${party.partyNumber}${titleSuffix}`)
         .setTimestamp();
 
       if (members.length === 0) {
@@ -153,20 +155,20 @@ async function handlePartiesPanel({ interaction, collections }) {
         // Stats fields
         const statusEmoji = members.length >= 6 ? '✅' : members.length >= 4 ? '⚠️' : '❌';
         embed.addFields(
-          { 
-            name: 'Party Status', 
-            value: `${statusEmoji} \`${members.length}/6 slots filled\``, 
-            inline: true 
+          {
+            name: 'Party Status',
+            value: `${statusEmoji} \`${members.length}/6 slots filled\``,
+            inline: true
           },
-          { 
-            name: 'Total CP', 
-            value: `\`${totalCP.toLocaleString()}\``, 
-            inline: true 
+          {
+            name: 'Total CP',
+            value: `\`${totalCP.toLocaleString()}\``,
+            inline: true
           },
-          { 
-            name: 'Average CP', 
-            value: `\`${avgCP.toLocaleString()}\``, 
-            inline: true 
+          {
+            name: 'Average CP',
+            value: `\`${avgCP.toLocaleString()}\``,
+            inline: true
           }
         );
 
@@ -183,6 +185,15 @@ async function handlePartiesPanel({ interaction, collections }) {
           value: roleText,
           inline: false
         });
+
+        // Party titles/roles
+        if (partyTitles.length > 0) {
+          embed.addFields({
+            name: '🏷️ Party Role',
+            value: partyTitles.join(' · '),
+            inline: false
+          });
+        }
       }
 
       embeds.push(embed);
