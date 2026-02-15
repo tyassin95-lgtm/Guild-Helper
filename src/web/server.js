@@ -789,6 +789,16 @@ class WebServer {
         );
       }
 
+      // Fetch static party titles to use as defaults in the event party editor
+      const staticParties = await this.collections.parties.find({
+        guildId: event.guildId,
+        isReserve: { $ne: true }
+      }).toArray();
+      const staticPartyTitles = {};
+      for (const sp of staticParties) {
+        staticPartyTitles[sp.partyNumber] = sp.titles || [];
+      }
+
       // Render the party editor page
       res.render('party-editor', {
         token: req.params.token,
@@ -798,7 +808,8 @@ class WebServer {
         eventLocation: event.location,
         eventTime: event.eventTime,
         formation: JSON.stringify(enrichedFormation),
-        summary: JSON.stringify(formation.summary)
+        summary: JSON.stringify(formation.summary),
+        staticPartyTitles: JSON.stringify(staticPartyTitles)
       });
 
     } catch (error) {
@@ -1038,6 +1049,15 @@ class WebServer {
       )
       .setFooter({ text: 'Good luck! See you at the event.' })
       .setTimestamp();
+
+    // Add party titles/roles if set
+    if (party.titles && party.titles.length > 0) {
+      embed.addFields({
+        name: '🏷️ Party Role',
+        value: party.titles.join(' · '),
+        inline: false
+      });
+    }
 
     return { embeds: [embed] };
   }
@@ -1306,6 +1326,7 @@ class WebServer {
             guildId,
             partyNumber: party.partyNumber,
             members: party.members || [],
+            titles: party.titles || [],
             roleComposition: composition,
             totalCP,
             isReserve: false,
@@ -1322,6 +1343,7 @@ class WebServer {
             {
               $set: {
                 members: party.members || [],
+                titles: party.titles || [],
                 roleComposition: composition,
                 totalCP,
                 lastModified: new Date(),
