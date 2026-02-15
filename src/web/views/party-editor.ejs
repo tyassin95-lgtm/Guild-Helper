@@ -272,47 +272,122 @@
     .comp-healer { color: var(--healer-color); }
     .comp-dps { color: var(--dps-color); }
 
-    .party-titles {
+    .party-roles-row {
       display: flex;
-      flex-wrap: wrap;
+      align-items: center;
       gap: 4px;
       margin-bottom: 8px;
-      min-height: 22px;
+      min-height: 20px;
+      flex-wrap: wrap;
     }
 
-    .title-chip {
-      font-size: 9px;
-      padding: 2px 7px;
-      border-radius: 10px;
-      cursor: pointer;
-      border: 1px solid;
-      font-weight: 600;
-      transition: all 0.15s ease;
-      letter-spacing: 0.3px;
+    .role-tag {
+      font-size: 8.5px;
+      font-weight: 700;
+      color: var(--accent-purple);
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      padding: 1px 6px;
+      border-radius: 8px;
       white-space: nowrap;
+      letter-spacing: 0.2px;
+    }
+
+    .roles-edit-btn {
+      margin-left: auto;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: transparent;
+      border: 1.5px dashed rgba(107, 114, 128, 0.35);
+      color: var(--text-muted);
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .roles-edit-btn:hover {
+      border-color: var(--accent-purple);
+      color: var(--accent-purple);
+      background: rgba(139, 92, 246, 0.12);
+      border-style: solid;
+    }
+
+    .roles-dropdown-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+    }
+
+    .roles-dropdown-menu {
+      position: fixed;
+      z-index: 1000;
+      background: #1a1f2e;
+      border: 1px solid rgba(139, 92, 246, 0.25);
+      border-radius: 12px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(139, 92, 246, 0.08);
+      padding: 6px;
+      width: 204px;
+    }
+
+    .roles-dropdown-header {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      padding: 3px 8px 7px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      margin-bottom: 4px;
+    }
+
+    .roles-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--text-secondary);
+      transition: background 0.12s ease, color 0.12s ease;
       user-select: none;
     }
 
-    .title-chip.active {
-      background: rgba(139, 92, 246, 0.25);
-      border-color: var(--accent-purple);
+    .roles-dropdown-item:hover {
+      background: rgba(139, 92, 246, 0.1);
+      color: var(--text-primary);
+    }
+
+    .roles-dropdown-item.active {
       color: var(--accent-purple);
     }
 
-    .title-chip.inactive {
-      background: rgba(107, 114, 128, 0.1);
-      border-color: rgba(107, 114, 128, 0.25);
-      color: var(--text-muted);
+    .role-check {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      border: 1.5px solid rgba(107, 114, 128, 0.4);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      font-weight: 700;
+      transition: all 0.15s ease;
+      color: transparent;
     }
 
-    .title-chip.inactive:hover {
-      background: rgba(139, 92, 246, 0.1);
-      border-color: rgba(139, 92, 246, 0.4);
-      color: var(--text-secondary);
-    }
-
-    .title-chip.active:hover {
-      background: rgba(139, 92, 246, 0.4);
+    .roles-dropdown-item.active .role-check {
+      background: var(--accent-purple);
+      border-color: var(--accent-purple);
+      color: white;
     }
 
     .members-list {
@@ -990,18 +1065,80 @@
       document.getElementById('party-count').textContent = parties.filter(p => p.members.length > 0).length;
     }
 
-    // Toggle a party title on/off
-    function toggleTitle(event, partyIndex, title) {
+    // Roles dropdown state
+    let _activeRolesDropdown = null;
+
+    function buildRolesRowInner(partyIndex) {
+      const titles = (parties[partyIndex] && parties[partyIndex].titles) || [];
+      const tagsHTML = titles.map(t => `<span class="role-tag">${t}</span>`).join('');
+      return `${tagsHTML}<button class="roles-edit-btn" onclick="openRolesMenu(event, ${partyIndex})" title="Edit roles">+</button>`;
+    }
+
+    function openRolesMenu(event, partyIndex) {
       event.stopPropagation();
+      closeRolesMenu();
+
+      const btn = event.currentTarget;
+      const rect = btn.getBoundingClientRect();
+
+      const overlay = document.createElement('div');
+      overlay.className = 'roles-dropdown-overlay';
+      overlay.onclick = closeRolesMenu;
+
+      const menu = document.createElement('div');
+      menu.className = 'roles-dropdown-menu';
+
+      let top = rect.bottom + 6;
+      const approxMenuH = 44 + PARTY_TITLES.length * 33;
+      if (top + approxMenuH > window.innerHeight - 16) {
+        top = rect.top - approxMenuH - 6;
+      }
+      const left = Math.max(8, Math.min(rect.right - 204, window.innerWidth - 216));
+      menu.style.top = top + 'px';
+      menu.style.left = left + 'px';
+
+      const party = parties[partyIndex];
+      const selectedTitles = party.titles || [];
+
+      menu.innerHTML = `
+        <div class="roles-dropdown-header">Party Roles</div>
+        ${PARTY_TITLES.map(t => {
+          const isActive = selectedTitles.includes(t);
+          return `<div class="roles-dropdown-item ${isActive ? 'active' : ''}"
+                       onclick="event.stopPropagation(); toggleRoleItem(${partyIndex}, '${t}', this)">
+                    <div class="role-check">${isActive ? '✓' : ''}</div>
+                    ${t}
+                  </div>`;
+        }).join('')}
+      `;
+
+      overlay.appendChild(menu);
+      document.body.appendChild(overlay);
+      _activeRolesDropdown = overlay;
+    }
+
+    function closeRolesMenu() {
+      if (_activeRolesDropdown) {
+        _activeRolesDropdown.remove();
+        _activeRolesDropdown = null;
+      }
+    }
+
+    function toggleRoleItem(partyIndex, title, itemEl) {
       const party = parties[partyIndex];
       if (!party.titles) party.titles = [];
       const idx = party.titles.indexOf(title);
       if (idx >= 0) {
         party.titles.splice(idx, 1);
+        itemEl.classList.remove('active');
+        itemEl.querySelector('.role-check').textContent = '';
       } else {
         party.titles.push(title);
+        itemEl.classList.add('active');
+        itemEl.querySelector('.role-check').textContent = '✓';
       }
-      render();
+      const row = document.getElementById(`roles-row-${partyIndex}`);
+      if (row) row.innerHTML = buildRolesRowInner(partyIndex);
     }
 
     // Create empty party structure
@@ -1034,12 +1171,6 @@
         ? `<button class="disband-btn" onclick="disbandParty(${partyIndex})" title="Disband party">&#10005;</button>`
         : '';
 
-      const selectedTitles = party.titles || [];
-      const titlesHTML = PARTY_TITLES.map(t => {
-        const isActive = selectedTitles.includes(t);
-        return `<span class="title-chip ${isActive ? 'active' : 'inactive'}" onclick="toggleTitle(event, ${partyIndex}, '${t}')">${t}</span>`;
-      }).join('');
-
       div.innerHTML = `
         <div class="party-header">
           <div class="party-title">Party ${party.partyNumber}</div>
@@ -1053,7 +1184,9 @@
           <span class="comp-item comp-healer">H: ${party.composition.healer}</span>
           <span class="comp-item comp-dps">D: ${party.composition.dps}</span>
         </div>
-        <div class="party-titles">${titlesHTML}</div>
+        <div class="party-roles-row" id="roles-row-${partyIndex}">
+          ${buildRolesRowInner(partyIndex)}
+        </div>
         <div class="members-list" id="party-${partyIndex}-members">
           ${party.members.map((member, memberIndex) =>
             createMemberCardHTML(member, partyIndex, memberIndex)

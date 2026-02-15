@@ -1016,10 +1016,14 @@ class WebServer {
     const roleComp = `🛡️ ${comp.tank}  ·  💚 ${comp.healer}  ·  ⚔️ ${comp.dps}`;
 
     // Build the embed
+    const titleRoleLine = (party.titles && party.titles.length > 0)
+      ? `\n**🏷️ ${party.titles.join(' · ')}**`
+      : '';
+
     const embed = new EmbedBuilder()
       .setColor(eventColor)
       .setTitle(`🎮 Party ${party.partyNumber} Assignment`)
-      .setDescription(`You've been assigned to **Party ${party.partyNumber}** for the upcoming event.`)
+      .setDescription(`You've been assigned to **Party ${party.partyNumber}** for the upcoming event.${titleRoleLine}`)
       .addFields(
         {
           name: '📅 Event',
@@ -1049,15 +1053,6 @@ class WebServer {
       )
       .setFooter({ text: 'Good luck! See you at the event.' })
       .setTimestamp();
-
-    // Add party titles/roles if set
-    if (party.titles && party.titles.length > 0) {
-      embed.addFields({
-        name: '🏷️ Party Role',
-        value: party.titles.join(' · '),
-        inline: false
-      });
-    }
 
     return { embeds: [embed] };
   }
