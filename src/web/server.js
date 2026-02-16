@@ -711,6 +711,11 @@ class WebServer {
       await this.handleAdminPartialFulfillRequest(req, res);
     });
 
+    // API: Toggle applications open/closed
+    this.app.post('/api/admin/guild-support/toggle-applications', requireAdmin, async (req, res) => {
+      await this.handleAdminToggleApplications(req, res);
+    });
+
     // 404 handler
     this.app.use((req, res) => {
       res.status(404).send('Page not found');
@@ -4136,7 +4141,8 @@ class WebServer {
       res.json({
         infoContent: config?.infoContent || '',
         requestSchema: config?.requestSchema || [],
-        hasConfig: !!config
+        hasConfig: !!config,
+        applicationsOpen: config?.applicationsOpen !== false
       });
 
     } catch (error) {
@@ -4157,6 +4163,11 @@ class WebServer {
       const config = await this.collections.guildSupportConfig.findOne({ guildId });
       if (!config || !config.requestSchema) {
         return res.status(400).json({ error: 'Support request form is not configured' });
+      }
+
+      // Check if applications are open
+      if (config.applicationsOpen === false) {
+        return res.status(403).json({ error: 'Guild Support Applications are currently closed by the admin until approved requests are fulfilled. Thanks for your patience' });
       }
 
       // Check if user already has an active support request
@@ -4392,7 +4403,8 @@ class WebServer {
         config: config || {
           guildId,
           infoContent: '',
-          requestSchema: []
+          requestSchema: [],
+          applicationsOpen: true
         }
       });
 
@@ -4436,6 +4448,36 @@ class WebServer {
     } catch (error) {
       console.error('Error updating guild support config:', error);
       res.status(500).json({ error: 'Failed to update configuration' });
+    }
+  }
+
+  /**
+   * Toggle guild support applications open/closed (admin)
+   */
+  async handleAdminToggleApplications(req, res) {
+    try {
+      const { guildId } = req.session;
+      const { applicationsOpen } = req.body;
+
+      if (typeof applicationsOpen !== 'boolean') {
+        return res.status(400).json({ error: 'applicationsOpen must be a boolean' });
+      }
+
+      await this.collections.guildSupportConfig.updateOne(
+        { guildId },
+        { $set: { applicationsOpen, updatedAt: new Date() } },
+        { upsert: true }
+      );
+
+      res.json({
+        success: true,
+        applicationsOpen,
+        message: applicationsOpen ? 'Applications are now open' : 'Applications are now closed'
+      });
+
+    } catch (error) {
+      console.error('Error toggling guild support applications:', error);
+      res.status(500).json({ error: 'Failed to toggle applications' });
     }
   }
 

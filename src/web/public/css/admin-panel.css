@@ -2430,6 +2430,48 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   color: var(--text-secondary);
 }
 
+/* Applications Toggle */
+.applications-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.applications-status-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.applications-status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.applications-status-badge.applications-open {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.applications-status-badge.applications-closed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.applications-status-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .form-field-item {

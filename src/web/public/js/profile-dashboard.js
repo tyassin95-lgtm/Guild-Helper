@@ -1772,35 +1772,51 @@ async function loadSupportForm() {
   try {
     const configResponse = await fetch('/api/guild-support/info');
     const data = await configResponse.json();
-    
+
+    // Check if applications are open
+    if (data.applicationsOpen === false) {
+      container.innerHTML = `
+        <div class="applications-closed-notice">
+          <div class="applications-closed-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <h3 class="applications-closed-title">Applications Currently Closed</h3>
+          <p class="applications-closed-message">Guild Support Applications are currently closed by the admin until approved requests are fulfilled. Thanks for your patience.</p>
+        </div>`;
+      return;
+    }
+
     // Check if we have schema from server
     if (!data.requestSchema || data.requestSchema.length === 0) {
       container.innerHTML = '<p class="text-muted">Support request form is not configured yet.</p>';
       return;
     }
-    
+
     const config = { requestSchema: data.requestSchema };
-    
+
     if (!config || !config.requestSchema || config.requestSchema.length === 0) {
       container.innerHTML = '<p class="text-muted">Support request form is not configured yet.</p>';
       return;
     }
-    
+
     // Generate form from schema
     let formHtml = '<form id="support-request-form" class="support-form">';
-    
+
     config.requestSchema.forEach(field => {
       formHtml += generateFormField(field);
     });
-    
+
     formHtml += `
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">Submit Request</button>
       </div>
     </form>`;
-    
+
     container.innerHTML = formHtml;
-    
+
     // Attach form submit handler
     document.getElementById('support-request-form').addEventListener('submit', handleSupportRequestSubmit);
   } catch (error) {
