@@ -1561,16 +1561,83 @@ async function loadGuildSupportConfig() {
   try {
     const response = await fetch('/api/admin/guild-support/config');
     const { config } = await response.json();
-    
+
     // Load info content
     document.getElementById('supportInfoEditor').value = config.infoContent || '';
-    
+
     // Load form schema
     currentFormSchema = config.requestSchema || [];
     renderFormFields();
+
+    // Load applications open/closed state
+    const applicationsOpen = config.applicationsOpen !== false;
+    updateApplicationsToggleUI(applicationsOpen);
   } catch (error) {
     console.error('Error loading guild support config:', error);
     showToast('Failed to load configuration', 'error');
+  }
+}
+
+/**
+ * Update the applications toggle button UI based on current state
+ */
+function updateApplicationsToggleUI(applicationsOpen) {
+  const badge = document.getElementById('applicationsStatusBadge');
+  const text = document.getElementById('applicationsStatusText');
+  const btn = document.getElementById('toggleApplicationsBtn');
+  const btnText = document.getElementById('toggleApplicationsBtnText');
+
+  if (!badge || !text || !btn || !btnText) return;
+
+  if (applicationsOpen) {
+    badge.className = 'applications-status-badge applications-open';
+    badge.textContent = 'OPEN';
+    text.textContent = 'Members can submit new support requests.';
+    btn.className = 'btn btn-danger';
+    btnText.textContent = 'Close Applications';
+    btn.dataset.current = 'open';
+  } else {
+    badge.className = 'applications-status-badge applications-closed';
+    badge.textContent = 'CLOSED';
+    text.textContent = 'New support request submissions are disabled.';
+    btn.className = 'btn btn-success';
+    btnText.textContent = 'Open Applications';
+    btn.dataset.current = 'closed';
+  }
+}
+
+/**
+ * Toggle guild support applications open/closed
+ */
+async function toggleApplications() {
+  const btn = document.getElementById('toggleApplicationsBtn');
+  if (!btn) return;
+
+  const currentlyOpen = btn.dataset.current === 'open';
+  const newState = !currentlyOpen;
+
+  btn.disabled = true;
+
+  try {
+    const response = await fetch('/api/admin/guild-support/toggle-applications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ applicationsOpen: newState })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to toggle applications');
+    }
+
+    updateApplicationsToggleUI(data.applicationsOpen);
+    showToast(data.message, 'success');
+  } catch (error) {
+    console.error('Error toggling applications:', error);
+    showToast(error.message || 'Failed to toggle applications', 'error');
+  } finally {
+    btn.disabled = false;
   }
 }
 
