@@ -99,11 +99,15 @@ async function handleResetPartiesConfirmation({ interaction, collections }) {
         try {
           const channel = await interaction.client.channels.fetch(panelInfo.channelId).catch(() => null);
           if (channel) {
-            const message = await channel.messages.fetch(panelInfo.messageId).catch(() => null);
-            if (message) await message.delete().catch(() => {});
+            // Support both new messageIds array and legacy messageId field
+            const idsToDelete = panelInfo.messageIds || (panelInfo.messageId ? [panelInfo.messageId] : []);
+            for (const msgId of idsToDelete) {
+              const message = await channel.messages.fetch(msgId).catch(() => null);
+              if (message) await message.delete().catch(() => {});
+            }
           }
         } catch (err) {
-          console.error('Failed to delete party panel message:', err);
+          console.error('Failed to delete party panel messages:', err);
         }
 
         await partyPanels.deleteOne({ guildId: interaction.guildId });
