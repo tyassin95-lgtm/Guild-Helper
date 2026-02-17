@@ -32,9 +32,10 @@ async function handlePartiesPanel({ interaction, collections }) {
         {
           $set: {
             channelId: interaction.channelId,
-            messageId: message.id,
+            messageIds: [message.id],
             createdAt: new Date()
-          }
+          },
+          $unset: { messageId: '' }
         },
         { upsert: true }
       );
@@ -190,14 +191,13 @@ async function handlePartiesPanel({ interaction, collections }) {
       embeds.push(embed);
     }
 
-    // Discord allows up to 10 embeds per message
-    if (embeds.length > 10) {
-      console.warn(`Guild ${interaction.guildId} has ${embeds.length} embeds, truncating to 10`);
-      embeds.splice(10);
+    // Discord allows up to 10 embeds per message, split into chunks
+    const messageIds = [];
+    for (let i = 0; i < embeds.length; i += 10) {
+      const chunk = embeds.slice(i, i + 10);
+      const message = await interaction.channel.send({ embeds: chunk });
+      messageIds.push(message.id);
     }
-
-    // Send the panel message
-    const message = await interaction.channel.send({ embeds });
 
     // Store panel info
     await partyPanels.updateOne(
@@ -205,9 +205,10 @@ async function handlePartiesPanel({ interaction, collections }) {
       {
         $set: {
           channelId: interaction.channelId,
-          messageId: message.id,
+          messageIds: messageIds,
           createdAt: new Date()
-        }
+        },
+        $unset: { messageId: '' }
       },
       { upsert: true }
     );
