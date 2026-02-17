@@ -5,7 +5,9 @@ const PARTY_TITLES = [
   'PvP Capture Party',
   'PvE Damage Party',
   'PvE Event Party',
-  'PvP Distraction Party'
+  'PvP Distraction Party',
+  'Reserve',
+  'Shotcalls'
 ];
 
 // Available weapons for role selection
