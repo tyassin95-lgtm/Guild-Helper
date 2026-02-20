@@ -126,6 +126,15 @@ async function enrichSessionData(req, collections, client) {
       
       if (guildSettings) {
         req.session.guildSettings = guildSettings;
+
+        // Grant admin access to users with pvpCodeManagers role
+        if (!req.session.isAdmin) {
+          const pvpCodeManagers = guildSettings.pvpCodeManagers || [];
+          const userRoles = req.session.userRoles || [];
+          if (pvpCodeManagers.some(roleId => userRoles.includes(roleId))) {
+            req.session.isAdmin = true;
+          }
+        }
       }
     }
     
