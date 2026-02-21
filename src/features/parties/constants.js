@@ -1,13 +1,19 @@
 // Available party titles/roles that can be assigned to each party
 const PARTY_TITLES = [
-  'PvP Main Ball',
-  'PvP Flank Party',
-  'PvP Capture Party',
-  'PvE Damage Party',
-  'PvE Event Party',
+  'Shotcalls',
+  'Main Ball',
+  'Flank Party',
+  'Throne Capture',
+  'Capture Party',
   'PvP Distraction Party',
-  'Reserve',
-  'Shotcalls'
+  'PvE Damage Party',
+  'PvE Farm Party',
+  'Portal 1',
+  'Portal 2',
+  'Portal 3',
+  'Sewers',
+  'Benched',
+  'Reserve'
 ];
 
 // Available weapons for role selection
