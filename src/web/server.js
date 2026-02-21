@@ -1830,9 +1830,11 @@ class WebServer {
       // Get the bonus points for this event
       const bonusPoints = event.bonusPoints || 10;
 
-      // Use a single atomic operation to add user to attendees and detect if this is the first attendee.
-      // returnDocument: 'after' returns the updated document so we can check attendees.length === 1.
-      const updatedEvent = await this.collections.pvpEvents.findOneAndUpdate(
+      // Check if this is the first attendee for this event
+      const isFirstAttendee = !event.attendees || event.attendees.length === 0;
+
+      // Use atomic operation to add user to attendees (prevents race conditions)
+      const updateResult = await this.collections.pvpEvents.updateOne(
         {
           _id: new ObjectId(eventId),
           attendees: { $ne: userId },
@@ -1840,12 +1842,11 @@ class WebServer {
         },
         {
           $push: { attendees: userId }
-        },
-        { returnDocument: 'after' }
+        }
       );
 
-      // If null, either the user already recorded attendance or the event was closed
-      if (!updatedEvent) {
+      // If matchedCount is 0, either the user already recorded attendance or event was closed
+      if (updateResult.matchedCount === 0) {
         const currentEvent = await this.collections.pvpEvents.findOne({ _id: new ObjectId(eventId) });
 
         if (!currentEvent) {
@@ -1863,8 +1864,8 @@ class WebServer {
         return res.status(400).json({ error: 'Unable to record attendance. Please try again.' });
       }
 
-      // Increment weeklyTotalEvents only when this was the very first attendee (0 → 1 transition)
-      if (updatedEvent.attendees.length === 1) {
+      // If this is the first attendee, increment the guild's weekly event counter
+      if (isFirstAttendee) {
         await this.collections.guildSettings.updateOne(
           { guildId },
           {
