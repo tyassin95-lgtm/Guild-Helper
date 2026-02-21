@@ -1022,13 +1022,13 @@ class WebServer {
 
     // Build the embed
     const titleRoleLine = (party.titles && party.titles.length > 0)
-      ? `\n**🏷️ ${party.titles.join(' · ')}**`
+      ? `\n** ${party.titles.join(' · ')}**`
       : '';
 
     const embed = new EmbedBuilder()
       .setColor(eventColor)
       .setTitle(`🎮 Party ${party.partyNumber} Assignment`)
-      .setDescription(`You've been assigned to **Party ${party.partyNumber}** for the upcoming event.${titleRoleLine}`)
+      .setDescription(`You've been assigned to **Party ${party.partyNumber}** for the upcoming event. Your party's role(s) are:${titleRoleLine}`)
       .addFields(
         {
           name: '📅 Event',
