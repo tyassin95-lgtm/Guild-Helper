@@ -107,12 +107,9 @@ async function handlePvPModals({ interaction, collections }) {
     // Get the bonus points for this event
     const bonusPoints = event.bonusPoints || 10;
 
-    // Check if this is the first attendee for this event
-    const isFirstAttendee = !event.attendees || event.attendees.length === 0;
-
-    // Use atomic operation to add user to attendees (prevents race conditions)
-    // Note: We keep the user's RSVP status as a record (no $pull)
-    const updateResult = await pvpEvents.updateOne(
+    // Use a single atomic operation to add user to attendees and detect if this is the first attendee.
+    // returnDocument: 'after' returns the updated document so we can check attendees.length === 1.
+    const updatedEvent = await pvpEvents.findOneAndUpdate(
       {
         _id: new ObjectId(eventId),
         attendees: { $ne: interaction.user.id },
@@ -120,11 +117,12 @@ async function handlePvPModals({ interaction, collections }) {
       },
       {
         $push: { attendees: interaction.user.id }
-      }
+      },
+      { returnDocument: 'after' }
     );
 
-    // If matchedCount is 0, either the user already recorded attendance or event was closed
-    if (updateResult.matchedCount === 0) {
+    // If null, either the user already recorded attendance or the event was closed
+    if (!updatedEvent) {
       const currentEvent = await pvpEvents.findOne({ _id: new ObjectId(eventId) });
 
       if (!currentEvent) {
@@ -142,8 +140,8 @@ async function handlePvPModals({ interaction, collections }) {
       return interaction.editReply({ content: '❌ Unable to record attendance. Please try again.' });
     }
 
-    // If this is the first attendee, increment the guild's weekly event counter
-    if (isFirstAttendee) {
+    // Increment weeklyTotalEvents only when this was the very first attendee (0 → 1 transition)
+    if (updatedEvent.attendees.length === 1) {
       await guildSettings.updateOne(
         { guildId: interaction.guildId },
         { 
@@ -226,20 +224,25 @@ async function handlePvPModals({ interaction, collections }) {
         return interaction.editReply({ content: `❌ ${member.displayName} already has attendance recorded for this event.` });
       }
 
-      // Check if this is the first attendee for this event
-      const isFirstAttendee = !event.attendees || event.attendees.length === 0;
-
-      // Add attendance for the user
-      // Note: We keep the user's RSVP status as a record (no $pull)
-      await pvpEvents.updateOne(
-        { _id: new ObjectId(eventId) },
+      // Use a single atomic operation to add user to attendees and detect if this is the first attendee.
+      // returnDocument: 'after' returns the updated document so we can check attendees.length === 1.
+      const updatedEvent = await pvpEvents.findOneAndUpdate(
+        {
+          _id: new ObjectId(eventId),
+          attendees: { $ne: userId }
+        },
         {
           $push: { attendees: userId }
-        }
+        },
+        { returnDocument: 'after' }
       );
 
-      // If this is the first attendee, increment the guild's weekly event counter
-      if (isFirstAttendee) {
+      if (!updatedEvent) {
+        return interaction.editReply({ content: `❌ ${member.displayName} already has attendance recorded for this event.` });
+      }
+
+      // Increment weeklyTotalEvents only when this was the very first attendee (0 → 1 transition)
+      if (updatedEvent.attendees.length === 1) {
         await guildSettings.updateOne(
           { guildId: interaction.guildId },
           { 
