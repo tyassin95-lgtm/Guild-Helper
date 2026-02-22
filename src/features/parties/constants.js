@@ -8,12 +8,15 @@ const PARTY_TITLES = [
   'PvP Distraction Party',
   'PvE Damage Party',
   'PvE Farm Party',
+  'Spinner',
+  'Spawn Campers',
   'Portal 1',
   'Portal 2',
   'Portal 3',
   'Sewers',
   'Benched',
-  'Reserve'
+  'Reserve',
+  'Unassigned - Fill Other Parties'
 ];
 
 // Available weapons for role selection
