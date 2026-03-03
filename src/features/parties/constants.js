@@ -19,6 +19,11 @@ const PARTY_TITLES = [
   'Unassigned - Fill Other Parties'
 ];
 
+// Available individual player tags (assigned per-player within a party)
+const PLAYER_TAGS = [
+  'AoE Bomber'
+];
+
 // Available weapons for role selection
 const WEAPONS = [
   { name: 'Orb', emoji: '🔮' },
@@ -40,6 +45,7 @@ const MAX_HEALERS_PER_PARTY = 2;
 
 module.exports = {
   PARTY_TITLES,
+  PLAYER_TAGS,
   WEAPONS,
   MAX_PARTIES,
   PARTY_SIZE,

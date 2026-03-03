@@ -293,6 +293,121 @@
       letter-spacing: 0.2px;
     }
 
+    .player-tag-badge {
+      font-size: 8px;
+      font-weight: 700;
+      color: #f59e0b;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      padding: 1px 5px;
+      border-radius: 6px;
+      white-space: nowrap;
+      letter-spacing: 0.2px;
+    }
+
+    .player-tag-btn {
+      margin-left: auto;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: transparent;
+      border: 1.5px dashed rgba(245, 158, 11, 0.35);
+      color: rgba(245, 158, 11, 0.6);
+      font-size: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s ease;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .player-tag-btn:hover {
+      border-color: #f59e0b;
+      color: #f59e0b;
+      background: rgba(245, 158, 11, 0.1);
+      border-style: solid;
+    }
+
+    .player-tag-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 18px;
+    }
+
+    .player-tag-dropdown-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1001;
+    }
+
+    .player-tag-dropdown-menu {
+      position: fixed;
+      z-index: 1002;
+      background: #1a1f2e;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 10px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.7);
+      padding: 5px;
+      width: 180px;
+    }
+
+    .player-tag-dropdown-header {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      padding: 3px 8px 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      margin-bottom: 3px;
+    }
+
+    .player-tag-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--text-secondary);
+      transition: background 0.12s ease, color 0.12s ease;
+      user-select: none;
+    }
+
+    .player-tag-dropdown-item:hover {
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--text-primary);
+    }
+
+    .player-tag-dropdown-item.active {
+      color: #f59e0b;
+    }
+
+    .player-tag-clear {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 10px;
+      color: var(--text-muted);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      margin-top: 3px;
+      transition: background 0.12s ease;
+      user-select: none;
+    }
+
+    .player-tag-clear:hover {
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+    }
+
     .roles-edit-btn {
       margin-left: auto;
       width: 18px;
@@ -334,6 +449,8 @@
       box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(139, 92, 246, 0.08);
       padding: 6px;
       width: 204px;
+      max-height: 80vh;
+      overflow-y: auto;
     }
 
     .roles-dropdown-header {
@@ -998,6 +1115,8 @@
       'Unassigned - Fill Other Parties'
     ];
     
+    const PLAYER_TAGS = ['AoE Bomber'];
+
     const STATIC_PARTY_TITLES = <%- staticPartyTitles %>;
     let parties = [];
     let availableMembers = [];
@@ -1100,11 +1219,12 @@
       const menu = document.createElement('div');
       menu.className = 'roles-dropdown-menu';
 
+      const maxMenuH = Math.min(window.innerHeight * 0.8, 44 + PARTY_TITLES.length * 33);
       let top = rect.bottom + 6;
-      const approxMenuH = 44 + PARTY_TITLES.length * 33;
-      if (top + approxMenuH > window.innerHeight - 16) {
-        top = rect.top - approxMenuH - 6;
+      if (top + maxMenuH > window.innerHeight - 16) {
+        top = rect.top - maxMenuH - 6;
       }
+      top = Math.max(8, top);
       const left = Math.max(8, Math.min(rect.right - 204, window.innerWidth - 216));
       menu.style.top = top + 'px';
       menu.style.left = left + 'px';
@@ -1151,6 +1271,69 @@
       }
       const row = document.getElementById(`roles-row-${partyIndex}`);
       if (row) row.innerHTML = buildRolesRowInner(partyIndex);
+    }
+
+    // Player tag dropdown state
+    let _activePlayerTagDropdown = null;
+
+    function openPlayerTagMenu(event, partyIndex, memberIndex) {
+      event.stopPropagation();
+      closePlayerTagMenu();
+
+      const btn = event.currentTarget;
+      const rect = btn.getBoundingClientRect();
+
+      const overlay = document.createElement('div');
+      overlay.className = 'player-tag-dropdown-overlay';
+      overlay.onclick = closePlayerTagMenu;
+
+      const menu = document.createElement('div');
+      menu.className = 'player-tag-dropdown-menu';
+
+      const menuH = 36 + PLAYER_TAGS.length * 32 + 32;
+      let top = rect.bottom + 6;
+      if (top + menuH > window.innerHeight - 16) top = rect.top - menuH - 6;
+      top = Math.max(8, top);
+      const left = Math.max(8, Math.min(rect.right - 180, window.innerWidth - 192));
+      menu.style.top = top + 'px';
+      menu.style.left = left + 'px';
+
+      const member = parties[partyIndex].members[memberIndex];
+      const currentTag = member.playerTag || null;
+
+      menu.innerHTML = `
+        <div class="player-tag-dropdown-header">Personal Role</div>
+        ${PLAYER_TAGS.map(t => `
+          <div class="player-tag-dropdown-item ${currentTag === t ? 'active' : ''}"
+               onclick="event.stopPropagation(); setPlayerTag(${partyIndex}, ${memberIndex}, '${t}')">
+            🎯 ${t}
+          </div>`).join('')}
+        <div class="player-tag-clear" onclick="event.stopPropagation(); setPlayerTag(${partyIndex}, ${memberIndex}, null)">
+          ✕ Remove tag
+        </div>
+      `;
+
+      overlay.appendChild(menu);
+      document.body.appendChild(overlay);
+      _activePlayerTagDropdown = overlay;
+    }
+
+    function closePlayerTagMenu() {
+      if (_activePlayerTagDropdown) {
+        _activePlayerTagDropdown.remove();
+        _activePlayerTagDropdown = null;
+      }
+    }
+
+    function setPlayerTag(partyIndex, memberIndex, tag) {
+      closePlayerTagMenu();
+      const member = parties[partyIndex].members[memberIndex];
+      if (tag) {
+        member.playerTag = tag;
+      } else {
+        delete member.playerTag;
+      }
+      renderParties();
     }
 
     // Create empty party structure
@@ -1215,6 +1398,10 @@
       const avatarUrl = member.avatarUrl || DEFAULT_AVATAR;
       const leaderCrown = member.isLeader ? '<span class="leader-crown">&#9733;</span>' : '';
       const roleClass = `role-${member.role || 'dps'}`;
+      const playerTagBadge = member.playerTag
+        ? `<span class="player-tag-badge">🎯 ${member.playerTag}</span>`
+        : '';
+      const playerTagBtn = `<button class="player-tag-btn" onclick="event.stopPropagation(); openPlayerTagMenu(event, ${partyIndex}, ${memberIndex})" title="Set personal role">🎯</button>`;
 
       return `
         <div class="member-card ${roleClass}"
@@ -1230,6 +1417,7 @@
           <div class="member-info">
             <div class="member-name">${leaderCrown}${member.displayName}</div>
             <div class="member-details">${member.weapon1}/${member.weapon2}</div>
+            <div class="player-tag-row">${playerTagBadge}${playerTagBtn}</div>
           </div>
           <div class="member-cp">${formatCP(member.cp)}</div>
         </div>

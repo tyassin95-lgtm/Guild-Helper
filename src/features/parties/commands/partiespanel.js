@@ -76,8 +76,9 @@ async function handlePartiesPanel({ interaction, collections }) {
 
             // Add crown for party leader
             const leaderCrown = m.isLeader ? '👑 ' : '';
+            const playerTagSuffix = m.playerTag ? ` • 🎯 \`${m.playerTag}\`` : '';
 
-            return `${position}. ${leaderCrown}<@${m.userId}>\n   ${roleIcon} ${m.weapon1} / ${m.weapon2} • \`${cp} CP\``;
+            return `${position}. ${leaderCrown}<@${m.userId}>\n   ${roleIcon} ${m.weapon1} / ${m.weapon2} • \`${cp} CP\`${playerTagSuffix}`;
           }));
 
           embed.setDescription(memberList.join('\n\n'));
@@ -147,8 +148,9 @@ async function handlePartiesPanel({ interaction, collections }) {
 
           // Add crown for party leader
           const leaderCrown = m.isLeader ? '👑 ' : '';
+          const playerTagSuffix = m.playerTag ? ` • 🎯 \`${m.playerTag}\`` : '';
 
-          return `${position} ${leaderCrown}<@${m.userId}>\n   ${roleIcon} ${m.weapon1} / ${m.weapon2} • \`${cp} CP\``;
+          return `${position} ${leaderCrown}<@${m.userId}>\n   ${roleIcon} ${m.weapon1} / ${m.weapon2} • \`${cp} CP\`${playerTagSuffix}`;
         }));
 
         embed.setDescription(memberList.join('\n\n'));

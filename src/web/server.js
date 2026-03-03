@@ -1025,6 +1025,12 @@ class WebServer {
       ? `\n** ${party.titles.join(' · ')}**`
       : '';
 
+    // Personal role tag for the receiving member
+    const memberData = party.members.find(m => m.userId === member.userId);
+    const personalRoleField = (memberData && memberData.playerTag)
+      ? [{ name: '🎯 Your Personal Role', value: `**${memberData.playerTag}**`, inline: false }]
+      : [];
+
     const embed = new EmbedBuilder()
       .setColor(eventColor)
       .setTitle(`🎮 Party ${party.partyNumber} Assignment`)
@@ -1045,6 +1051,7 @@ class WebServer {
           value: '\u200B',
           inline: true
         },
+        ...personalRoleField,
         {
           name: '👥 Party Members',
           value: partyList,
