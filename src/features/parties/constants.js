@@ -3,6 +3,7 @@ const PARTY_TITLES = [
   'Shotcalls',
   'Main Ball',
   'Flank Party',
+  'Flex Party',
   'Throne Capture',
   'Capture Party',
   'PvP Distraction Party',
@@ -21,7 +22,14 @@ const PARTY_TITLES = [
 
 // Available individual player tags (assigned per-player within a party)
 const PLAYER_TAGS = [
-  'AoE Bomber'
+  'AoE Bomber',
+  'Frontline Tank',
+  'Diver',
+  'Spinner',
+  'Spinner Support',
+  'Healer',
+  'Scout',
+  'Boss Damage'
 ];
 
 // Available weapons for role selection
