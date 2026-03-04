@@ -1063,7 +1063,7 @@ class WebServer {
           inline: false
         }
       )
-      .setFooter({ text: 'Good luck! See you at the event.' })
+      .setFooter({ text: 'Please join https://oathly.net/voice - Make an account and join your respective assigned party number!' })
       .setTimestamp();
 
     return { embeds: [embed] };
