@@ -1177,27 +1177,27 @@
     // Load initial data
     function loadData() {
       const formationData = <%- formation %>;
-      parties = formationData.processedParties || [];
+      const processedParties = formationData.processedParties || [];
 
       // Apply static party title defaults (use existing titles if already set on the party)
-      parties.forEach(party => {
+      processedParties.forEach(party => {
         if (!party.titles || party.titles.length === 0) {
           party.titles = STATIC_PARTY_TITLES[party.partyNumber] || [];
         }
       });
 
-      // Ensure we always have 12 party slots, avoiding duplicate party numbers
-      let maxPartyNum = parties.reduce((max, p) => Math.max(max, p.partyNumber || 0), 0);
-      while (parties.length < 12) {
-        maxPartyNum++;
-        parties.push({
-          partyNumber: maxPartyNum,
-          status: 'empty',
-          members: [],
-          removedMembers: [],
-          composition: { tank: 0, healer: 0, dps: 0 },
-          titles: STATIC_PARTY_TITLES[maxPartyNum] || []
-        });
+      // Initialize a fixed array of 12 parties (Party 1 through Party 12)
+      // Map processedParties into their correct slots by partyNumber
+      const partyByNumber = {};
+      processedParties.forEach(p => {
+        if (p.partyNumber >= 1 && p.partyNumber <= 12) {
+          partyByNumber[p.partyNumber] = p;
+        }
+      });
+
+      parties = [];
+      for (let i = 1; i <= 12; i++) {
+        parties.push(partyByNumber[i] || createEmptyParty(i));
       }
 
       availableMembers = formationData.availableMembers || [];
