@@ -1187,20 +1187,17 @@
       });
 
       // Ensure we always have 12 party slots, avoiding duplicate party numbers
-      const usedPartyNumbers = new Set(parties.map(p => p.partyNumber));
-      let nextNum = 1;
+      let maxPartyNum = parties.reduce((max, p) => Math.max(max, p.partyNumber || 0), 0);
       while (parties.length < 12) {
-        while (usedPartyNumbers.has(nextNum)) nextNum++;
-        usedPartyNumbers.add(nextNum);
+        maxPartyNum++;
         parties.push({
-          partyNumber: nextNum,
+          partyNumber: maxPartyNum,
           status: 'empty',
           members: [],
           removedMembers: [],
           composition: { tank: 0, healer: 0, dps: 0 },
-          titles: STATIC_PARTY_TITLES[nextNum] || []
+          titles: STATIC_PARTY_TITLES[maxPartyNum] || []
         });
-        nextNum++;
       }
 
       availableMembers = formationData.availableMembers || [];
