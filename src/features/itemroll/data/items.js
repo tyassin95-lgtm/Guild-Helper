@@ -285,6 +285,10 @@ const ITEMS = {
       {
         name: 'Cloak of Piercing Ice',
         imageUrl: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00029.webp'
+      },
+      {
+        name: 'Cloak of the Frozen Expanse',
+        imageUrl: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00025.webp'
       }
     ]
   },

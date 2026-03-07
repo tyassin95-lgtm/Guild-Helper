@@ -149,6 +149,12 @@ const WISHLIST_ITEMS = {
       name: 'Cloak of Piercing Ice',
       icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00029.webp',
       type: 'Cloak'
+    },
+    {
+      id: 'frozen_expanse_cloak',
+      name: 'Cloak of the Frozen Expanse',
+      icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00025.webp',
+      type: 'Cloak'
     }
   ],
 

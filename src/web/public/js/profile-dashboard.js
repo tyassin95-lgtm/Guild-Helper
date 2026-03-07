@@ -69,7 +69,8 @@ const WISHLIST_ITEMS = {
     { id: 'errant_brim', name: 'Errant Scion Brim', icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_Set_LE_M_HM_00022A.webp', type: 'Helmet' },
     { id: 'umbral_pants', name: 'Umbral Astarch Pants', icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_Set_LE_M_PT_00030.webp', type: 'Pants' },
     { id: 'blood_moon_cloak', name: 'Cloak of the Blood Moon', icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00032.webp', type: 'Cloak' },
-    { id: 'piercing_ice_cloak', name: 'Cloak of Piercing Ice', icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00029.webp', type: 'Cloak' }
+    { id: 'piercing_ice_cloak', name: 'Cloak of Piercing Ice', icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00029.webp', type: 'Cloak' },
+    { id: 'frozen_expanse_cloak', name: 'Cloak of the Frozen Expanse', icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Armor/P_M_CA_00025.webp', type: 'Cloak' }
   ],
   t3Weapons: [
     { id: 'daigon_stormblade', name: "Daigon's Stormblade", icon: 'https://cdn.questlog.gg/throne-and-liberty/assets/Game/Image/Icon/Item_128/Equip/Weapon/IT_P_Sword_00017A.webp', category: 'Sword & Shield' },
