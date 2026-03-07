@@ -70,6 +70,14 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
           ...m,
           source: `Party ${party.partyNumber} (disbanded)`
         })));
+        // Keep the party slot visible but empty
+        processedParties.push({
+          partyNumber: result.partyNumber,
+          status: 'disbanded',
+          members: [],
+          removedMembers: result.removedMembers,
+          composition: { tank: 0, healer: 0, dps: 0 }
+        });
       } else {
         processedParties.push(result);
       }
@@ -126,7 +134,7 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
       totalAttending: attendingSet.size,
       partiesIntact: processedParties.filter(p => p.status === 'intact').length,
       partiesModified: processedParties.filter(p => p.status === 'modified').length,
-      partiesDisbanded: staticParties.length - processedParties.length,
+      partiesDisbanded: processedParties.filter(p => p.status === 'disbanded').length,
       membersRemoved: processedParties.reduce((sum, p) => sum + p.removedMembers.length, 0),
       membersAvailable: availableMembers.length,
       noRsvpCount: noRsvpMembers.length
