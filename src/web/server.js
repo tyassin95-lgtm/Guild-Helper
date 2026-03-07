@@ -1061,9 +1061,14 @@ class WebServer {
           name: '⚖️ Composition',
           value: roleComp,
           inline: false
+        },
+        {
+          name: '🎤 Voice Communication',
+          value: 'Please join **https://oathly.net/voice** for voice communication!\nJoin your party\'s number.',
+          inline: false
         }
       )
-      .setFooter({ text: 'Please join https://oathly.net/voice - Make an account and join your respective assigned party number!' })
+      .setFooter({ text: 'Good luck! See you at the event.' })
       .setTimestamp();
 
     return { embeds: [embed] };
