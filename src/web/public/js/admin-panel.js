@@ -225,7 +225,7 @@ async function loadEventsForParties() {
           <h4>${event.eventTypeName}${event.location ? ` - ${event.location}` : ''}</h4>
           <div class="event-time">${formatDate(event.eventTime)}</div>
           <div class="event-stats">
-            ${event.rsvpAttendingCount} attending, ${event.rsvpMaybeCount} maybe
+            ${event.rsvpAttendingCount} attending, ${event.rsvpNotAttendingCount} not attending
           </div>
         </div>
         <span class="event-status ${event.partiesFormed ? 'closed' : 'active'}">
@@ -300,7 +300,7 @@ async function loadEvents() {
           <h4>${event.eventTypeName}${event.location ? ` - ${event.location}` : ''}</h4>
           <div class="event-time">${formatDate(event.eventTime)}</div>
           <div class="event-stats">
-            ${event.rsvpAttendingCount} attending, ${event.rsvpMaybeCount} maybe
+            ${event.rsvpAttendingCount} attending, ${event.rsvpNotAttendingCount} not attending
           </div>
         </div>
         <span class="event-status active">Active</span>
