@@ -31,15 +31,12 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
 
     // Get attendance data
     const notAttendingSet = new Set(event.rsvpNotAttending || []);
-    const attendingSet = new Set([
-      ...(event.rsvpAttending || []),
-      ...(event.rsvpMaybe || [])
-    ]);
+    const attendingSet = new Set(event.rsvpAttending || []);
 
     if (attendingSet.size === 0) {
       return interaction.editReply({
-        content: '❌ No members have RSVP\'d as attending or maybe for this event.\n\n' +
-                 'Event parties can only be formed when people have signed up.'
+        content: '❌ No members have RSVP\'d as attending for this event.\n\n' +
+                 'Event parties can only be formed when people have signed up as Attending.'
       });
     }
 
@@ -62,7 +59,7 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
     for (const party of staticParties) {
       const result = await processStaticParty(
         party,
-        notAttendingSet,
+        attendingSet,
         interaction.guild,
         partyPlayers
       );
@@ -102,6 +99,28 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
 
     console.log(`Total available for placement: ${availableMembers.length}`);
 
+    // Compute no-RSVP members: players with party info who didn't RSVP at all
+    const allPlayersWithInfo = await partyPlayers.find({
+      guildId: interaction.guildId,
+      weapon1: { $exists: true },
+      weapon2: { $exists: true }
+    }).toArray();
+
+    const noRsvpMembers = [];
+    for (const player of allPlayersWithInfo) {
+      if (!attendingSet.has(player.userId) && !notAttendingSet.has(player.userId)) {
+        const discordMember = await interaction.guild.members.fetch(player.userId).catch(() => null);
+        if (discordMember && !discordMember.user.bot) {
+          noRsvpMembers.push({
+            userId: player.userId,
+            displayName: discordMember.displayName || 'Unknown'
+          });
+        }
+      }
+    }
+
+    console.log(`No RSVP members: ${noRsvpMembers.length}`);
+
     // Calculate summary statistics
     const summary = {
       totalAttending: attendingSet.size,
@@ -109,7 +128,8 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
       partiesModified: processedParties.filter(p => p.status === 'modified').length,
       partiesDisbanded: staticParties.length - processedParties.length,
       membersRemoved: processedParties.reduce((sum, p) => sum + p.removedMembers.length, 0),
-      membersAvailable: availableMembers.length
+      membersAvailable: availableMembers.length,
+      noRsvpCount: noRsvpMembers.length
     };
 
     // Store the formation
@@ -121,6 +141,7 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
           guildId: interaction.guildId,
           processedParties,
           availableMembers,
+          noRsvpMembers,
           summary,
           status: 'pending',
           createdBy: interaction.user.id,
@@ -149,7 +170,8 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
                `• ${summary.partiesModified} parties modified\n` +
                `• ${summary.partiesDisbanded} parties disbanded\n` +
                `• ${summary.membersAvailable} members available for placement\n` +
-               `• ${summary.totalAttending} total attending\n\n` +
+               `• ${summary.totalAttending} total attending\n` +
+               `• ${summary.noRsvpCount} members with no RSVP\n\n` +
                `🌐 **[Open Party Editor](${webUrl})**\n\n` +
                `⏰ Link expires in 1 hour\n` +
                `ℹ️ Use the web interface to review, edit, and send party assignments`
@@ -166,7 +188,7 @@ async function handleFormEventParties({ interaction, eventId, collections }) {
 /**
  * Process a static party against attendance data
  */
-async function processStaticParty(party, notAttendingSet, guild, partyPlayers) {
+async function processStaticParty(party, attendingSet, guild, partyPlayers) {
   const removedMembers = [];
   const remainingMembers = [];
 
@@ -175,9 +197,9 @@ async function processStaticParty(party, notAttendingSet, guild, partyPlayers) {
   for (const member of party.members || []) {
     const enrichedMember = await enrichMemberData(member, guild, partyPlayers);
 
-    if (notAttendingSet.has(member.userId)) {
+    if (!attendingSet.has(member.userId)) {
       removedMembers.push(enrichedMember);
-      console.log(`  ❌ Removed: ${enrichedMember.displayName} (not attending)`);
+      console.log(`  ❌ Removed: ${enrichedMember.displayName} (not attending or no RSVP)`);
     } else {
       remainingMembers.push(enrichedMember);
       console.log(`  ✅ Kept: ${enrichedMember.displayName}`);

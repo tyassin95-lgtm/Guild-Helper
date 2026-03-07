@@ -566,6 +566,12 @@
       box-shadow: 0 0 20px var(--accent-purple-glow);
     }
 
+    .member-card.no-rsvp-card {
+      background: rgba(245, 158, 11, 0.05);
+      border-color: rgba(245, 158, 11, 0.3);
+      cursor: default;
+    }
+
     .member-avatar {
       width: 32px;
       height: 32px;
@@ -1052,6 +1058,20 @@
           </div>
         </div>
 
+        <!-- No RSVP Members -->
+        <div class="available-section" style="margin-top: 16px;">
+          <div class="section-title">
+            <span>No RSVP</span>
+            <span class="count-badge" style="background: var(--warning-color);" id="no-rsvp-count">0</span>
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+            These players did not RSVP and will not be assigned to a party. They will receive a notification DM when parties are sent.
+          </div>
+          <div class="available-list" id="no-rsvp-list">
+            <!-- No-RSVP members will be rendered here -->
+          </div>
+        </div>
+
         <!-- Actions -->
         <div class="actions-section">
           <div class="section-title">Actions</div>
@@ -1130,6 +1150,7 @@
     const STATIC_PARTY_TITLES = <%- staticPartyTitles %>;
     let parties = [];
     let availableMembers = [];
+    let noRsvpMembers = [];
     let draggedMember = null;
     let draggedFromParty = null;
 
@@ -1165,20 +1186,22 @@
         }
       });
 
-      // Ensure we always have 12 party slots
+      // Ensure we always have 12 party slots, avoiding duplicate party numbers
+      let maxPartyNum = parties.reduce((max, p) => Math.max(max, p.partyNumber || 0), 0);
       while (parties.length < 12) {
-        const nextNum = parties.length + 1;
+        maxPartyNum++;
         parties.push({
-          partyNumber: nextNum,
+          partyNumber: maxPartyNum,
           status: 'empty',
           members: [],
           removedMembers: [],
           composition: { tank: 0, healer: 0, dps: 0 },
-          titles: STATIC_PARTY_TITLES[nextNum] || []
+          titles: STATIC_PARTY_TITLES[maxPartyNum] || []
         });
       }
 
       availableMembers = formationData.availableMembers || [];
+      noRsvpMembers = formationData.noRsvpMembers || [];
       render();
     }
 
@@ -1186,6 +1209,7 @@
     function render() {
       renderParties();
       renderAvailable();
+      renderNoRsvp();
       updateStats();
     }
 
@@ -1469,7 +1493,32 @@
       document.getElementById('available-count').textContent = availableMembers.length;
     }
 
-    // Drag handlers
+    // Render no-RSVP members list
+    function renderNoRsvp() {
+      const list = document.getElementById('no-rsvp-list');
+      const countEl = document.getElementById('no-rsvp-count');
+      if (!list || !countEl) return;
+
+      countEl.textContent = noRsvpMembers.length;
+
+      if (noRsvpMembers.length === 0) {
+        list.innerHTML = '<div class="empty-state">All players have responded</div>';
+        return;
+      }
+
+      list.innerHTML = noRsvpMembers.map(member => {
+        const avatarUrl = member.avatarUrl || DEFAULT_AVATAR;
+        return `
+          <div class="member-card no-rsvp-card">
+            <img class="member-avatar" src="${avatarUrl}" alt="" onerror="this.src='${DEFAULT_AVATAR}'">
+            <div class="member-info">
+              <div class="member-name">${member.displayName}</div>
+              <div class="member-details" style="color: var(--warning-color);">No RSVP</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
     function handleDragStart(event, partyIndex, memberIndex) {
       event.dataTransfer.effectAllowed = 'move';
       draggedMember = parties[partyIndex].members[memberIndex];
@@ -1870,10 +1919,15 @@
         return;
       }
 
-      const confirmed = confirm(
-        `Are you sure you want to send party assignments to ${totalMembers} member(s)?\n\n` +
-        `This will send DMs to all party members and cannot be undone.`
-      );
+      const noRsvpCount = noRsvpMembers.length;
+      const confirmMsg = noRsvpCount > 0
+        ? `Are you sure you want to send party assignments to ${totalMembers} member(s)?\n\n` +
+          `Additionally, ${noRsvpCount} member(s) with no RSVP will receive a notification DM informing them they were not assigned to a party.\n\n` +
+          `This will send DMs and cannot be undone.`
+        : `Are you sure you want to send party assignments to ${totalMembers} member(s)?\n\n` +
+          `This will send DMs to all party members and cannot be undone.`;
+
+      const confirmed = confirm(confirmMsg);
 
       if (!confirmed) return;
 
@@ -1885,7 +1939,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             processedParties: parties,
-            availableMembers
+            availableMembers,
+            noRsvpMembers
           })
         });
 
@@ -1894,7 +1949,7 @@
         document.getElementById('loading').classList.remove('active');
 
         if (response.ok) {
-          const { dmResults } = data;
+          const { dmResults, noRsvpDmResults } = data;
           const successCount = dmResults.successful.length;
           const failCount = dmResults.failed.length;
 
@@ -1907,6 +1962,10 @@
             dmResults.failed.forEach(f => {
               message += `${f.displayName}: ${f.error}\n`;
             });
+          }
+
+          if (noRsvpDmResults && noRsvpDmResults.successful.length > 0) {
+            message += `\nNo-RSVP notifications sent: ${noRsvpDmResults.successful.length} member(s)\n`;
           }
 
           alert(message);

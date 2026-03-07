@@ -5,9 +5,9 @@ let autoReminderInterval = null;
 // Check every 5 minutes for events needing reminders
 const CHECK_INTERVAL = 5 * 60 * 1000;
 
-// Reminder window: 1 hour before event (with 5-minute buffer)
-const REMINDER_WINDOW_START = 65 * 60 * 1000; // 65 minutes before
-const REMINDER_WINDOW_END = 55 * 60 * 1000;   // 55 minutes before
+// Reminder window: 2 hours before event (with 5-minute buffer)
+const REMINDER_WINDOW_START = 125 * 60 * 1000; // 125 minutes before
+const REMINDER_WINDOW_END = 115 * 60 * 1000;   // 115 minutes before
 
 /**
  * Start the auto-reminder task for PvP attendance
@@ -115,12 +115,10 @@ async function sendRemindersForEvent(client, event, collections) {
 
     // Get users who have already marked attendance (any status)
     const rsvpAttending = event.rsvpAttending || [];
-    const rsvpMaybe = event.rsvpMaybe || [];
     const rsvpNotAttending = event.rsvpNotAttending || [];
 
     const respondedUsers = new Set([
       ...rsvpAttending,
-      ...rsvpMaybe,
       ...rsvpNotAttending
     ]);
 
@@ -212,7 +210,7 @@ function createReminderEmbed(event, guild) {
 
   // Calculate timestamps
   const eventTimestamp = Math.floor(event.eventTime.getTime() / 1000);
-  const signupDeadline = new Date(event.eventTime.getTime() - (20 * 60 * 1000));
+  const signupDeadline = new Date(event.eventTime.getTime() - (60 * 60 * 1000));
   const signupDeadlineTimestamp = Math.floor(signupDeadline.getTime() / 1000);
 
   // Create direct link to the event message
@@ -223,7 +221,7 @@ function createReminderEmbed(event, guild) {
     .setTitle(`${emoji} PvP Event Reminder`)
     .setDescription(
       `Hey there! You haven't marked your attendance for an upcoming **${typeName}** event in **${guild.name}**.\n\n` +
-      `The event starts **soon** - please let us know if you can make it!`
+      `The event starts in approximately **2 hours** - please let us know if you can make it!`
     )
     .addFields(
       {
@@ -248,7 +246,7 @@ function createReminderEmbed(event, guild) {
       },
       {
         name: '🔗 Quick Link',
-        value: `**[Click here to go to the event](${eventLink})**\n\nUse the buttons there to mark yourself as **Attending**, **Maybe**, or **Not Attending**.`,
+        value: `**[Click here to go to the event](${eventLink})**\n\nUse the buttons there to mark yourself as **Attending** or **Not Attending**.`,
         inline: false
       }
     )

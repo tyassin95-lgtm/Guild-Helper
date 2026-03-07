@@ -752,9 +752,6 @@ function renderEvents() {
         } else if (event.signupStatus === 'not_attending') {
           statusClass = 'not-attending';
           statusText = 'Not Going';
-        } else if (event.signupStatus === 'maybe') {
-          statusClass = 'maybe';
-          statusText = 'Maybe';
         }
 
         return `
@@ -781,18 +778,13 @@ function renderEvents() {
                             ${event.signupStatus === 'attending' ? 'disabled style="cursor: default; opacity: 1;"' : ''}>
                       ${event.signupStatus === 'attending' ? '✓ ' : ''}Going
                     </button>
-                    <button class="btn ${event.signupStatus === 'maybe' ? 'btn-warning' : 'btn-secondary'}"
-                            onclick="updateRsvp('${event._id}', 'maybe', this)"
-                            ${event.signupStatus === 'maybe' ? 'disabled style="cursor: default; opacity: 1;"' : ''}>
-                      ${event.signupStatus === 'maybe' ? '✓ ' : ''}Maybe
-                    </button>
                     <button class="btn ${event.signupStatus === 'not_attending' ? 'btn-danger' : 'btn-secondary'}"
                             onclick="updateRsvp('${event._id}', 'not_attending', this)"
                             ${event.signupStatus === 'not_attending' ? 'disabled style="cursor: default; opacity: 1;"' : ''}>
                       ${event.signupStatus === 'not_attending' ? '✓ ' : ''}Not Going
                     </button>
                   ` : `
-                    <span style="color: var(--text-muted); font-size: 13px;">Signups closed (20 min before event)</span>
+                    <span style="color: var(--text-muted); font-size: 13px;">Signups closed (1 hour before event)</span>
                   `}
                 </div>
                 ${event.canRecordAttendance ? `
