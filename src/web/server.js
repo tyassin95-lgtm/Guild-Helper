@@ -1064,7 +1064,7 @@ class WebServer {
         },
         {
           name: '🎤 Voice Communication',
-          value: 'Please join **https://oathly.net/voice** for voice communication!\nJoin your party\'s number.',
+          value: 'Please join **[Oathly Voice](https://oathly.net/voice)** for voice communication!\nJoin your party\'s number.',
           inline: false
         }
       )
