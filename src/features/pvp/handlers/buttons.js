@@ -32,12 +32,6 @@ async function handlePvPButtons({ interaction, collections }) {
     return handleRSVP(interaction, eventId, 'not_attending', collections);
   }
 
-  // RSVP Maybe button - OPTIMIZED
-  if (interaction.customId.startsWith('pvp_rsvp_maybe:')) {
-    const eventId = interaction.customId.split(':')[1];
-    return handleRSVP(interaction, eventId, 'maybe', collections);
-  }
-
   // Continue setup button (after location input)
   if (interaction.customId.startsWith('pvp_continue_setup:')) {
     const parts = interaction.customId.split(':');
@@ -112,20 +106,16 @@ async function handlePvPButtons({ interaction, collections }) {
       return interaction.reply({ content: '❌ You\'ve already recorded attendance for this event.', flags: [64] });
     }
 
-    // Check if user signed up (attending, maybe, or not attending)
+    // Check if user signed up as attending
     const rsvpAttending = event.rsvpAttending || [];
-    const rsvpMaybe = event.rsvpMaybe || [];
-    const rsvpNotAttending = event.rsvpNotAttending || [];
 
-    const hasSignedUp = rsvpAttending.includes(interaction.user.id) || 
-                        rsvpMaybe.includes(interaction.user.id) || 
-                        rsvpNotAttending.includes(interaction.user.id);
+    const hasSignedUp = rsvpAttending.includes(interaction.user.id);
 
     if (!hasSignedUp) {
       return interaction.reply({ 
-        content: '❌ **You must sign up for this event before recording attendance!**\n\n' +
-                 'Please use the RSVP buttons (Attending/Maybe/Not Attending) before the signup deadline.\n\n' +
-                 '⚠️ Signups close 20 minutes before the event starts.',
+        content: '❌ **You must RSVP as Attending for this event before recording attendance!**\n\n' +
+                 'Please use the RSVP buttons (Attending/Not Attending) before the signup deadline.\n\n' +
+                 '⚠️ Signups close 1 hour before the event starts.',
         flags: [64] 
       });
     }
@@ -322,14 +312,14 @@ async function handleRSVP(interaction, eventId, rsvpType, collections) {
     });
   }
 
-  // Check if signup deadline has passed (20 minutes before event)
-  const signupDeadline = new Date(event.eventTime.getTime() - (20 * 60 * 1000));
+  // Check if signup deadline has passed (1 hour before event)
+  const signupDeadline = new Date(event.eventTime.getTime() - (60 * 60 * 1000));
   const isSignupClosed = new Date() >= signupDeadline;
 
   if (isSignupClosed) {
     return interaction.followUp({
       content: '❌ **Signups are closed!**\n\n' +
-               'The signup deadline has passed (20 minutes before event start).\n' +
+               'The signup deadline has passed (1 hour before event start).\n' +
                'You can no longer change your RSVP status.',
       flags: [64]
     });
@@ -343,8 +333,7 @@ async function handleRSVP(interaction, eventId, rsvpType, collections) {
     { 
       $pull: { 
         rsvpAttending: userId,
-        rsvpNotAttending: userId,
-        rsvpMaybe: userId
+        rsvpNotAttending: userId
       }
     }
   );
@@ -352,8 +341,7 @@ async function handleRSVP(interaction, eventId, rsvpType, collections) {
   // Add user to the selected RSVP list
   const fieldMap = {
     'attending': 'rsvpAttending',
-    'not_attending': 'rsvpNotAttending',
-    'maybe': 'rsvpMaybe'
+    'not_attending': 'rsvpNotAttending'
   };
 
   const field = fieldMap[rsvpType];
@@ -369,8 +357,7 @@ async function handleRSVP(interaction, eventId, rsvpType, collections) {
 
   const responseMap = {
     'attending': '✅ You marked yourself as **Attending**!',
-    'not_attending': '❌ You marked yourself as **Not Attending**.',
-    'maybe': '❓ You marked yourself as **Maybe**.'
+    'not_attending': '❌ You marked yourself as **Not Attending**.'
   };
 
   return interaction.followUp({

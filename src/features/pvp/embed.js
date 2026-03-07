@@ -28,8 +28,8 @@ async function createEventEmbed(event, client, collections) {
   const typeName = eventTypeNames[event.eventType] || event.eventType;
   const bonusPoints = event.bonusPoints || 10;
 
-  // Calculate signup deadline (20 minutes before event)
-  const signupDeadline = new Date(event.eventTime.getTime() - (20 * 60 * 1000));
+  // Calculate signup deadline (1 hour before event)
+  const signupDeadline = new Date(event.eventTime.getTime() - (60 * 60 * 1000));
   const signupDeadlineTimestamp = Math.floor(signupDeadline.getTime() / 1000);
   const isSignupClosed = new Date() >= signupDeadline;
 
@@ -75,13 +75,11 @@ async function createEventEmbed(event, client, collections) {
   // Add RSVP Planning section
   const rsvpAttending = event.rsvpAttending || [];
   const rsvpNotAttending = event.rsvpNotAttending || [];
-  const rsvpMaybe = event.rsvpMaybe || [];
 
   // Fetch names in parallel for better performance
-  const [attendingNames, notAttendingNames, maybeNames] = await Promise.all([
+  const [attendingNames, notAttendingNames] = await Promise.all([
     fetchUserNamesOptimized(client, event.guildId, rsvpAttending),
-    fetchUserNamesOptimized(client, event.guildId, rsvpNotAttending),
-    fetchUserNamesOptimized(client, event.guildId, rsvpMaybe)
+    fetchUserNamesOptimized(client, event.guildId, rsvpNotAttending)
   ]);
 
   const attendingText = attendingNames.length > 0 
@@ -90,15 +88,11 @@ async function createEventEmbed(event, client, collections) {
   const notAttendingText = notAttendingNames.length > 0 
     ? notAttendingNames.join(', ') 
     : '*None yet*';
-  const maybeText = maybeNames.length > 0 
-    ? maybeNames.join(', ') 
-    : '*None yet*';
 
   embed.addFields({
     name: `📊 Planning`,
     value: `✅ **Attending (${attendingNames.length}):** ${attendingText}\n` +
-           `❌ **Not Attending (${notAttendingNames.length}):** ${notAttendingText}\n` +
-           `❓ **Maybe (${maybeNames.length}):** ${maybeText}`,
+           `❌ **Not Attending (${notAttendingNames.length}):** ${notAttendingText}`,
     inline: false
   });
 
@@ -137,7 +131,7 @@ async function createEventEmbed(event, client, collections) {
   // Add status field
   let statusText = event.closed ? '🔒 **Event Closed**' : '✅ **Event Open**';
   if (!event.closed && isSignupClosed) {
-    statusText += '\n🔒 **Signups Closed** (20 min before event)';
+    statusText += '\n🔒 **Signups Closed** (1 hour before event)';
   }
 
   embed.addFields({
@@ -163,12 +157,6 @@ async function createEventEmbed(event, client, collections) {
         .setLabel('Not Attending')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('❌')
-        .setDisabled(isSignupClosed),
-      new ButtonBuilder()
-        .setCustomId(`pvp_rsvp_maybe:${event._id}`)
-        .setLabel('Maybe')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('❓')
         .setDisabled(isSignupClosed)
     );
 

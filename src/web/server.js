@@ -794,6 +794,18 @@ class WebServer {
         );
       }
 
+      if (enrichedFormation.noRsvpMembers) {
+        enrichedFormation.noRsvpMembers = await Promise.all(
+          enrichedFormation.noRsvpMembers.map(async (member) => {
+            const discordMember = await guild.members.fetch(member.userId).catch(() => null);
+            return {
+              ...member,
+              avatarUrl: discordMember?.user?.displayAvatarURL({ size: 64, format: 'png' }) || null
+            };
+          })
+        );
+      }
+
       // Fetch static party titles to use as defaults in the event party editor
       const staticParties = await this.collections.parties.find({
         guildId: event.guildId,
@@ -877,7 +889,7 @@ class WebServer {
       }
 
       const { eventId, userId } = validation.data;
-      const { processedParties, availableMembers } = req.body;
+      const { processedParties, availableMembers, noRsvpMembers = [] } = req.body;
 
       // Validate data
       if (!processedParties || !Array.isArray(processedParties)) {
@@ -891,6 +903,7 @@ class WebServer {
           $set: {
             processedParties,
             availableMembers: availableMembers || [],
+            noRsvpMembers,
             lastModified: new Date(),
             approved: true,
             approvedBy: userId,
@@ -923,12 +936,16 @@ class WebServer {
 
       const dmResults = await this.sendPartyDMs(processedParties, eventInfo);
 
+      // Send no-RSVP notification DMs
+      const noRsvpDmResults = await this.sendNoRsvpDMs(noRsvpMembers, eventInfo);
+
       // Invalidate token (one-time use)
       this.activeTokens.delete(req.params.token);
 
       res.json({ 
         success: true, 
         dmResults,
+        noRsvpDmResults,
         message: 'Party assignments sent successfully!'
       });
 
@@ -1130,6 +1147,79 @@ class WebServer {
     }
 
     console.log(`\n=== DM Summary: ${results.successful.length} successful, ${results.failed.length} failed ===\n`);
+
+    return results;
+  }
+
+  /**
+   * Send no-RSVP notification DMs to members who didn't sign up
+   */
+  async sendNoRsvpDMs(noRsvpMembers, eventInfo) {
+    const results = {
+      successful: [],
+      failed: []
+    };
+
+    if (!noRsvpMembers || noRsvpMembers.length === 0) {
+      return results;
+    }
+
+    const eventTypeNames = {
+      siege: 'Siege',
+      riftstone: 'Riftstone',
+      boonstone: 'Boonstone',
+      wargames: 'Wargames',
+      warboss: 'War Boss',
+      guildevent: 'Guild Event'
+    };
+
+    const eventName = eventTypeNames[eventInfo.eventType] || eventInfo.eventType;
+    const timestamp = Math.floor(eventInfo.eventTime.getTime() / 1000);
+    const location = eventInfo.location ? ` - ${eventInfo.location}` : '';
+
+    console.log(`\n=== Sending No-RSVP Notification DMs ===`);
+    console.log(`Total no-RSVP members: ${noRsvpMembers.length}`);
+
+    for (const member of noRsvpMembers) {
+      try {
+        if (!member.userId || !/^\d+$/.test(member.userId)) {
+          results.failed.push({
+            userId: member.userId || 'unknown',
+            displayName: member.displayName,
+            error: 'Invalid user ID format'
+          });
+          continue;
+        }
+
+        const user = await this.client.users.fetch(member.userId);
+        await user.send({
+          content:
+            `⚠️ **Party Assignment Notice**\n\n` +
+            `You were not assigned to a party for the upcoming **${eventName}${location}** event ` +
+            `(<t:${timestamp}:F>) because you did not RSVP for the event.\n\n` +
+            `You cannot submit the event party code for this event.\n\n` +
+            `Please remember to RSVP for future events so you can be assigned to a party.`
+        });
+
+        results.successful.push({
+          userId: member.userId,
+          displayName: member.displayName
+        });
+
+        // Small delay to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+      } catch (error) {
+        console.error(`  ❌ Failed to send no-RSVP DM to ${member.displayName}: ${error.message}`);
+        results.failed.push({
+          userId: member.userId,
+          displayName: member.displayName,
+          error: error.message
+        });
+      }
+    }
+
+    console.log(`\n=== No-RSVP DM Summary: ${results.successful.length} successful, ${results.failed.length} failed ===\n`);
 
     return results;
   }
@@ -1666,12 +1756,11 @@ class WebServer {
         let signupStatus = 'none';
         if (event.rsvpAttending?.includes(userId)) signupStatus = 'attending';
         else if (event.rsvpNotAttending?.includes(userId)) signupStatus = 'not_attending';
-        else if (event.rsvpMaybe?.includes(userId)) signupStatus = 'maybe';
 
         const hasRecordedAttendance = event.attendees?.includes(userId);
 
-        // Check if signup deadline passed (20 min before event)
-        const signupDeadline = new Date(event.eventTime.getTime() - 20 * 60 * 1000);
+        // Check if signup deadline passed (1 hour before event)
+        const signupDeadline = new Date(event.eventTime.getTime() - 60 * 60 * 1000);
         const signupsClosed = Date.now() > signupDeadline.getTime();
 
         // Check if attendance can be recorded (5 min before to 2 hour after event)
@@ -1679,7 +1768,7 @@ class WebServer {
         const fiveMinsBefore = eventTime - (5 * 60 * 1000);
         const oneHourAfter = eventTime + (120 * 60 * 1000);
         const now = Date.now();
-        const canRecordAttendance = signupStatus !== 'none' &&
+        const canRecordAttendance = signupStatus === 'attending' &&
                                     now >= fiveMinsBefore &&
                                     now <= oneHourAfter &&
                                     !hasRecordedAttendance &&
@@ -1698,7 +1787,6 @@ class WebServer {
           signupsClosed,
           attendeesCount: event.attendees?.length || 0,
           rsvpAttendingCount: event.rsvpAttending?.length || 0,
-          rsvpMaybeCount: event.rsvpMaybe?.length || 0,
           rsvpNotAttendingCount: event.rsvpNotAttending?.length || 0,
           // Users enter the code manually via 4-digit input panel - do not send code to client
           canRecordAttendance,
@@ -1733,7 +1821,7 @@ class WebServer {
       const { guildId, userId } = req.session;
       const { eventId, status } = req.body;
 
-      if (!eventId || !['attending', 'not_attending', 'maybe'].includes(status)) {
+      if (!eventId || !['attending', 'not_attending'].includes(status)) {
         return res.status(400).json({ error: 'Invalid event ID or status' });
       }
 
@@ -1748,7 +1836,7 @@ class WebServer {
       }
 
       // Check if signups are closed
-      const signupDeadline = new Date(event.eventTime.getTime() - 20 * 60 * 1000);
+      const signupDeadline = new Date(event.eventTime.getTime() - 60 * 60 * 1000);
       if (Date.now() > signupDeadline.getTime()) {
         return res.status(400).json({ error: 'Signups are closed for this event' });
       }
@@ -1759,8 +1847,7 @@ class WebServer {
         {
           $pull: {
             rsvpAttending: userId,
-            rsvpNotAttending: userId,
-            rsvpMaybe: userId
+            rsvpNotAttending: userId
           }
         }
       );
@@ -1768,8 +1855,7 @@ class WebServer {
       // Add to appropriate list
       const fieldMap = {
         attending: 'rsvpAttending',
-        not_attending: 'rsvpNotAttending',
-        maybe: 'rsvpMaybe'
+        not_attending: 'rsvpNotAttending'
       };
 
       await this.collections.pvpEvents.updateOne(
@@ -1825,13 +1911,11 @@ class WebServer {
         return res.status(400).json({ error: 'Event is closed' });
       }
 
-      // Check if user has signed up
-      const hasSignedUp = event.rsvpAttending?.includes(userId) ||
-                         event.rsvpMaybe?.includes(userId) ||
-                         event.rsvpNotAttending?.includes(userId);
+      // Check if user has signed up as attending
+      const hasSignedUp = event.rsvpAttending?.includes(userId);
 
       if (!hasSignedUp) {
-        return res.status(400).json({ error: 'You must sign up for the event first' });
+        return res.status(400).json({ error: 'You must RSVP as Attending for the event to record attendance' });
       }
 
       // Verify code first (before checking attendance to save a DB query)
@@ -2685,7 +2769,6 @@ class WebServer {
         partiesFormed: event.partiesFormed || false,
         bonusPoints: event.bonusPoints || 10,
         rsvpAttendingCount: (event.rsvpAttending || []).length,
-        rsvpMaybeCount: (event.rsvpMaybe || []).length,
         rsvpNotAttendingCount: (event.rsvpNotAttending || []).length,
         attendeesCount: (event.attendees || []).length,
         isPast: event.eventTime < now
@@ -2771,14 +2854,11 @@ class WebServer {
 
       // Get attendance data
       const notAttendingSet = new Set(event.rsvpNotAttending || []);
-      const attendingSet = new Set([
-        ...(event.rsvpAttending || []),
-        ...(event.rsvpMaybe || [])
-      ]);
+      const attendingSet = new Set(event.rsvpAttending || []);
 
       if (attendingSet.size === 0) {
         return res.status(400).json({
-          error: 'No members have RSVPd as attending or maybe for this event'
+          error: 'No members have RSVPd as attending for this event'
         });
       }
 
@@ -2816,7 +2896,7 @@ class WebServer {
             isLeader: member.isLeader || false
           };
 
-          if (notAttendingSet.has(member.userId)) {
+          if (!attendingSet.has(member.userId)) {
             removedMembers.push(enrichedMember);
           } else {
             remainingMembers.push(enrichedMember);
@@ -2874,13 +2954,34 @@ class WebServer {
         }
       }
 
+      // Compute no-RSVP members: players with party info who didn't RSVP at all
+      const allPlayersWithInfo = await this.collections.partyPlayers.find({
+        guildId,
+        weapon1: { $exists: true },
+        weapon2: { $exists: true }
+      }).toArray();
+
+      const noRsvpMembers = [];
+      for (const player of allPlayersWithInfo) {
+        if (!attendingSet.has(player.userId) && !notAttendingSet.has(player.userId)) {
+          const discordMember = await guild.members.fetch(player.userId).catch(() => null);
+          if (discordMember && !discordMember.user.bot) {
+            noRsvpMembers.push({
+              userId: player.userId,
+              displayName: discordMember.displayName || 'Unknown'
+            });
+          }
+        }
+      }
+
       // Calculate summary
       const summary = {
         totalAttending: attendingSet.size,
         partiesIntact: processedParties.filter(p => p.status === 'intact').length,
         partiesModified: processedParties.filter(p => p.status === 'modified').length,
         partiesDisbanded: staticParties.length - processedParties.length,
-        membersAvailable: availableMembers.length
+        membersAvailable: availableMembers.length,
+        noRsvpCount: noRsvpMembers.length
       };
 
       // Store the formation
@@ -2892,6 +2993,7 @@ class WebServer {
             guildId,
             processedParties,
             availableMembers,
+            noRsvpMembers,
             summary,
             status: 'pending',
             createdBy: userId,
