@@ -14,6 +14,8 @@ const PARTY_TITLES = [
   'Portal 1',
   'Portal 2',
   'Portal 3',
+  'Team Yellow',
+  'Team Red',
   'Sewers',
   'Benched',
   'Reserve',
