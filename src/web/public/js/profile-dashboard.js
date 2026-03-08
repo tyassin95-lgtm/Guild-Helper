@@ -768,7 +768,7 @@ function renderEvents() {
               <div style="display: flex; gap: 16px; margin-bottom: 12px; color: var(--text-secondary); font-size: 13px;">
                 <span>+${event.bonusPoints} bonus</span>
                 <span>${event.rsvpAttendingCount} attending</span>
-                <span>${event.attendeesCount} recorded</span>
+                <span>${event.rsvpNotAttendingCount} not attending</span>
               </div>
               ${!event.isClosed && !event.hasRecordedAttendance ? `
                 <div class="event-actions">
