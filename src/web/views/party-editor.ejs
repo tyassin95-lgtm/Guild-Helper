@@ -1970,6 +1970,10 @@
             message += `\nNo-RSVP notifications sent: ${noRsvpDmResults.successful.length} member(s)\n`;
           }
 
+          if (noRsvpDmResults && noRsvpDmResults.failed.length > 0) {
+            message += `\nNo-RSVP notifications failed: ${noRsvpDmResults.failed.length} member(s)\n`;
+          }
+
           alert(message);
 
           // Show success message and disable buttons
