@@ -936,8 +936,14 @@ class WebServer {
 
       const dmResults = await this.sendPartyDMs(processedParties, eventInfo);
 
-      // Send no-RSVP notification DMs
-      const noRsvpDmResults = await this.sendNoRsvpDMs(noRsvpMembers, eventInfo);
+      // Send no-RSVP notification DMs (isolated so failures don't affect party DM response)
+      let noRsvpDmResults = { successful: [], failed: [] };
+      try {
+        noRsvpDmResults = await this.sendNoRsvpDMs(noRsvpMembers, eventInfo);
+      } catch (noRsvpError) {
+        console.error('Error sending no-RSVP DMs:', noRsvpError);
+        noRsvpDmResults = { successful: [], failed: noRsvpMembers.map(m => ({ userId: m.userId, displayName: m.displayName, error: 'Failed to send no-RSVP DMs' })) };
+      }
 
       // Invalidate token (one-time use)
       this.activeTokens.delete(req.params.token);
@@ -1023,7 +1029,8 @@ class WebServer {
     const eventName = eventTypeNames[eventInfo.eventType] || eventInfo.eventType;
     const eventColor = eventTypeColors[eventInfo.eventType] || '#5865F2';
     const location = eventInfo.location ? eventInfo.location : null;
-    const timestamp = Math.floor(eventInfo.eventTime.getTime() / 1000);
+    const eventDate = eventInfo.eventTime instanceof Date ? eventInfo.eventTime : new Date(eventInfo.eventTime);
+    const timestamp = Math.floor(eventDate.getTime() / 1000);
 
     // Create party member list with better formatting
     const partyList = party.members.map(m => {
@@ -1104,9 +1111,10 @@ class WebServer {
     console.log(`Total parties: ${processedParties.length}`);
 
     for (const party of processedParties) {
-      console.log(`\nProcessing Party ${party.partyNumber} (${party.members.length} members):`);
+      const members = party.members || [];
+      console.log(`\nProcessing Party ${party.partyNumber} (${members.length} members):`);
 
-      for (const member of party.members) {
+      for (const member of members) {
         try {
           if (!member.userId || !/^\d+$/.test(member.userId)) {
             console.error(`❌ Invalid user ID for ${member.displayName}: "${member.userId}"`);
@@ -1174,7 +1182,8 @@ class WebServer {
     };
 
     const eventName = eventTypeNames[eventInfo.eventType] || eventInfo.eventType;
-    const timestamp = Math.floor(eventInfo.eventTime.getTime() / 1000);
+    const eventDate = eventInfo.eventTime instanceof Date ? eventInfo.eventTime : new Date(eventInfo.eventTime);
+    const timestamp = Math.floor(eventDate.getTime() / 1000);
     const location = eventInfo.location ? ` - ${eventInfo.location}` : '';
 
     console.log(`\n=== Sending No-RSVP Notification DMs ===`);
